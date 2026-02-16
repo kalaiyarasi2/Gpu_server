@@ -1,0 +1,301 @@
+
+[[PAGE_1]]
+TRIGGER 00792606 0000 02/01/25 02/28/25 02/01/25 $1,360.54 01/17/25
+<newenvelope>312
+<page>1 I
+<group>339780
+<division>0000
+<billfrom>02/01/25
+<billto>02/28/25
+Billing Statement PlanholderReference
+ALICIAKEEL
+For Period 02/01/25 to 02/28/25 ROCCATAMPALLC
+StatementDate: 01/17/25 GroupID:00792606
+DivisionID:0000
+Payment Summary
+RHO:AP
+RGO:018
+PaymentReceived12/17/24 -762.87
+A/R:ASG
+OutstandingBalanceAsOf1/17/25 701.23 ö PastDueNotice Questions?
+CurrentPremium 659.31 Ifwedonotreceivepayment
+ofyouroutstandingbalance
+TotalPaymentDue 2/01/25 $1,360.54 byFebruary1,2025,your Logonto
+planwillautomaticallycancel. www.GuardianAnytime.com
+Checkormakechangesto
+Approval: members'eligibility,viewandpay
+"Planholderuseonly" billsandmore.
+Logonorregisterintwominutes
+Summary of Activity this Period
+atwww.GuardianAnytime.com
+Coverage Previous Adds. Terms. Current Current Premium
+No.Ins. No.Ins. Premiums Adjustments
+BasicTermLife 28 4 2 30 $130.50 $47.48
+Dental 18 0 1 17 $294.27 ($17.31)
+Std 13 0 0 13 $218.23 ($73.22)
+Vision 10 0 1 9 $66.78 ($7.42)
+TOTAL $709.78 ($50.47)
+Summary of Current
+Premiums by Rate Class
+Coverage Emp Total
+BasicTermLife $130.50 $130.50
+Dental $294.27 $294.27
+Std $218.23 $218.23
+Vision $66.78 $66.78
+TOTAL $709.78 $709.78
+ö Page1of6 ö QC41945 ö GroupID00792606 ö DivisionID0000 ö CustomerResponseUnit Ph:800-627-4200
+-
+tnemyaphtiwnruterdnahcatedesaelP
+Ò
+52/10/20
+:etaDeuD
+nopuoC
+tnemyaP
+45.063,1$
+:euDtnemyaP
+.nopuoctnemyapnoetirwtonodesaelP
+ö
+mehttimbusesaelp,segnahcevahuoyfI
+notimbusroemitynAnaidrauGaiv
+.tropeRegnahC
+aivtimbus,tnemyapysaednatsafroF
+ö
+hcatedro,moc.emitynanaidraug.www
+ruoydnanopuoCtnemyaPdnesdna
+ehtninaidrauGotelbayapedamkcehc
+LEEKAICILA
+OP,NAIDRAUG:otepolevnedesolcne
+CLLAPMATACCOR
+AP,AIHPLEDALIHP,404428XOB
+EUNEVADRAWOHHTUOS107
+.4044-28191
+302ETIUS
+60633
+LF,APMAT
+606297
+00
+:DI
+puorG
+0000
+:noisiviD
+GSA
+:R/A
+
+[[PAGE_2]]
+si
+sserdda
+naidrauG
+eht
+erus
+ekam
+esaelP
+epolevne
+nruter
+eht
+hguorht
+elbisiv
+.wodniw
+Premium Adjustments Since Last Bill
+NEW
+Employee Eff. Date Coverage Ins. New New Premium
+Volume Premium Adjustment
+Cheine,AlexanderB 11/01/24 BasicTermLife 25,000 1.75 5.25
+BasicTermLife 25,000 0.75 2.25
+$2.50 $7.50
+Collymore,MoeshaT 12/01/24 BasicTermLife 25,000 1.75 3.50
+BasicTermLife 25,000 0.75 1.50
+$2.50 $5.00
+Malavet,Jordan 11/01/24 BasicTermLife 25,000 1.75 5.25
+BasicTermLife 25,000 0.75 2.25
+$2.50 $7.50
+PachecoMorillo,Oscar 06/01/24 BasicTermLife 25,000 3.25 26.00
+BasicTermLife 25,000 0.75 6.00
+$4.00 $32.00
+SALARYCHANGE
+Employee Eff. Date Coverage Ins. New New Premium
+Volume Premium Adjustment
+Gerhart,PaulR 06/09/24 Std 635 15.88 11.22
+$15.88 $11.22
+Orr,Nicholas 08/30/24 Std 577 14.43 -53.53
+$14.43 -$53.53
+Tovar,Frank 08/09/24 Std 432 21.17 -33.76
+$21.17 -$33.76
+Winters,Mitchell 09/01/24 Std 577 13.27 2.85
+$13.27 $2.85
+TERMINATEDEMPLOYEE
+Employee Eff. Date Coverage Ins. New New Premium
+Volume Premium Adjustment
+Pingel,TrevorF 01/01/25 BasicTermLife -2.00
+BasicTermLife -0.75
+Dental Emp -17.31
+Vision Emp -7.42
+-$27.48
+continued
+ö Page2of6 ö QC41945 ö GroupID00792606 ö DivisionID0000 ö CustomerResponseUnit Ph:800-627-4200
+-
+moc.emitynanaidraug.wwwtaetisbewerucesruotisiV
+liamroftiawehttuohtiwenilnollibweiV
+ö
+stnemyapekamdnasegnahctimbuS
+ö
+NAIDRAUG
+404428XOBOP
+4044-28191
+AP,AIHPLEDALIHP
+
+[[PAGE_3]]
+Premium Adjustments Since Last Bill (cont'd)
+Notices For ROCCA TAMPA LLC
+TERMINATEDEMPLOYEE (cont'd)
+Employee Eff. Date Coverage Ins. New New Premium ö Toensurecontinuedcoverageandclaimsservice,paymentsmust
+Volume Premium Adjustment
+bereceivedinourofficebytheendofyourgraceperiod.
+Smith,Catherine 01/10/25 BasicTermLife -1.24
+BasicTermLife -0.53 ö Forthequickestandeasiestwaytopayyourbillormanagemember
+-$1.77 changes,gotowww.GuardianAnytime.com. Simplified,secure
+benefitsadministrationisavailable24/7. Ifyouaren'talready
+TotalPremiumAdjustments -$50.47 registered,gotowww.GuardianAnytime.com.
+ö Page3of6 ö QC 41945 ö GroupID00792606 ö DivisionID0000 ö CustomerResponseUnit Ph:800-627-4200
+-
+
+[[PAGE_4]]
+ö TheGuardianLifeInsuranceCompanyofAmerica(“Guardian”)AnnualElectionofDirectors
+Guardian®isamutualcompany.Assuch,allparticipatingpolicyholdersareentitledandencouragedtovoteinGuardian’sAnnualElectionofDirectorswhichisheldonthesecondWednesday
+ofDecemberofeachyearfrom10:00a.m.to4:00p.m.(ET).EverypolicyholderoftheCompanyasdefinedintheInsuranceLawoftheStateofNewYork(“NYInsuranceLaw”)whosepolicy
+orcontractisinforceandhasbeeninforceforatleastoneyearpriortheretoisentitledtoonevoteonlyirrespectiveofthenumberofpoliciesorcontractsheldateachsuchAnnualElection
+eitherinperson,bymailorbyproxy,asprovidedbytheNYInsuranceLaw.
+NYInsuranceLawprovidesthatatleastsevenmonthspriortothedateofanyelectionofdirectorsofamutualcompany,itsboardofdirectorsshallnominatecandidatesforeveryvacancyto
+befilledatsuchelection.Independentnominationsmaybemadebygroupsofpolicyholders,pursuanttoSection4210oftheNYInsuranceLaw,atleastfivemonthsbeforeanyAnnual
+Election.
+ProxiesmaybeobtainedfromtheOfficeoftheCorporateSecretaryattheCompany’sprincipalofficelocatedat10HudsonYards,NewYork,NewYork10001orthroughtheCorporate
+GovernancesectionofGuardian’swebsiteatwww.GuardianLife.com/corporate-governance.IfadditionalinformationisdesiredregardingGuardian’sAnnualElection,pleasecontactthe
+CorporateSecretaryattheaddresslistedabove.
+Guardian®isaregisteredtrademarkofTheGuardianLifeInsuranceCompanyofAmerica.
+ö Page4of6 ö QC41945 ö GroupID00792606 ö DivisionID0000 ö CustomerResponseUnit Ph:800-627-4200
+-
+
+[[PAGE_5]]
+Current Premiums
+Employee BasicTermLife Dental Std Vision TotalPremium
+Premium Premium Ins. Premium Premium Ins.
+Balingit,AlecJ 2.50 17.31Emp 7.42Emp $27.23
+Boghosian,Brandon 5.25 17.31Emp 7.42Emp $29.98
+Bonsack,Bryce 4.00 17.31Emp 23.36 $44.67
+Burton,Kyle 2.75 17.31Emp $20.06
+Carney,DakotaM 2.50 $2.50
+Cheine,AlexanderB 2.50 $2.50
+Collymore,MoeshaT 2.50 $2.50
+Crouch,TherralR 5.25 17.31Emp 12.53 7.42Emp $42.51
+Fayson,Bryonne 2.50 17.31Emp 8.28 7.42Emp $35.51
+Gerhart,PaulR 2.75 17.31Emp 15.88 $35.94
+Graves,CarsonJ 2.50 $2.50
+Harvey,PaytonL 2.50 17.31Emp 23.00 7.42Emp $50.23
+JeanLouis,Roody 2.50 $2.50
+LegaspiCisnero,Jonathan 2.50 17.31Emp 7.42Emp $27.23
+Malavet,Jordan 2.50 $2.50
+Massaad,Michael 2.75 $2.75
+Mckee,Maxwell 2.50 17.31Emp 19.90 $39.71
+Micenec,MatthewR 4.00 $4.00
+Noskey,Christian 2.50 $2.50
+Orr,Nicholas 2.75 17.31Emp 14.43 $34.49
+Ortiz-Hernandez,Alfredo 2.50 17.31Emp 12.74 $32.55
+continued
+ö Page5of6 ö QC 41945 ö GroupID00792606 ö DivisionID0000 ö CustomerResponseUnit Ph:800-627-4200 ö BillingPeriod:02/01/25to02/28/25
+-
+
+[[PAGE_6]]
+Current Premiums (cont'd.)
+Employee BasicTermLife Dental Std Vision TotalPremium
+Premium Premium Ins. Premium Premium Ins.
+PachecoMorillo,Oscar 4.00 $4.00
+Proechel,Greg 5.25 17.31Emp 25.09 7.42Emp $55.07
+Rodriguez,KristianL 2.50 $2.50
+Sarmiento,DanielA 2.50 17.31Emp 12.70 7.42Emp $39.93
+Stealey,Eric 2.75 17.31Emp 15.88 $35.94
+Tovar,Frank 44.00 17.31Emp 21.17 $82.48
+Winters,Mitchell 2.50 17.31Emp 13.27 7.42Emp $40.50
+Yoder,GaryM 2.50 $2.50
+Zwetsch,Ryan 2.50 $2.50
+TOTAL $130.50 $294.27 $218.23 $66.78 $709.78
+TotalCurrentPremium $130.50 $294.27 $218.23 $66.78 $709.78
+ö Page6of6 ö QC 41945 ö GroupID00792606 ö DivisionID0000 ö CustomerResponseUnit Ph:800-627-4200 ö BillingPeriod:02/01/25to02/28/25
+-
+
+[[PAGE_7]]
+ALICIAKEEL
+ROCCATAMPALLC
+GroupID:00792606
+Change Report DivisionID:0000
+A/R:ASG
+ö Guardianrequires3-6business daystoprocesschangesfromthedateofreceipt.
+ö FaxcompletedChangeReportto610-807-2994ormailwithyourPaymentCouponinthe PleasepaytheTotalPaymentDueasshownonyourBillingStatement.Premiumadjustments
+enclosedenvelope.Forassistancewithchanges,pleasecontactusat800-627-4200. forthechangesyousubmitwillbeonthenextBillingStatementafterprocessingiscomplete.
+ö Useaphotocopyofthisformifyouneedadditionalspace.
+ö AddressChange_______________________________________________________________
+_______________________________________________________________
+_______________________________________________________________
+New Employees/Dependents or Added/Refused Coverages
+SubmitacompletedEnrollmentFormforeachnewemployee,newdependentorexistingemployeeaddingacoverage.CompletetheRefuse/Drop
+coveragessectionforemployeesordependentswhoarewaivingacoverage.Faxenrollmentformto610-807-2994ormailwithyourPayment
+Couponintheenclosedenvelope.
+Employee Changes
+ReasonCodesforEmployeeChanges
+Reason
+1.Terminatecoverageduetoterminated
+EmployeeName ID EffectiveDate Code Notes
+employment(indicatelastdayworked)
+/ /
+2.Terminatecoverageduetodeath
+/ /
+3.TerminatecoverageduetoendofCOBRAor
+/ / StateContinuation
+4.BeginCOBRAorStateContinuation(include
+/ /
+completedCOBRA/StateContinuationform)
+/ /
+5.Dropcontributorycoverage(include
+/ / EnrollmentFormwithcompletedRefuse/Drop
+coveragessection)
+/ /
+6.Reinstateemployeeduetorehire(include
+/ / completedEnrollmentFormifrehiredmore
+than31daysafterterminationdate)
+/ /
+7.Changeinsuranceamountduetosalary
+/ / change(notepreviousandnewsalaries)
+/ / 8.Changejobtitle,classification,department,or
+division(notenewinformation)
+/ /
+9.Changeemployeename(notenewname)
+/ /
+10.Changeemployeeaddress(notenewaddress)
+ö Page1of2 ö QC41945 ö GroupID00792606 | DivisionID0000 | CustomerResponseUnit Ph:800-627-4200
+-
+
+[[PAGE_8]]
+Dependent Changes
+Reason
+EmployeeName ID EffectiveDate DependentName Code Notes
+/ /
+/ /
+/ /
+/ /
+/ /
+/ /
+/ /
+/ /
+/ /
+/ /
+/ /
+/ /
+/ /
+ReasonCodesForDependentChanges
+101.Terminatespouse'scoverageduetodivorce 104.BeginCOBRAorStateContinuation(includecompletedCOBRA/State
+Continuationform
+102.Terminatechild'scoverageduetoreachingagelimitforeligibility
+105.Dropcontributorycoverage(includeEnrollmentFormwithcompleted
+103.Terminatedependent'scoverageduetoendofCOBRAorStateContinuation
+Refuse/Dropcoveragessection)
+CHNOT2025011800007926060019250201ASG
+ö Page2of2 ö QC41945 ö GroupID00792606 ö DivisionID0000 | CustomerResponseUnit Ph:800-627-4200
+-

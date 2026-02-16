@@ -1,0 +1,19 @@
+# Core requirements for PDF extraction
+openai>=1.0.0
+pdfplumber>=0.10.0
+pymupdf>=1.23.0
+pandas>=2.0.0
+openpyxl>=3.1.0
+python-dotenv>=1.0.0
+fastapi>=0.100.0
+uvicorn>=0.22.0
+python-multipart>=0.0.6
+jinja2>=3.1.2
+
+# Alternative PDF library
+PyPDF2>=3.0.0
+
+# OCR support (for scanned/image-based PDFs)
+pytesseract>=0.3.10
+pdf2image>=1.16.3
+pillow>=10.0.0

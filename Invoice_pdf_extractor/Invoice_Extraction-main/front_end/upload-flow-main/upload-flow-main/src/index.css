@@ -1,0 +1,135 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222 47% 11%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    --primary: 202 100% 24%;
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 222 47% 11%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 210 20% 90%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+
+    --accent: 145 60% 50%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --success: 145 60% 50%;
+    --success-foreground: 0 0% 100%;
+
+    --border: 214.3 31.8% 85%;
+    --input: 214.3 31.8% 85%;
+    --ring: 202 100% 24%;
+
+    --radius: 0.5rem;
+
+    --sidebar: 222 47% 11%;
+    --sidebar-text: 210 40% 98%;
+  }
+
+  .dark {
+    --background: 222 47% 6%;
+    --foreground: 210 40% 98%;
+
+    --card: 222 47% 10%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222 47% 10%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 191 100% 45%;
+    --primary-foreground: 222 47% 6%;
+
+    --secondary: 222 47% 4%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 222 47% 15%;
+    --muted-foreground: 215 20% 70%;
+
+    --accent: 145 60% 60%;
+    --accent-foreground: 222 47% 6%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 222 47% 18%;
+    --input: 222 47% 18%;
+    --ring: 191 100% 45%;
+
+    --sidebar: 222 47% 4%;
+    --sidebar-text: 210 40% 98%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border transition-colors duration-300;
+  }
+
+  body {
+    @apply bg-background text-foreground transition-colors duration-300 antialiased;
+  }
+}
+
+/* Simplified class for a cleaner look */
+.neon-text {
+  @apply tracking-tight font-extrabold;
+}
+
+.glass-card {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border) / 0.5);
+  @apply shadow-lg;
+}
+
+.dark .glass-card {
+  background: hsl(var(--card) / 0.8);
+  backdrop-filter: blur(12px);
+}
+
+.success-glow {
+  @apply shadow-[0_0_20px_#91b99b33];
+}
+
+.dark .success-glow {
+  @apply shadow-[0_0_30px_#91b99b66];
+}
+
+/* Row appear */
+@keyframes row-appear {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.row-appear {
+  animation: row-appear 0.4s ease-out forwards;
+}
+
+/* Grid helper for main layout */
+.grid-layout {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  height: 100vh;
+  overflow: hidden;
+}

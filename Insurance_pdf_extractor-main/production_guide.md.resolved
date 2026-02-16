@@ -1,0 +1,105 @@
+# Production Environment Operations Guide
+
+This guide provides the necessary commands and workflows to manage your production-ready setup (Waitress Backend + Static Frontend) using PM2.
+
+## 🚀 Starting the Environment
+
+To start the service defined in the configuration:
+
+powershell
+
+pm2 start ecosystem.config.js
+
+This will launch the **Consolidated Production App** on port `5000`.
+
+### 🌐 Accessing via WiFi
+Since the app is now consolidated, you can access it from any device on the same WiFi (Phone, Laptop, Tablet):
+
+1.  **Find your IP address**: `10.10.8.218` (already found for you).
+2.  **Open URL**: `http://10.10.8.218:5000`
+
+> [!TIP]
+> Both the website and the API are now on the same port, so you don't have to worry about CORS or multiple addresses!
+
+---
+
+## 📊 Monitoring & Analysis
+
+### Check Status
+See a summary of all running processes, their uptime, memory, and CPU usage:
+```powershell
+pm2 status
+```
+
+### View Logs
+*   **All processes**: `pm2 logs`
+*   **Backend only**: `pm2 logs backend`
+*   **Frontend only**: `pm2 logs frontend`
+*   **Specific number of lines**: `pm2 logs --lines 50`
+
+### Real-time Dashboard
+PM2 provides a terminal-based dashboard for advanced monitoring:
+```powershell
+pm2 monit
+```
+
+---
+
+## 🔄 Updating Your Code
+
+### Backend Changes
+If you modify any Python files in the `backend/` directory:
+1.  Save your changes.
+2.  Restart the process to apply them:
+    ```powershell
+    pm2 restart backend
+    ```
+
+### Frontend Changes
+If you modify React components or styles:
+1.  **Rebuild the project** (this generates new static files in the `dist` folder):
+    ```powershell
+    cd frontend/document-insight-engine-main
+    npm run build
+    cd ../..
+    ```
+2.  **Restart the process** (though the static server usually picks up new files, a restart ensures a clean state):
+    ```powershell
+    pm2 restart frontend
+    ```
+
+---
+
+## 🛑 Stopping & Maintenance
+
+### Stop Services
+*   **Stop all**: `pm2 stop all`
+*   **Stop specific**: `pm2 stop backend`
+*   *(Note: Stopping keeps the process in the list, but stops execution)*
+
+### Delete Services
+To remove the processes from the PM2 list entirely:
+```powershell
+pm2 delete all
+```
+
+### Save Configuration
+If you want PM2 to remember this specific list of apps even after a server reboot:
+```powershell
+pm2 save
+```
+
+---
+
+## 🛠️ Troubleshooting
+
+### Port Conflicts
+If you see `EADDRINUSE` errors, make sure you have closed your development terminals:
+- Stop `python app.py` (Development Flask)
+- Stop `npm run dev` (Development Vite)
+
+### Windows Encoding Errors
+The backend is configured with `PYTHONUTF8: "1"` in [ecosystem.config.js](file:///c:/Users/Intern/data%20extraction/ecosystem.config.js) to prevent crashes when printing emojis or special characters in the terminal.
+
+### PM2 Path Issues
+If `pm2` is "not recognized", ensure `C:\Users\Intern\AppData\Roaming\npm` is in your system Environment Variables (Path).

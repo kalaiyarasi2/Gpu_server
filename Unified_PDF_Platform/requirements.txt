@@ -1,0 +1,35 @@
+# Unified PDF Platform Requirements
+# Combines dependencies from both Invoice and Insurance extractors
+
+# Web Framework
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+jinja2==3.1.2
+
+# Core Dependencies
+python-dotenv==1.0.0
+openai>=1.0.0
+pandas>=2.0.0
+openpyxl>=3.1.0
+
+# PDF Processing
+PyMuPDF>=1.23.0
+pdfplumber==0.11.7
+pdf2image==1.16.3
+PyPDF2==3.0.1
+pypdf==6.7.0
+
+# OCR
+pytesseract==0.3.10
+
+# Document Processing (from Insurance extractor)
+docling==2.73.0
+
+# Utilities
+requests>=2.32.2
+Pillow>=10.0.0
+
+# Optional - Advanced Table Extraction
+tabulate==0.9.0
+camelot-py==0.11.0
