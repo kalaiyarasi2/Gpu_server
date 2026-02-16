@@ -82,6 +82,7 @@ Analyze the provided claims JSON and generate a comprehensive, professional summ
    - Total incurred amount
    - Total paid (breakdown: medical + indemnity + expense)
    - Total reserves
+   - Litigated claims count (Yes/No)
 
 2. **Financial Insights**
    - Highest incurred claim (include claim ID and amount)
@@ -96,13 +97,7 @@ Analyze the provided claims JSON and generate a comprehensive, professional summ
    - Status distribution (open/closed/pending)
    - Average days to closure (if date information available)
 
-4. **Insurance Provider Analysis**
-   - List of insurance providers/carriers
-   - Claims distribution by provider
-   - Top provider by claim volume
-   - Top provider by total incurred
-
-5. **Risk Flags & Recommendations**
+4. **Risk Flags & Recommendations**
    - Claims requiring immediate attention
    - Potential fraud indicators (if any patterns detected)
    - Cost containment opportunities

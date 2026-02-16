@@ -68,6 +68,7 @@ class InsuranceClaim:
     recovery: Optional[float] = None
     deductible: Optional[float] = None
     total_incurred: Optional[float] = None
+    litigation: Optional[str] = None
     confidence_score: Optional[float] = None
     extraction_metadata: Optional[Dict] = None
 
@@ -695,6 +696,9 @@ Return ONLY the JSON. Ensure the dynamic_instruction is highly technical and spe
    - If a claim ID is not in the list, DO NOT extract it.
 3. 🛑 FIELD INTEGRITY: Do NOT swap Medical and Indemnity columns. Check headers for each row.
 4. 🛑 CURRENCY: Remove all symbols ($, ,) and return numbers as floats.
+5. 🛑 LITIGATION: ONLY extract if explicitly present (e.g., 'Litigated: Y', 'Litigation: No'). 
+   - If there is NO mention of litigation, you MUST return null. 
+   - NEVER assume 'No' if the field is missing.
 """
         
         if format_type == 'complex_multi_row':
@@ -808,7 +812,8 @@ Return JSON:
       "expense_reserve": "string",
       "recovery": "string",
       "deductible": "string",
-      "total_incurred": "string"
+      "total_incurred": "string",
+      "litigation": "Yes or No or null (ONLY if explicitly present)"
     }}
   ]
 }}
@@ -1102,6 +1107,19 @@ Follow the format-specific instructions above. Validate your extractions."""
             raw_status = str(claim.get("status", "")).upper().strip()
             claim["status"] = status_map.get(raw_status, raw_status)
             
+            # 1b. Normalize Litigation
+            litigation_val = claim.get("litigation")
+            if litigation_val is None:
+                claim["litigation"] = None
+            else:
+                raw_litigation = str(litigation_val).upper().strip()
+                if raw_litigation in ["Y", "YES", "TRUE"]:
+                    claim["litigation"] = "Yes"
+                elif raw_litigation in ["N", "NO", "FALSE"]:
+                    claim["litigation"] = "No"
+                else:
+                    claim["litigation"] = None
+            
             # 2. Normalize Injury Type (MED/COMP)
             raw_type = str(claim.get("injury_type", "")).upper()
             if any(x in raw_type for x in ["COMP", "TTD", "TPD", "PPD", "INDEMNITY", "INDEM"]):
@@ -1358,7 +1376,8 @@ Return a JSON object with this structure:
       "expense_reserve": "string",
       "recovery": "string",
       "deductible": "string",
-      "total_incurred": "string"
+      "total_incurred": "string",
+      "litigation": "Yes or No or null (ONLY if explicitly present)"
     }}
   ]
 }}
@@ -1419,7 +1438,8 @@ Return a JSON object with this structure:
   "expense_reserve": 0.0,
   "recovery": 0.0,
   "deductible": 0.0,
-  "total_incurred": 0.0
+  "total_incurred": 0.0,
+  "litigation": "Yes or No or null (ONLY if explicitly present)"
 }}
 
 RULES:
