@@ -708,10 +708,10 @@ AmTrust PDFs use a strict 3-Row by 4-Column structure. Use these examples to CAL
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🔴 AMTRUST CALIBRATION (Mandatory) 🔴
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-CALIBRATION 1: Duarte Milian (3631112) -> MED=966, INDEM=2,926, EXP=173.
-CALIBRATION 2: Johnson Linda (3543022) -> EXPENSE PAID=1,427.
-CALIBRATION 3: Boyce Michael (3675064) -> MEDICAL RESERVE=6,862. (Sum with Paid 26,303 = 33,165).
-CALIBRATION 4: Watson Glenn (3674444) -> EXPENSE RESERVE=0. (Note: 9,924 is often Expenses, but mapping varies).
+CALIBRATION 1: Sample John (9999999) -> MED=966, INDEM=2,926, EXP=173.
+CALIBRATION 2: Tester Jane (8888888) -> EXPENSE PAID=1,427.
+CALIBRATION 3: User Example (7777777) -> MEDICAL RESERVE=6,862. (Sum with Paid 26,303 = 33,165).
+CALIBRATION 4: Placeholder Alex (6666666) -> EXPENSE RESERVE=0. (Note: 9,924 is often Expenses, but mapping varies).
 
 ⚠️ AMTRUST COLUMN ORDER: 1. MEDICAL, 2. INDEMNITY, 3. EXPENSE / LAE.
 
@@ -1140,16 +1140,21 @@ Follow the format-specific instructions above. Validate your extractions."""
                         pass
 
             # 4. Calculate Quality Score (Checksum Match)
-            med_inc = claim.get("medical_paid", 0) + claim.get("medical_reserve", 0)
-            indem_inc = claim.get("indemnity_paid", 0) + claim.get("indemnity_reserve", 0)
-            exp_inc = claim.get("expense_paid", 0) + claim.get("expense_reserve", 0)
+            # Use same logic as _validate_financial_data for consistency
+            med_paid = claim.get('medical_paid', 0.0) or 0.0
+            med_res = claim.get('medical_reserve', 0.0) or 0.0
+            ind_paid = claim.get('indemnity_paid', 0.0) or 0.0
+            ind_res = claim.get('indemnity_reserve', 0.0) or 0.0
+            exp_paid = claim.get('expense_paid', 0.0) or 0.0
+            exp_res = claim.get('expense_reserve', 0.0) or 0.0
+            recovery = claim.get('recovery', 0.0) or 0.0
+            deductible = claim.get('deductible', 0.0) or 0.0
+            reported_total = claim.get('total_incurred', 0.0) or 0.0
             
-            # recovery is usually a subtraction from the total
-            recovery = claim.get("recovery", 0)
-            calc_sum = med_inc + indem_inc + exp_inc
-            calc_net = calc_sum - recovery
-            
-            reported_total = claim.get("total_incurred", 0)
+            # Simple sum for gross check
+            calc_sum = med_paid + med_res + ind_paid + ind_res + exp_paid + exp_res
+            # Net sum for net check (most common)
+            calc_net = calc_sum - recovery - deductible
             
             # Check if calc_sum matches perfectly or calc_net matches
             quality_score = 0.5
@@ -1228,9 +1233,7 @@ Follow the format-specific instructions above. Validate your extractions."""
             # Catch calibration examples and phantom placeholders
             phantom_names = [
                 "john smith", "doe john", "john doe", "smith jane", "jane smith", 
-                "alice johnson", "johnson alice", "michael johnson", "johnson michael",
-                "duarte milian", "milian duarte", "linda johnson", "boyce michael", 
-                "michael boyce", "glenn watson", "watson glenn"
+                "alice johnson", "johnson alice", "michael johnson", "johnson michael"
             ]
             if name_clean in phantom_names:
                 print(f"      🗑️  Filtering phantom calibration claim: {claim.get('employee_name')}")
@@ -1277,6 +1280,8 @@ Follow the format-specific instructions above. Validate your extractions."""
         indemnity_reserve = claim.get('indemnity_reserve', 0.0) or 0.0
         expense_paid = claim.get('expense_paid', 0.0) or 0.0
         expense_reserve = claim.get('expense_reserve', 0.0) or 0.0
+        recovery = claim.get('recovery', 0.0) or 0.0
+        deductible = claim.get('deductible', 0.0) or 0.0
         total_incurred = claim.get('total_incurred', 0.0) or 0.0
         
         # Calculate expected totals
@@ -1284,7 +1289,7 @@ Follow the format-specific instructions above. Validate your extractions."""
         indemnity_incurred = indemnity_paid + indemnity_reserve
         expense_incurred = expense_paid + expense_reserve
         
-        calculated_total = medical_incurred + indemnity_incurred + expense_incurred
+        calculated_total = (medical_incurred + indemnity_incurred + expense_incurred) - recovery - deductible
         
         # Validate total incurred
         if abs(calculated_total - total_incurred) > tolerance:

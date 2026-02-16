@@ -1,0 +1,472 @@
+================================================================================
+PDF DOCUMENT EXTRACTION (pdfplumber)
+================================================================================
+
+
+================================================================================
+PAGE 1
+================================================================================
+
+                                                                                                             
+                                                                                                             
+                      Report ID: 677             WC LOSS RUN REPORT                          Date: 6/6/2025  
+                      Run ID: 13871240                                                       Time: 10:41:53AM
+                                                                                        
+                      User:  NickMcapstonecoverage.com                                       Page: Page 1 of 9
+                                                                                    
+                                                                                                             
+                                                                                                             
+   Claim No Claimant       Department             Loss Location                                              
+   Converted # Class Cd    DOL    Nature  Status  Part Injured                                               
+   Policy Number Juris St  First Aware Employee Lag Category Cause                                           
+   Pol. Eff Date Insured   Date Rcvd Reporting Lag Adjuster Loss Description          Indem Medical LAE Total
+                                                                                                             
+         0  NO CLAIMANTS                                                                                     
+                                                                               Reserves 0     0     0    0   
+   SWC1362034                     0   Days                                     Payments 0     0     0    0   
+   10/13/2021  0 Days     NO LOSSES                  Recoveries 0    0     0    0   
+                                                                               Incurred 0     0     0    0   
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+
+
+================================================================================
+PAGE 2
+================================================================================
+
+                                                                                                             
+                                                                                                             
+                      Report ID: 677             WC LOSS RUN REPORT                          Date: 6/6/2025  
+                      Run ID: 13871240                                                       Time: 10:41:53AM
+                                                                                        
+                      User:  NickMcapstonecoverage.com                                       Page: Page 2 of 9
+                                                                                    
+                                                                                                             
+                                                                                                             
+   Claim No Claimant       Department             Loss Location                                              
+   Converted # Class Cd    DOL    Nature  Status  Part Injured                                               
+   Policy Number Juris St  First Aware Employee Lag Category Cause                                           
+   Pol. Eff Date Insured   Date Rcvd Reporting Lag Adjuster Loss Description          Indem Medical LAE Total
+                                                                                                             
+                SWC1362034                                   LT   Med  Total   Reserves 0     0     0    0   
+                                                        Open  0   0     0      Payments 0     0     0    0   
+                                     Group Totals                                                            
+                                                        Closed 0  0     0     Recoveries 0    0     0    0   
+                                                                               Incurred 0     0     0    0   
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+
+
+================================================================================
+PAGE 3
+================================================================================
+
+                                                                                                             
+                                                                                                             
+                      Report ID: 677             WC LOSS RUN REPORT                          Date: 6/6/2025  
+                      Run ID: 13871240                                                       Time: 10:41:53AM
+                                                                                        
+                      User:  NickMcapstonecoverage.com                                       Page: Page 3 of 9
+                                                                                    
+                                                                                                             
+                                                                                                             
+   Claim No Claimant       Department             Loss Location                                              
+   Converted # Class Cd    DOL    Nature  Status  Part Injured                                               
+   Policy Number Juris St  First Aware Employee Lag Category Cause                                           
+   Pol. Eff Date Insured   Date Rcvd Reporting Lag Adjuster Loss Description          Indem Medical LAE Total
+                                                                                                             
+   3510012 1 Smith Christopher 717 Broadway Ave, Holbrook, NY 11741 717 Broadway Ave, Holbrook, NY 11741     
+   0        7231           05/06/2022 Sprain C    Ankle                        Reserves 0     0     0    0   
+   SWC1364773 NY           05/22/2022 16 Days TPD Fall or Slip - Miscellaneous (NOC) Payments 493 540 81 1,114
+   10/20/2021  06/07/2022 32 Days 34740 EE was making a delivery and a residents step gave way Recoveries 0 0 0 0
+                                                   and it made him fall and twist his ankle... Ee said he Incurred 493 540 81 1,114
+                                                   was in pain and missed work the next few days. Was        
+   3543022 1 Johnson Linda 717 Broadway Ave, Holbrook, NY 11741 717 Broadway Ave, Holbrook, NY 11741         
+   0        7231           08/14/2022 Fracture R  Ankle                        Reserves 4,858 11,412 1,427 17,697
+   SWC1364773 NY           08/14/2022 0 Days PPD  Fall or Slip - From Different Level Payments 4,644 3,331 3,612 11,587
+   10/20/2021  08/17/2022 3 Days 35629 EE was making a delivery to the customer's house, she Recoveries 0 0 0 0
+                                                   missed her footing and buckled her ankle. Resulting in Incurred 9,501 14,743 5,040 29,284
+                                                   an unspecified injury to EE's LEFT ankle                  
+   3556120 1 Smith Christopher 717 Broadway Ave, Holbrook, NY 11741 717 Broadway Ave, Holbrook, NY 11741     
+            7231           09/06/2022 Sprain C    Ankle                        Reserves 0     0     0    0   
+   SWC1364773 NY           09/06/2022 0 Days TTD  Fall or Slip - On Same Level Payments 1,973 1,058 23  3,054
+   10/20/2021  09/15/2022 9 Days 39519 While exiting truck to deliver a package with box in Recoveries 0 0 0 0
+                                                   had EE fell causing to sustain injuries to the right Incurred 1,973 1,058 23 3,054
+                                                   ankle.                                                    
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+
+
+================================================================================
+PAGE 4
+================================================================================
+
+                                                                                                             
+                                                                                                             
+                      Report ID: 677             WC LOSS RUN REPORT                          Date: 6/6/2025  
+                      Run ID: 13871240                                                       Time: 10:41:53AM
+                                                                                        
+                      User:  NickMcapstonecoverage.com                                       Page: Page 4 of 9
+                                                                                    
+                                                                                                             
+                                                                                                             
+   Claim No Claimant       Department             Loss Location                                              
+   Converted # Class Cd    DOL    Nature  Status  Part Injured                                               
+   Policy Number Juris St  First Aware Employee Lag Category Cause                                           
+   Pol. Eff Date Insured   Date Rcvd Reporting Lag Adjuster Loss Description          Indem Medical LAE Total
+                                                                                                             
+         Policy Number SWC1364773                            LT   Med  Total   Reserves 4,858 11,412 1,427 17,697
+                                                        Open  1   0     1      Payments 7,110 4,929 3,715 15,755
+                                     Group Totals                                                            
+                                                        Closed 2  0     2     Recoveries 0    0     0    0   
+                                                                               Incurred 11,968 16,341 5,143 33,452
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+
+
+================================================================================
+PAGE 5
+================================================================================
+
+                                                                                                             
+                                                                                                             
+                      Report ID: 677             WC LOSS RUN REPORT                          Date: 6/6/2025  
+                      Run ID: 13871240                                                       Time: 10:41:53AM
+                                                                                        
+                      User:  NickMcapstonecoverage.com                                       Page: Page 5 of 9
+                                                                                    
+                                                                                                             
+                                                                                                             
+   Claim No Claimant       Department             Loss Location                                              
+   Converted # Class Cd    DOL    Nature  Status  Part Injured                                               
+   Policy Number Juris St  First Aware Employee Lag Category Cause                                           
+   Pol. Eff Date Insured   Date Rcvd Reporting Lag Adjuster Loss Description          Indem Medical LAE Total
+                                                                                                             
+   3581250 1 Portilla Johel 717 Broadway Ave, Holbrook, NY 11741 717 Broadway Ave, Holbrook, NY 11741        
+   0        7231           11/07/2022 All Other RC Multiple Lower Extremities  Reserves 0     0     0    0   
+   TWC4172502 NY           11/08/2022 1 Days PPD  Fall or Slip - Into Openings Payments 16,242 5,123 2,615 23,981
+   10/20/2022  11/08/2022 1 Days 34740 EE was delivering package when on the way back to Recoveries 0 0 0 0
+                                                   van EE didn't see a hole and stepped in it. Resulting in Incurred 16,242 5,123 2,615 23,981
+                                                   an unknown injury to their right ankle/foot.              
+   3588252 1 Scivoletti Dominic 717 Broadway Ave, Holbrook, NY 11741 717 Broadway Ave, Holbrook, NY 11741    
+   0        7231           11/25/2022 Multiple Physical InjuRries Arm Upper (Incl. Clavicle & Scapula Reserves 32,679 1,618 269 34,566
+   TWC4172502 NY           11/25/2022 0 Days PPD  Fall or Slip - On Same Level Payments 7,176 23,704 4,288 35,168
+   10/20/2022  11/25/2022 0 Days 39864 EE was running outside the warehouse unaware of curb Recoveries 0 0 0 0
+                                                   and shrubbery causing them to fall forward. Resulting in Incurred 39,855 25,322 4,557 69,735
+                                                   injuries to their right shoulder and right side of face.  
+   3588853 1 Johnson Linda 717 Broadway Ave, Holbrook, NY 11741 717 Broadway Ave, Holbrook, NY 11741         
+   0        7231           11/26/2022 All Other RC Spinal Cord (Neck)          Reserves 0     0     0    0   
+   TWC4172502 NY           11/26/2022 0 Days PPD  Fall or Slip - On Same Level Payments 37,576 13,732 7,301 58,609
+   10/20/2022  11/28/2022 2 Days 34740 EE was in their van and got their foot stuck causing Recoveries 0 22 0 22
+                                                   them to fall face first into the metal shelving in the Incurred 37,576 13,710 7,301 58,587
+                                                   back of the van. EE sustained injuries to the right knee, 
+   3631112 1 Duarte Milian Breydeli 717 Broadway Ave, Holbrook, NY 11741 717 Broadway Ave, Holbrook, NY 11741
+   0        7231           01/12/2023 Sprain C    Ankle                        Reserves 0     0     0    0   
+   TWC4172502 NY           03/01/2023 48 Days TPD Strain or Injury By - Jumping Payments 966 2,926 173  4,065
+   10/20/2022  03/01/2023 48 Days 21442 Claimant was on a delivery, jumped out of truck and Recoveries 0 0 0 0
+                                                   when she injured her R ankle. Incurred 966 2,926 173 4,065
+                                                                                                             
+                                                                                                             
+   3637831 1 Duarte Milian Breydeli 717 Broadway Ave, Holbrook, NY 11741 717 Broadway Ave, Holbrook, NY 11741
+   0        7231           12/08/2022 Puncture C  Leg Upper                    Reserves 0     0     0    0   
+   TWC4172502 NY           12/08/2022 0 Days MED  Struck or Injured By - Animal or Insect Payments 0 2,039 31 2,070
+   10/20/2022  03/15/2023 97 Days 32252 EE was delivering a package when the customer opened Recoveries 0 0 0 0
+                                                   the door and two dogs came out. EE was bit on the Incurred 0 2,039 31 2,070
+                                                   right leg.                                                
+                                                                                                             
+
+
+================================================================================
+PAGE 6
+================================================================================
+
+                                                                                                             
+                                                                                                             
+                      Report ID: 677             WC LOSS RUN REPORT                          Date: 6/6/2025  
+                      Run ID: 13871240                                                       Time: 10:41:53AM
+                                                                                        
+                      User:  NickMcapstonecoverage.com                                       Page: Page 6 of 9
+                                                                                    
+                                                                                                             
+                                                                                                             
+   Claim No Claimant       Department             Loss Location                                              
+   Converted # Class Cd    DOL    Nature  Status  Part Injured                                               
+   Policy Number Juris St  First Aware Employee Lag Category Cause                                           
+   Pol. Eff Date Insured   Date Rcvd Reporting Lag Adjuster Loss Description          Indem Medical LAE Total
+                                                                                                             
+   3652308 1 Elezi Algert  , , 34I4s3la CnLd IWFTidOeN L oBgLisVtiDcs, WLLaCnt,a Igshla, nNdY W 1id1e7 9L3ogistics LLC, 3443 CLIFTON BLVD, Wantagh, NY 11793
+   0        7231           04/11/2023 All Other C Ankle                        Reserves 0     0     0    0   
+   TWC4172502 NY           04/11/2023 0 Days MED  Strain or Injury By - Twisting Payments 0   0    16    16  
+   10/20/2022  04/14/2023 3 Days 35576 EE was making a delivery to a client. EE stepped out Recoveries 0 0 0 0
+                                                   of the van onto the sidestep. EE twisted EEs left ankle. Incurred 0 0 16 16
+                                                                                                             
+   3654301 1 Torres Jonathan                      728 Fort Salonga Rd Northport NY, 11768                    
+   0        7231           04/14/2023 Puncture C  Leg Upper                    Reserves 0     0     0    0   
+   TWC4172502 NY           04/18/2023 4 Days MED  Struck or Injured By - Animal or Insect Payments 0 0 0 0   
+   10/20/2022  04/19/2023 5 Days 36165 EE was making a delivery to the back door of Recoveries 0 0 0 0
+                                                   customer's home that was requested and there were no Incurred 0 0 0 0
+                                                   dog warning signs and while putting the package in a      
+   3668778 1 Garry-York Anesia 717 Broadway Ave, Holbrook, NY 11741 717 Broadway Ave, Holbrook, NY 11741     
+            7231           05/16/2023 All Other C Leg Upper                    Reserves 0     0     0    0   
+   TWC4172502 NY           05/16/2023 0 Days TTD  Struck or Injured By - Animal or Insect Payments 30 4,184 846 5,059
+   10/20/2022  05/18/2023 2 Days 39519 EE upon arriving at her next delivery location, a small Recoveries 30 2,657 0 2,687
+                                                   dog began barking at her as she walked to the house to Incurred 0 1,527 846 2,373
+                                                   deliver package triggering a larger pitbull dog coming    
+   3673754 1 Gonzalez Michael 717 Broadway Ave, Holbrook, NY 11741 717 Broadway Ave, Holbrook, NY 11741      
+   0        7231           05/21/2023 Puncture C  Leg Lower                    Reserves 0     0     0    0   
+   TWC4172502 NY           05/30/2023 9 Days MED  Struck or Injured By - Animal or Insect Payments 0 151 31 182
+   10/20/2022  05/30/2023 9 Days 35576 After arriving at the customer's residence, EE entered Recoveries 0 0 0 0
+                                                   the backyard and made their presence known to deliver Incurred 0 151 31 182
+                                                   package and when they felt it was ok to enter and         
+                                                                                                             
+   3674444 1 Watson Glenn  717 Broadway Ave, Holbrook, NY 11741 717 Broadway Ave, Holbrook, NY 11741         
+   0        7231           05/14/2023 Contusion O Knee                         Reserves 12,200 352 2,317 14,869
+   TWC4172502 NY           05/14/2023 0 Days PPD  Fall or Slip - Miscellaneous (NOC) Payments 41,009 17,653 7,607 66,268
+   10/20/2022  05/31/2023 17 Days 27909 tripped over extension cord behind the desk and fell Recoveries 0 0 0 0
+                                                   Directly on his left knee when he hit the ground inside Incurred 53,209 18,005 9,924 81,138
+                                                   the warehouse                                             
+                                                                                                             
+
+
+================================================================================
+PAGE 7
+================================================================================
+
+                                                                                                             
+                                                                                                             
+                      Report ID: 677             WC LOSS RUN REPORT                          Date: 6/6/2025  
+                      Run ID: 13871240                                                       Time: 10:41:53AM
+                                                                                        
+                      User:  NickMcapstonecoverage.com                                       Page: Page 7 of 9
+                                                                                    
+                                                                                                             
+                                                                                                             
+   Claim No Claimant       Department             Loss Location                                              
+   Converted # Class Cd    DOL    Nature  Status  Part Injured                                               
+   Policy Number Juris St  First Aware Employee Lag Category Cause                                           
+   Pol. Eff Date Insured   Date Rcvd Reporting Lag Adjuster Loss Description          Indem Medical LAE Total
+                                                                                                             
+   3675064 1 Boyce Michael 717 Broadway Ave, Holbrook, NY 11741 717 Broadway Ave, Holbrook, NY 11741         
+            7231           05/30/2023 Strain C    Multiple Upper Extremities   Reserves 0     0     0    0   
+   TWC4172502 NY           05/30/2023 0 Days TTD  Strain or Injury By - Miscellaneous (NOC) Payments 26,303 6,985 4,107 37,395
+   10/20/2022  06/01/2023 2 Days 39519 Ee lost his footing in the van before getting out to Recoveries 0 123 0 123
+                                                   make a delivery to the customer house causing injury Incurred 26,303 6,862 4,107 37,272
+                                                   to his L side, wrist, arm, shoulder, back all left side   
+   3679802 1 Quintanilla Maria 717 Broadway Ave, Holbrook, NY 11741 717 Broadway Ave, Holbrook, NY 11741     
+   0        7231           06/10/2023 All Other C Wrist(s) & Hand(s)           Reserves 0     0     0    0   
+   TWC4172502 NY           06/10/2023 0 Days PPD  Fall or Slip - On Same Level Payments 44,041 10,977 5,374 60,392
+   10/20/2022  06/12/2023 2 Days 39519 While at a customers residence making a delivery, EE Recoveries 18,795 0 0 18,795
+                                                   tripped over the curb and fell forward. In the process Incurred 25,247 10,977 5,374 41,598
+                                                   she landed on both of her palms, injuring the left hand   
+   3739777 1 Oldham Nicole 717 Broadway Ave, Holbrook, NY 11741 717 Broadway Ave, Holbrook, NY 11741         
+   0        7231           10/09/2023 Sprain C    Ankle                        Reserves 0     0     0    0   
+   TWC4172502 NY           10/09/2023 0 Days TPD  Strain or Injury By - Twisting Payments 0  656   40   696  
+   10/20/2022  10/10/2023 1 Days 39519 She was at customers house, both hands occupied, when Recoveries 0 0 0 0
+                                                   her left ankle gave out after she stepped out of the car Incurred 0 656 40 696
+                                                   and onto the pavement                                     
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+
+
+================================================================================
+PAGE 8
+================================================================================
+
+                                                                                                             
+                                                                                                             
+                      Report ID: 677             WC LOSS RUN REPORT                          Date: 6/6/2025  
+                      Run ID: 13871240                                                       Time: 10:41:53AM
+                                                                                        
+                      User:  NickMcapstonecoverage.com                                       Page: Page 8 of 9
+                                                                                    
+                                                                                                             
+                                                                                                             
+   Claim No Claimant       Department             Loss Location                                              
+   Converted # Class Cd    DOL    Nature  Status  Part Injured                                               
+   Policy Number Juris St  First Aware Employee Lag Category Cause                                           
+   Pol. Eff Date Insured   Date Rcvd Reporting Lag Adjuster Loss Description          Indem Medical LAE Total
+                                                                                                             
+         Policy Number TWC4172502                            LT   Med  Total   Reserves 44,879 1,971 2,586 49,436
+                                                        Open  2   0     2      Payments 173,344 88,129 32,429 293,902
+                                     Group Totals                                                            
+                                                        Closed 7  4     11    Recoveries 18,825 2,801 0 21,626
+                                                                               Incurred 199,398 87,299 35,015 321,712
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+
+
+================================================================================
+PAGE 9
+================================================================================
+
+                                                                                                             
+                                                                                                             
+                      Report ID: 677             WC LOSS RUN REPORT                          Date: 6/6/2025  
+                      Run ID: 13871240                                                       Time: 10:41:53AM
+                                                                                        
+                      User:  NickMcapstonecoverage.com                                       Page: Page 9 of 9
+                                                                                    
+                                                                                                             
+                                                     Report Totals                                           
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                      Indem Medical LAE Total
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                             LT   Med  Total   Reserves 49,736 13,383 4,013 67,133
+                                                   Totals for Open 3 0  3      Payments 52,828 44,688 15,508 113,024
+                                                                              Recoveries 0    0     0    0   
+                                                                               Incurred 102,565 58,071 19,521 180,156
+                                                                                                             
+                                                                                                             
+                                                             LT   Med  Total   Reserves 0     0     0    0   
+                                                  Totals for Closed 9 4 13     Payments 127,626 48,371 20,637 196,633
+                                                                              Recoveries 18,825 2,801 0 21,626
+                                                                               Incurred 108,801 45,570 20,637 175,007
+                                                                                                             
+                                                                                                             
+                                                             LT   Med  Total   Reserves 49,736 13,383 4,013 67,133
+                                                    Report Totals 12 4  16     Payments 180,454 93,058 36,144 309,657
+                                                                              Recoveries 18,825 2,801 0 21,626
+                                                                               Incurred 211,366 103,640 40,158 355,164
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+    Policy Loss Run Selection:  Loss Statuses: All Statuses, Losses = 0, for all loss dates
+                                                                                                             
+
