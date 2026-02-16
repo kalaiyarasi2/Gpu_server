@@ -203,6 +203,34 @@ export function useDocumentProcessor() {
     [activeDocId, processQueue]
   );
 
+  const reprocessDocument = useCallback((id: string) => {
+    setDocuments((prev) => {
+      const doc = prev.find((d) => d.id === id);
+      if (!doc) return prev;
+
+      // Add to queue logic after state update
+      setTimeout(() => {
+        processingQueue.current.push({ id: doc.id, file: doc.file });
+        processQueue();
+      }, 0);
+
+      return prev.map((d) =>
+        d.id === id
+          ? {
+            ...d,
+            stage: "queued" as ProcessingStage,
+            stageMessage: "Reprocessing...",
+            result: null,
+            error: null,
+            progress: 0,
+            startedAt: null,
+            completedAt: null
+          }
+          : d
+      );
+    });
+  }, [processQueue]);
+
   const selectedDoc = documents.find((d) => d.id === activeDocId) || null;
 
   return {
@@ -211,5 +239,6 @@ export function useDocumentProcessor() {
     selectedDoc,
     addFiles,
     setActiveDocId,
+    reprocessDocument,
   };
 }
