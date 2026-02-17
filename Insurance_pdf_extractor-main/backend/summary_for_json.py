@@ -83,6 +83,7 @@ Analyze the provided claims JSON and generate a comprehensive, professional summ
    - Total paid (breakdown: medical + indemnity + expense)
    - Total reserves
    - Litigated claims count (Yes/No)
+   - Reopened claims count (reopen: "True")
 
 2. **Financial Insights**
    - Highest incurred claim (include claim ID and amount)
