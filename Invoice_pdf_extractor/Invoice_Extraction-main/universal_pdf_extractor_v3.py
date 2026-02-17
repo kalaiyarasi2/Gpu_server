@@ -9,6 +9,13 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 import json
+
+# Fix for pytesseract compatibility in Python 3.12+
+import pkgutil
+if not hasattr(pkgutil, 'find_loader'):
+    import importlib.util
+    pkgutil.find_loader = lambda name: importlib.util.find_spec(name)
+
 import pandas as pd
 from pathlib import Path
 from openai import OpenAI
@@ -1005,14 +1012,46 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                     continue
                 
                 # Possible match keys
-                key_id = f"{fname}|{lname}|{member_id}" if not is_weak_id else None
-                key_ssn = f"{fname}|{lname}|{ssn}" if not is_weak_ssn else None
+                # PRIMARY KEY: Name + ID + Plan (Strict match for multi-plan differentiation)
+                plan_name = str(item.get("PLAN_NAME") or "").strip().lower()
+                clean_plan = plan_name if plan_name not in ["n/a", "none", ""] else None
+                
+                key_id_strict = f"{fname}|{lname}|{member_id}|{clean_plan}" if not is_weak_id and clean_plan else None
+                key_ssn_strict = f"{fname}|{lname}|{ssn}|{clean_plan}" if not is_weak_ssn and clean_plan else None
+                
+                # SECONDARY KEY: Name + ID (Relaxed for merging adjustments without plan name)
+                key_id_loose = f"{fname}|{lname}|{member_id}" if not is_weak_id else None
+                key_ssn_loose = f"{fname}|{lname}|{ssn}" if not is_weak_ssn else None
                 
                 match_index = None
-                if key_id and key_id in index_by_id:
-                    match_index = index_by_id[key_id]
-                elif key_ssn and key_ssn in index_by_ssn:
-                    match_index = index_by_ssn[key_ssn]
+                
+                # 1. Try Strict Match first
+                if key_id_strict and key_id_strict in index_by_id:
+                    match_index = index_by_id[key_id_strict]
+                elif key_ssn_strict and key_ssn_strict in index_by_ssn:
+                    match_index = index_by_ssn[key_ssn_strict]
+                
+                # 2. Try Loose Match (if strict failed) to catch adjustments with missing Plan Name
+                if match_index is None:
+                     # Look for a potential match using loose keys
+                     potential_idx = None
+                     if key_id_loose and key_id_loose in index_by_id:
+                         potential_idx = index_by_id[key_id_loose]
+                     elif key_ssn_loose and key_ssn_loose in index_by_ssn:
+                         potential_idx = index_by_ssn[key_ssn_loose]
+                     
+                     if potential_idx is not None:
+                         # VALIDATE: Only merge if one of the plan names is missing, OR if they are the same
+                         existing = merged_items[potential_idx]
+                         ex_plan = str(existing.get("PLAN_NAME") or "").strip().lower()
+                         ex_clean = ex_plan if ex_plan not in ["n/a", "none", ""] else None
+                         
+                         # Allow merge if:
+                         # A) New item has no plan (it's an adjustment)
+                         # B) Existing item has no plan (it was an orphan adjustment, now we found the plan)
+                         # C) Both have same plan (handled by strict match usually, but safety net)
+                         if not clean_plan or not ex_clean or clean_plan == ex_clean:
+                             match_index = potential_idx
                 
                 if match_index is not None:
                     existing = merged_items[match_index]
@@ -1029,15 +1068,22 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                                 existing[k] = v
                     
                     # Also update missing indices if the current item has them
-                    if key_id and key_id not in index_by_id: index_by_id[key_id] = match_index
-                    if key_ssn and key_ssn not in index_by_ssn: index_by_ssn[key_ssn] = match_index
+                    # Index BOTH strict and loose keys to enable flexible matching
+                    if match_index is not None:
+                         if key_id_strict: index_by_id[key_id_strict] = match_index
+                         if key_ssn_strict: index_by_ssn[key_ssn_strict] = match_index
+                         if key_id_loose: index_by_id[key_id_loose] = match_index
+                         if key_ssn_loose: index_by_ssn[key_ssn_loose] = match_index
                 else:
                     # New record
                     new_item = item.copy()
                     current_idx = len(merged_items)
                     merged_items.append(new_item)
-                    if key_id: index_by_id[key_id] = current_idx
-                    if key_ssn: index_by_ssn[key_ssn] = current_idx
+                    
+                    if key_id_strict: index_by_id[key_id_strict] = current_idx
+                    if key_ssn_strict: index_by_ssn[key_ssn_strict] = current_idx
+                    if key_id_loose: index_by_id[key_id_loose] = current_idx
+                    if key_ssn_loose: index_by_ssn[key_ssn_loose] = current_idx
             
             # Convert merged items to rows
             for item in merged_items:

@@ -12,8 +12,13 @@ from dotenv import load_dotenv
 # Import our router logic
 from unified_router import UnifiedRouter
 
-# Load environment variables
-load_dotenv()
+# Setup directories
+BASE_DIR = Path(__file__).parent
+UPLOAD_DIR = BASE_DIR / "uploads"
+UPLOAD_DIR.mkdir(exist_ok=True)
+
+# Load environment variables from parent directory
+load_dotenv(BASE_DIR.parent / ".env")
 
 app = FastAPI(title="Insurance Form Extractor")
 router_engine = UnifiedRouter()
@@ -30,10 +35,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Setup directories
-BASE_DIR = Path(__file__).parent
-UPLOAD_DIR = BASE_DIR / "uploads"
-UPLOAD_DIR.mkdir(exist_ok=True)
+# BASE_DIR and UPLOAD_DIR are now defined at the top
 
 # Mount static and templates for the new React frontend
 frontend_dist_path = BASE_DIR / "frontend" / "dist"

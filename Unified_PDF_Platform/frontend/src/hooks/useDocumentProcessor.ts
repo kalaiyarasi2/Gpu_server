@@ -120,10 +120,11 @@ export function useDocumentProcessor() {
           // Invoice format: [...] (flat array of records)
           const records = Array.isArray(schema) ? schema : [];
 
-          // Calculate sum of CURRENT_PREMIUM across all records
+          // Calculate sum of ONLY CURRENT_PREMIUM across all records for the summary box
           totalValue = records.reduce((sum: number, rec: any) => {
-            const val = parseFloat(String(rec.CURRENT_PREMIUM || 0).replace(/[^0-9.-]+/g, ""));
-            return sum + (isNaN(val) ? 0 : val);
+            const current = parseFloat(String(rec.CURRENT_PREMIUM || 0).replace(/[^0-9.-]+/g, ""));
+            const currVal = isNaN(current) ? 0 : current;
+            return sum + currVal;
           }, 0);
         }
 
