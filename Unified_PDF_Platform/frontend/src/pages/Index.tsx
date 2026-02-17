@@ -4,12 +4,15 @@ import DocumentQueue from "@/components/DocumentQueue";
 import ResultsPanel from "@/components/ResultsPanel";
 import MergeJsonButton from "@/components/MergeJsonButton";
 import ProcessingStages from "@/components/ProcessingStages";
+import ClaimSummary from "@/components/ClaimSummary";
 import { useDocumentProcessor } from "@/hooks/useDocumentProcessor";
 import { FileText } from "lucide-react";
+import { useState } from "react";
 
 const Index = () => {
-  const { documents, activeDocId, selectedDoc, addFiles, setActiveDocId } =
+  const { documents, activeDocId, selectedDoc, addFiles, setActiveDocId, reprocessDocument } =
     useDocumentProcessor();
+  const [activeSummary, setActiveSummary] = useState<string | null>(null);
 
   const hasDocuments = documents.length > 0;
   const isAnyProcessing = documents.some(
@@ -62,11 +65,23 @@ const Index = () => {
                 )}
 
               {/* Merge button */}
-              <MergeJsonButton documents={documents} />
+              <MergeJsonButton
+                documents={documents}
+                onSummaryGenerated={(summary) => setActiveSummary(summary)}
+              />
             </aside>
 
             {/* Right panel: Results */}
             <section className="lg:col-span-8">
+              {activeSummary && (
+                <div className="mb-6">
+                  <ClaimSummary
+                    summary={activeSummary}
+                    onClose={() => setActiveSummary(null)}
+                  />
+                </div>
+              )}
+
               <div className="p-6 rounded-xl border border-border bg-card min-h-[400px]">
                 <h2 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
                   <FileText className="w-4 h-4 text-primary" />
@@ -74,7 +89,7 @@ const Index = () => {
                     ? `Results — ${selectedDoc.name}`
                     : "Extraction Results"}
                 </h2>
-                <ResultsPanel document={selectedDoc} />
+                <ResultsPanel document={selectedDoc} onReprocess={reprocessDocument} />
               </div>
             </section>
           </div>

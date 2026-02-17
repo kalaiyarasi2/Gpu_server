@@ -1,13 +1,14 @@
-import { Download, FileJson, BarChart3, Building2 } from "lucide-react";
+import { Download, FileJson, BarChart3, Building2, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { DocumentFile } from "@/types/extractor";
 import JsonViewer from "./JsonViewer";
 
 interface ResultsPanelProps {
   document: DocumentFile | null;
+  onReprocess?: (id: string) => void;
 }
 
-const ResultsPanel = ({ document }: ResultsPanelProps) => {
+const ResultsPanel = ({ document, onReprocess }: ResultsPanelProps) => {
   if (!document) {
     return (
       <div className="flex flex-col items-center justify-center h-64 text-muted-foreground gap-3">
@@ -19,9 +20,22 @@ const ResultsPanel = ({ document }: ResultsPanelProps) => {
 
   if (document.stage === "error") {
     return (
-      <div className="p-6 bg-destructive/5 rounded-lg border border-destructive/20">
-        <p className="text-sm text-destructive font-medium">Processing Error</p>
-        <p className="text-xs text-muted-foreground mt-1">{document.error}</p>
+      <div className="p-6 bg-destructive/5 rounded-lg border border-destructive/20 flex flex-col gap-4">
+        <div>
+          <p className="text-sm text-destructive font-medium">Processing Error</p>
+          <p className="text-xs text-muted-foreground mt-1">{document.error}</p>
+        </div>
+        {onReprocess && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-fit text-destructive border-destructive/20 hover:bg-destructive/10"
+            onClick={() => onReprocess(document.id)}
+          >
+            <RotateCcw className="w-4 h-4 mr-2" />
+            Retry Extraction
+          </Button>
+        )}
       </div>
     );
   }
@@ -145,6 +159,12 @@ const ResultsPanel = ({ document }: ResultsPanelProps) => {
           <Download className="w-4 h-4 mr-2" />
           Download Excel
         </Button>
+        {onReprocess && (
+          <Button size="sm" variant="ghost" className="text-muted-foreground hover:text-primary" onClick={() => onReprocess(document.id)}>
+            <RotateCcw className="w-3.5 h-3.5 mr-2" />
+            Reprocess
+          </Button>
+        )}
       </div>
 
       {/* JSON Viewer */}

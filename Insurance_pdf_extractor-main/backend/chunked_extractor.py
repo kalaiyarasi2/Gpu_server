@@ -183,7 +183,7 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
         print(f"📋 SCHEMA EXTRACTION")
         print(f"{'='*60}")
         
-        schema_data = self.extract_schema_from_text(all_text, target_claim_number)
+        schema_data = self.extract_schema_from_text(all_text, target_claim_number, num_pages=len(pages_metadata))
         
         # Validate extraction
         validation = self.validate_extraction(schema_data, all_text)
@@ -273,7 +273,7 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
 
         return verification_data
 
-    def extract_schema_from_text(self, all_text: str, target_claim_number: Optional[str] = None) -> Dict:
+    def extract_schema_from_text(self, all_text: str, target_claim_number: Optional[str] = None, num_pages: Optional[int] = None) -> Dict:
         """
         OVERRIDE: Implements chunking before calling extraction.
         """
@@ -285,17 +285,37 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
         chunker = PolicyChunker(self.client)
         boundaries = chunker.detect_policy_boundaries(all_text)
         
+        chunks = []
+        strategy = "policy-based"
+        
         if len(boundaries) <= 1:
-            print("   ℹ️ Single policy or no boundaries detected. Proceeding with single-shot extraction.")
-            return super()._extract_all_claims(all_text)
+            # CHECK FOR LARGE DOCUMENT FALLBACK
+            if num_pages and num_pages >= 55:
+                print(f"   ⚠️ Large document ({num_pages} pages) with no clear policy boundaries.")
+                print("   🔄 Falling back to dynamic AI chunking to avoid token limits...")
+                dynamic_chunks = self._chunk_text_dynamically(all_text)
+                
+                # Normalize dynamic chunks for processing
+                for dc in dynamic_chunks:
+                    chunks.append({
+                        "policy_number": f"Part {dc.get('chunk_id', 0) + 1}",
+                        "text": dc.get("text", "")
+                    })
+                strategy = "dynamic-fallback"
+            else:
+                print("   ℹ️ Single policy or no boundaries detected. Proceeding with single-shot extraction.")
+                return super()._extract_all_claims(all_text)
+        else:
+            chunks = chunker.split_into_chunks(all_text, boundaries)
             
-        chunks = chunker.split_into_chunks(all_text, boundaries)
-        print(f"   ✂️ Split into {len(chunks)} chunks.")
+        print(f"   ✂️ Split into {len(chunks)} chunks using {strategy} strategy.")
         
         # Generate Chunking Report
         report = {
             "total_original_chars": len(all_text),
             "num_chunks": len(chunks),
+            "strategy": strategy,
+            "num_pages": num_pages,
             "chunks": [],
             "total_chunked_chars": sum(len(c["text"]) for c in chunks),
             "integrity_check": "Sum of chunk lengths is close to original"

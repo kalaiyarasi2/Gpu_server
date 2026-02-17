@@ -273,6 +273,40 @@ def extract_schema_only():
             'success': False
         }), 500
 
+@app.route('/api/claim-summary', methods=['POST'])
+def get_claim_summary():
+    """
+    Generate an AI summary for provided claims JSON
+    """
+    data = request.get_json()
+    
+    if not data or 'claims' not in data:
+        # Check if it's a list directly
+        if isinstance(data, list):
+            claims_data = {'claims': data}
+        else:
+            return jsonify({'error': 'No claims data provided'}), 400
+    else:
+        claims_data = data
+        
+    try:
+        from summary_for_json import ClaimsAnalyzer
+        analyzer = ClaimsAnalyzer(api_key=os.getenv("OPENAI_API_KEY"))
+        
+        summary = analyzer.generate_claim_summary(claims_data)
+        
+        return jsonify({
+            'success': True,
+            'summary': summary
+        })
+    
+    except Exception as e:
+        print(f"❌ Error generating summary: {e}")
+        return jsonify({
+            'error': str(e),
+            'success': False
+        }), 500
+
 
 @app.route('/api/files/<path:filename>')
 def serve_file(filename):
