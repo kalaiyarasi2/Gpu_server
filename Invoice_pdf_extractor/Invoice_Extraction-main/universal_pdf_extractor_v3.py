@@ -121,8 +121,7 @@ REQUIRED_FIELDS = [
     "COVERAGE",
     "CURRENT_PREMIUM",
     "ADJUSTMENT_PREMIUM",
-    "PRICING_ADJUSTMENT",
-    "TOTAL_AMOUNT"
+    "PRICING_ADJUSTMENT"
 ]
 
 
@@ -505,8 +504,7 @@ Output: `{{"LASTNAME": "ANAND", "FIRSTNAME": "ARJUN", "MEMBERID": "2543915", "SS
   "HEADER": {{
     "INV_DATE": null,
     "INV_NUMBER": null,
-    "BILLING_PERIOD": null,
-    "TOTAL_AMOUNT": null
+    "BILLING_PERIOD": null
   }},
   "LINE_ITEMS": [
     {{
@@ -532,14 +530,22 @@ Output: `{{"LASTNAME": "ANAND", "FIRSTNAME": "ARJUN", "MEMBERID": "2543915", "SS
 
 ### CRITICAL EXTRACTION RULES (STRICT ADHERENCE REQUIRED):
 
-1. **HEADER TOTALS**:
-   - YOU MUST identify the grand total of the invoice (often labeled "Total Payment Due", "Total Amount Due", or "Current Premium Total") and map it to `TOTAL_AMOUNT` in the `HEADER` section.
-   - DO NOT extract this grand total as an individual line item.
+1. **GRAND TOTAL**:
+   - Locate the grand total premium amount (usually found in a summary or total section).
+   - IMPORTANT: DO NOT add a `TOTAL_AMOUNT` field to the HEADER.
+   - INSTEAD: Add a FINAL object to the `LINE_ITEMS` array with:
+     - `PLAN_NAME`: "TOTAL"
+     - `FIRSTNAME`: "INVOICE TOTAL"
+     - `CURRENT_PREMIUM`: The grand total value.
+     - All other fields: null.
 
-2. **IGNORE SUMMARY TABLES IN LINE_ITEMS**: 
-   - DO NOT extract data from sections titled "Summary of Activity", "Summary of Current Premiums", "Payment Summary", or "Totals" as members in the `LINE_ITEMS` array.
+2. **IGNORE SUMMARY TABLES (Except for Grand Total)**: 
+   - DO NOT extract individual line items from summary sections.
+   - ONLY use them to find the Grand Total for the special "TOTAL" line item.
    - THESE ARE NOT INDIVIDUAL LINE ITEMS. 
    - ERROR CASE: Never link planholder names found in headers (e.g., "Alicia Keel") to document-level totals found in summary tables.
+   - **IGNORE NAME HEADERS**: Often invoices repeat a name at the top of a section or page (e.g., "Bill for: Sharad Saxton"). DO NOT extract these as line items if they are solo headers. ONLY extract names when they are part of the actual premium/billing table rows.
+   - **CRITICAL: NEVER MISATTRIBUTE TOTALS**: A member's premium must be their own individual cost. NEVER attribute a sub-total or grand total (e.g., $3301.90) to an individual member row (e.g., SAXTON SHARAD). Sub-totals are for visual grouping only and MUST be ignored for individual line item extraction.
 
 2. **WIDE FORMAT / MULTI-COLUMN TABLES**:
    - If coverages (Dental, Vision, LIFE, Std) are listed as COLUMNS:
@@ -1037,7 +1043,6 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                 elif key_ssn_strict and key_ssn_strict in index_by_ssn:
                     match_index = index_by_ssn[key_ssn_strict]
                 
-                # 2. Try Loose Match (if strict failed) to catch adjustments with missing Plan Name
                 if match_index is None:
                      # Look for a potential match using loose keys
                      potential_idx = None
@@ -1051,23 +1056,63 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                          existing = merged_items[potential_idx]
                          ex_plan = str(existing.get("PLAN_NAME") or "").strip().lower()
                          ex_clean = ex_plan if ex_plan not in ["n/a", "none", ""] else None
-                         
-                         # Allow merge if:
-                         # A) New item has no plan (it's an adjustment)
-                         # B) Existing item has no plan (it was an orphan adjustment, now we found the plan)
-                         # C) Both have same plan (handled by strict match usually, but safety net)
                          if not clean_plan or not ex_clean or clean_plan == ex_clean:
                              match_index = potential_idx
                 
+                # 3. Try Name-Only Match (ULTRA-LOOSE) if one side is a "shell" record (missing identifiers)
+                if match_index is None and not is_weak_name:
+                    # Check if we have an existing record with the SAME name
+                    name_key = f"{fname}|{lname}"
+                    matched_by_name_idx = None
+                    for idx, ex in enumerate(merged_items):
+                        ex_fname = str(ex.get("FIRSTNAME") or "").strip().lower()
+                        ex_lname = str(ex.get("LASTNAME") or "").strip().lower()
+                        if ex_fname == fname and ex_lname == lname:
+                            ex_id = str(ex.get("MEMBERID") or "").strip().lower()
+                            ex_ssn = str(ex.get("SSN") or "").strip().lower()
+                            
+                            # Rule: Merge if the IDENTIFIER space is compatible
+                            curr_no_id = is_weak_id and is_weak_ssn
+                            ex_no_id = (not ex_id or ex_id in ["n/a", "none", ""]) and (not ex_ssn or ex_ssn in ["n/a", "none", ""])
+                            
+                            if curr_no_id or ex_no_id:
+                                # Potential match - check plan name compatibility
+                                ex_plan = str(ex.get("PLAN_NAME") or "").strip().lower()
+                                ex_clean = ex_plan if ex_plan not in ["n/a", "none", ""] else None
+                                if not clean_plan or not ex_clean or clean_plan == ex_clean:
+                                    matched_by_name_idx = idx
+                                    break
+                    
+                    if matched_by_name_idx is not None:
+                        match_index = matched_by_name_idx
+                
                 if match_index is not None:
                     existing = merged_items[match_index]
+                    
+                    def check_total(item_obj):
+                        p = str(item_obj.get("PLAN_NAME", "") or "").upper()
+                        f = str(item_obj.get("FIRSTNAME", "") or "").upper()
+                        l = str(item_obj.get("LASTNAME", "") or "").upper()
+                        return any(kw in p or kw in f or kw in l for kw in ["TOTAL", "GRAND TOTAL"])
+
+                    is_total_type = check_total(item) or check_total(existing)
+                    
                     # Merge data: update existing record
                     for k, v in item.items():
                         if k in ["CURRENT_PREMIUM", "ADJUSTMENT_PREMIUM"]:
                             v1 = to_float(existing.get(k))
                             v2 = to_float(v)
+                            
                             if v2 != 0:
-                                existing[k] = round(v1 + v2, 2)
+                                # DEDUPLICATION: If it's a "TOTAL" row, keep the LATEST value, do not sum.
+                                if is_total_type:
+                                    existing[k] = v2
+                                # For members: only add if the value is DIFFERENT (ignore redundant extractions of same row)
+                                elif abs(v1 - v2) > 0.01:
+                                    existing[k] = round(v1 + v2, 2)
+                                else:
+                                    # Identical value likely from chunk overlap/redundant extraction
+                                    pass
                         elif v and str(v).lower() not in ["n/a", "none", ""]:
                             # Keep first non-null encounter for others, unless existing is null
                             if not existing.get(k) or str(existing.get(k)).lower() in ["n/a", "none", ""]:
@@ -1091,21 +1136,50 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                     if key_id_loose: index_by_id[key_id_loose] = current_idx
                     if key_ssn_loose: index_by_ssn[key_ssn_loose] = current_idx
             
-            # Convert merged items to rows
+            # PHASE 1: Separate member rows from total rows
+            member_rows = []
+            total_rows = []
+            
             for item in merged_items:
                 row = {"SOURCE_FILE": source_filename}
-                # Ensure all required fields are present (even as None/empty)
                 for field in REQUIRED_FIELDS:
                     row[field] = None
                 
-                row.update(header)
                 row.update(item)
-                # Remove internal fields that shouldn't be in Excel
-                for internal_field in ["PRICING_MODEL", "RELATIONSHIP"]:
-                    if internal_field in row:
-                        del row[internal_field]
-                    
-                rows.append(row)
+                
+                # STRICT SCHEMA ENFORCEMENT: Only allow REQUIRED_FIELDS + SOURCE_FILE
+                clean_row = {"SOURCE_FILE": row.get("SOURCE_FILE")}
+                for field in REQUIRED_FIELDS:
+                    clean_row[field] = row.get(field)
+                row = clean_row
+                
+                is_total_row = (str(item.get("PLAN_NAME", "") or "").upper() == "TOTAL" or 
+                               str(item.get("FIRSTNAME", "") or "").upper() == "INVOICE TOTAL" or
+                               str(item.get("LASTNAME", "") or "").upper() == "TOTAL")
+                
+                if is_total_row:
+                    # Clear metadata for special rows
+                    row["SOURCE_FILE"] = None
+                    row.update({k: None for k in header.keys()})
+                    row["LASTNAME"] = " " # Anchor
+                    total_rows.append(row)
+                else:
+                    row.update(header)
+                    # Remove internal fields
+                    for internal_field in ["PRICING_MODEL", "RELATIONSHIP"]:
+                        if internal_field in row:
+                            del row[internal_field]
+                    member_rows.append(row)
+            
+            # PHASE 2: Final assembly
+            # Add all members first
+            rows.extend(member_rows)
+            
+            # Add only the FINAL total row if any exist
+            if total_rows:
+                # We assume the last total row extracted is the grand total
+                final_total = total_rows[-1]
+                rows.append(final_total)
                 
     else:
         # Fallback for legacy/error case

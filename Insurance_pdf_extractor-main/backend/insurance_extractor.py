@@ -69,6 +69,7 @@ class InsuranceClaim:
     deductible: Optional[float] = None
     total_incurred: Optional[float] = None
     litigation: Optional[str] = None
+    reopen: Optional[str] = "False"
     confidence_score: Optional[float] = None
     extraction_metadata: Optional[Dict] = None
 
@@ -800,6 +801,7 @@ Return JSON:
       "injury_date_time": "YYYY-MM-DD",
       "claim_year": 2020,
       "status": "Open or Closed or Reopened",
+      "reopen": "True or False",
       "injury_description": "description",
       "body_part": "body part or null",
       "injury_type": "MED or COMP",
@@ -1106,6 +1108,14 @@ Follow the format-specific instructions above. Validate your extractions."""
             # 1. Normalize Status
             raw_status = str(claim.get("status", "")).upper().strip()
             claim["status"] = status_map.get(raw_status, raw_status)
+            
+            # 1a-1. Handle Reopen flag
+            if claim["status"] == "Reopened":
+                claim["reopen"] = "True"
+            else:
+                # If AI didn't provide it or it's not "True"
+                if claim.get("reopen") not in ["True", "False"]:
+                    claim["reopen"] = "False"
             
             # 1b. Normalize Litigation
             litigation_val = claim.get("litigation")
@@ -1426,6 +1436,7 @@ Return a JSON object with this structure:
   "injury_date_time": "YYYY-MM-DD",
   "claim_year": 2020,
   "status": "Open/Closed/REOP",
+  "reopen": "True or False",
   "injury_description": "cause of injury",
   "body_part": "injured body part",
   "injury_type": "COMP/MEDI/etc",

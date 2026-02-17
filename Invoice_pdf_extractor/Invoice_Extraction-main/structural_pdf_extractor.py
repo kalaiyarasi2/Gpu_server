@@ -13,7 +13,7 @@ load_dotenv()
 import importlib.util
 
 # Path to the original script
-V3_PATH = r"c:\Users\INT002\pdf_extractor\Invoice_pdf_extractor\Invoice_Extraction-main\universal_pdf_extractor_v3.py"
+V3_PATH = os.path.join(os.path.dirname(__file__), "universal_pdf_extractor_v3.py")
 
 def load_v3():
     spec = importlib.util.spec_from_file_location("universal_pdf_extractor_v3", V3_PATH)
@@ -30,18 +30,6 @@ print("  [Debug] universal_pdf_extractor_v3 loaded successfully.")
 # but we can hack sys.path or just copy essentials. 
 # Given "don't touch the code", I'll write a standalone layer that uses the OpenAI client similarly.
 
-import importlib.util
-
-# Path to the original script
-V3_PATH = r"c:\Users\INT002\pdf_extractor\Invoice_pdf_extractor\Invoice_Extraction-main\universal_pdf_extractor_v3.py"
-
-def load_v3():
-    spec = importlib.util.spec_from_file_location("universal_pdf_extractor_v3", V3_PATH)
-    v3_module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(v3_module)
-    return v3_module
-
-v3 = load_v3()
 
 def map_and_segment_text(text):
     """
@@ -57,7 +45,7 @@ def map_and_segment_text(text):
     
     refined_chunks = []
     detail_buffer = []  # Buffer to merge consecutive detail pages
-    MAX_MERGE = 1       # Prevents giant chunks that time out LLM or hit response limits
+    MAX_MERGE = 2       # Efficiently group pages for complex documents
     
     # GIS 23 Optimization: Check if this document has the detailed "Payroll File Number" pages
     has_payroll = any("Payroll File Number" in p for p in pages)
@@ -68,7 +56,7 @@ def map_and_segment_text(text):
         if detail_buffer:
             merged_text = "\n\n".join(detail_buffer)
             # SUB-CHUNKING: If the text is long, split into parts to avoid JSON truncation (max ~25 items per chunk)
-            chunk_size = 2000
+            chunk_size = 6000
             if len(merged_text) > chunk_size:
                 print(f"  [Layer] Chunk is very large ({len(merged_text)} chars). Split-chunking into smaller pieces...")
                 lines = merged_text.split("\n")
@@ -93,10 +81,11 @@ def map_and_segment_text(text):
     for i, page_text in enumerate(pages):
         page_num = i + 1
         
-        # GIS 23 Optimization: If payroll pages exist, skip the redundant summary pages 1-3
-        # Strict check: If it's page 1-3 and doesn't have the payroll header, it's a summary.
+        # GIS 23 Optimization: If payroll pages exist, we still need summary pages for HEADER fields
+        # but we mark them as summary type to avoid extracting redundant line items.
         if has_payroll and page_num <= 3 and "Payroll File Number" not in page_text:
-            print(f"  [Layer] Page {page_num}: Skipping summary page (using detailed Payroll instead)")
+            print(f"  [Layer] Page {page_num}: Identifying as GIS 23 Summary (for Header only)")
+            refined_chunks.append({"type": "summary", "text": page_text, "page": page_num})
             continue
         
         # STRUCTURAL CHECK: Is this a mixed page (members + summary)?
@@ -176,7 +165,7 @@ def process_with_structural_layer(pdf_path, output_excel=None):
     chunks = map_and_segment_text(text)
     
     all_line_items = []
-    final_header = {field: None for field in v3.REQUIRED_FIELDS if field in ["INV_DATE", "INV_NUMBER", "BILLING_PERIOD", "GROUP_NUMBER", "PRICING_ADJUSTMENT", "TOTAL_AMOUNT"]}
+    final_header = {field: None for field in v3.REQUIRED_FIELDS if field in ["INV_DATE", "INV_NUMBER", "BILLING_PERIOD", "GROUP_NUMBER", "PRICING_ADJUSTMENT"]}
     
     print(f"  [Layer] Segmented document into {len(chunks)} contextual chunks.")
     
@@ -270,11 +259,10 @@ def process_with_structural_layer(pdf_path, output_excel=None):
         df = df[cols]
         
         # FIXED: Keep all rows - each benefit type should be a separate row
-        # Only filter out completely invalid rows (missing both first and last name)
-        df_valid = df.dropna(subset=['LASTNAME', 'FIRSTNAME'])
-        
-        # NO CONSOLIDATION - preserve all benefit type rows as separate entries
-        df = df_valid
+        # unless it is the specialized "TOTAL" row
+        df['is_total'] = df['PLAN_NAME'].str.upper().fillna('') == 'TOTAL'
+        df = df[(df[['LASTNAME', 'FIRSTNAME']].notna().any(axis=1)) | (df['is_total'])]
+        df = df.drop(columns=['is_total'])
         
         print(f"    -> [Layer] Preserved {len(df)} benefit line items (NO consolidation applied).")
         

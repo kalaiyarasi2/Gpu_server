@@ -38,7 +38,7 @@ except ImportError as e:
 
 # Configuration for paths
 INVOICE_SCRIPT = BASE_DIR.parent / "Invoice_pdf_extractor/Invoice_Extraction-main/universal_pdf_extractor_v3.py"
-STRUCTURAL_INVOICE_SCRIPT = BASE_DIR.parent / "structural_pdf_extractor.py"  # NEW: Structural layer
+STRUCTURAL_INVOICE_SCRIPT = BASE_DIR.parent / "Invoice_pdf_extractor/Invoice_Extraction-main/structural_pdf_extractor.py"
 INSURANCE_SCRIPT = BASE_DIR.parent / "Insurance_pdf_extractor-main/backend/chunked_extractor.py"
 INSURANCE_OUTPUT_DIR = INSURANCE_BACKEND_DIR / "outputs"
 OUTPUT_BASE = BASE_DIR / "unified_outputs"
@@ -224,7 +224,7 @@ OUTPUT:"""
                 # Structural extractor creates its own output file
                 output_xlsx = Path(pdf_path).parent / "extracted_data_structural.xlsx"
             else:
-                result = run_with_logging(["python", str(script_to_use), str(pdf_path), str(output_xlsx)], 900)
+                result = run_with_logging(["python", str(script_to_use), str(pdf_path), str(output_xlsx)], 600)
             
             if result.returncode != 0:
                 print(f"\n❌ Extraction Failed (Exit Code: {result.returncode})")
@@ -251,7 +251,7 @@ OUTPUT:"""
             
             return {"type": "INVOICE", "excel": str(output_xlsx), "json": self.xlsx_to_json(output_xlsx)}
         except subprocess.TimeoutExpired:
-            print(f"\n❌ Invoice Extraction Failed: Timeout after 900 seconds.")
+            print(f"\n❌ Invoice Extraction Failed: Timeout after 300 seconds.")
             return {"error": "Invoice extraction timed out."}
         except Exception as e:
             print(f"\n❌ Invoice Extraction Error: {e}")
@@ -407,13 +407,8 @@ OUTPUT:"""
         
         # Step 2: Route to appropriate extractor
         if doc_type == "INVOICE":
-            # TRY 1: Standard Extractor
-            result = self.run_invoice_extractor(pdf_path, use_structural=False)
-            
-            # FALLBACK: If standard extraction yielded no data or failed, try structural
-            should_fallback = False
-            
             # 1. Proactive Detection: Is this a Guardian or GIS 23 invoice?
+            # These are known to be complex and slow the standard extractor
             is_guardian = False
             is_gis23 = False
             try:
@@ -429,29 +424,35 @@ OUTPUT:"""
             except Exception as e:
                 print(f"  [Router] Detection failed: {e}")
 
-            if "error" in result:
-                should_fallback = True
+            # 2. Decision: Should we go straight to Structural Layer?
+            if is_guardian or is_gis23:
+                reason = "Guardian" if is_guardian else "GIS 23"
+                print(f"\n⚠️  {reason} invoice detected: Skipping Standard Extractor to prevent hang.")
+                print(f"⚠️  Routing directly to Structural Layer for maximum accuracy...")
+                result = self.run_invoice_extractor(pdf_path, use_structural=True)
             else:
-                try:
-                    df = pd.read_excel(result["excel"])
-                    if len(df) <= 1: # Only header or empty
-                        should_fallback = True
-                    
-                    # 2. Force fallback for complex invoices to ensure accuracy and prevent standard timeouts
-                    if is_guardian or is_gis23:
-                         should_fallback = True
-                         reason = "Guardian" if is_guardian else "GIS 23"
-                         print(f"⚠️  {reason} invoice: Forcing Structural layer for maximum accuracy...")
-                except:
+                # TRY 1: Standard Extractor for normal documents
+                result = self.run_invoice_extractor(pdf_path, use_structural=False)
+                
+                # FALLBACK: If standard extraction yielded no data or failed, try structural
+                should_fallback = False
+                if "error" in result:
                     should_fallback = True
-            
-            if should_fallback:
-                print("\n⚠️  Standard extraction yielded insufficient results. Falling back to Structural Layer...")
-                structural_result = self.run_invoice_extractor(pdf_path, use_structural=True)
-                if "error" not in structural_result:
-                    result = structural_result
                 else:
-                    print(f"❌ Structural fallback also failed: {structural_result.get('error')}")
+                    try:
+                        df = pd.read_excel(result["excel"])
+                        if len(df) <= 1: # Only header or empty
+                            should_fallback = True
+                    except:
+                        should_fallback = True
+                
+                if should_fallback:
+                    print("\n⚠️  Standard extraction yielded insufficient results. Falling back to Structural Layer...")
+                    structural_result = self.run_invoice_extractor(pdf_path, use_structural=True)
+                    if "error" not in structural_result:
+                        result = structural_result
+                    else:
+                        print(f"❌ Structural fallback also failed: {structural_result.get('error')}")
 
         elif doc_type == "INSURANCE":
             result = self.run_insurance_extractor(pdf_path)
