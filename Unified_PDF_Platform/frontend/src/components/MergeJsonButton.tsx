@@ -63,7 +63,7 @@ const MergeJsonButton = ({ documents, onSummaryGenerated }: MergeJsonButtonProps
 
     setIsSummarizing(true);
     try {
-      const response = await fetch("http://localhost:5000/api/claim-summary", {
+      const response = await fetch("/api/claim-summary", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

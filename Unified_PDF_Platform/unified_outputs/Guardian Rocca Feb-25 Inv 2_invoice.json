@@ -15,7 +15,8 @@
         "COVERAGE":null,
         "CURRENT_PREMIUM":2.5,
         "ADJUSTMENT_PREMIUM":7.5,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -33,7 +34,8 @@
         "COVERAGE":null,
         "CURRENT_PREMIUM":2.5,
         "ADJUSTMENT_PREMIUM":5.0,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -51,7 +53,8 @@
         "COVERAGE":null,
         "CURRENT_PREMIUM":2.5,
         "ADJUSTMENT_PREMIUM":7.5,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -69,7 +72,8 @@
         "COVERAGE":null,
         "CURRENT_PREMIUM":4.0,
         "ADJUSTMENT_PREMIUM":32.0,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -87,7 +91,8 @@
         "COVERAGE":null,
         "CURRENT_PREMIUM":15.88,
         "ADJUSTMENT_PREMIUM":11.22,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -105,7 +110,8 @@
         "COVERAGE":null,
         "CURRENT_PREMIUM":14.43,
         "ADJUSTMENT_PREMIUM":-53.53,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -123,7 +129,8 @@
         "COVERAGE":null,
         "CURRENT_PREMIUM":21.17,
         "ADJUSTMENT_PREMIUM":-33.76,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -141,7 +148,8 @@
         "COVERAGE":null,
         "CURRENT_PREMIUM":13.27,
         "ADJUSTMENT_PREMIUM":2.85,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -159,7 +167,8 @@
         "COVERAGE":null,
         "CURRENT_PREMIUM":null,
         "ADJUSTMENT_PREMIUM":-2.75,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -177,7 +186,8 @@
         "COVERAGE":null,
         "CURRENT_PREMIUM":null,
         "ADJUSTMENT_PREMIUM":-17.31,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -195,7 +205,8 @@
         "COVERAGE":null,
         "CURRENT_PREMIUM":null,
         "ADJUSTMENT_PREMIUM":-7.42,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -213,7 +224,8 @@
         "COVERAGE":null,
         "CURRENT_PREMIUM":null,
         "ADJUSTMENT_PREMIUM":-1.24,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -231,7 +243,8 @@
         "COVERAGE":null,
         "CURRENT_PREMIUM":null,
         "ADJUSTMENT_PREMIUM":-0.53,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -249,7 +262,8 @@
         "COVERAGE":null,
         "CURRENT_PREMIUM":2.5,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -267,7 +281,8 @@
         "COVERAGE":"DENTAL",
         "CURRENT_PREMIUM":17.31,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -285,7 +300,8 @@
         "COVERAGE":"VISION",
         "CURRENT_PREMIUM":7.42,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -303,7 +319,8 @@
         "COVERAGE":null,
         "CURRENT_PREMIUM":5.25,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -321,7 +338,8 @@
         "COVERAGE":"DENTAL",
         "CURRENT_PREMIUM":17.31,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -339,7 +357,8 @@
         "COVERAGE":"VISION",
         "CURRENT_PREMIUM":7.42,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -357,7 +376,8 @@
         "COVERAGE":null,
         "CURRENT_PREMIUM":4.0,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -375,7 +395,8 @@
         "COVERAGE":"DENTAL",
         "CURRENT_PREMIUM":17.31,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -393,7 +414,8 @@
         "COVERAGE":"VISION",
         "CURRENT_PREMIUM":23.36,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -411,7 +433,8 @@
         "COVERAGE":null,
         "CURRENT_PREMIUM":2.75,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -429,7 +452,8 @@
         "COVERAGE":"DENTAL",
         "CURRENT_PREMIUM":17.31,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -447,7 +471,8 @@
         "COVERAGE":null,
         "CURRENT_PREMIUM":2.5,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -465,7 +490,8 @@
         "COVERAGE":null,
         "CURRENT_PREMIUM":2.5,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -483,7 +509,8 @@
         "COVERAGE":null,
         "CURRENT_PREMIUM":2.5,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -501,7 +528,8 @@
         "COVERAGE":null,
         "CURRENT_PREMIUM":5.25,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -519,7 +547,27 @@
         "COVERAGE":"DENTAL",
         "CURRENT_PREMIUM":17.31,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
+    },
+    {
+        "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
+        "INV_DATE":"01\/17\/25",
+        "INV_NUMBER":null,
+        "BILLING_PERIOD":"02\/01\/25 to 02\/28\/25",
+        "LASTNAME":"Crouch",
+        "FIRSTNAME":"TherralR",
+        "MIDDLENAME":null,
+        "SSN":null,
+        "POLICYID":null,
+        "MEMBERID":null,
+        "PLAN_NAME":"Vision",
+        "PLAN_TYPE":null,
+        "COVERAGE":"VISION",
+        "CURRENT_PREMIUM":7.42,
+        "ADJUSTMENT_PREMIUM":null,
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -537,7 +585,8 @@
         "COVERAGE":"VISION",
         "CURRENT_PREMIUM":12.53,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -555,7 +604,8 @@
         "COVERAGE":null,
         "CURRENT_PREMIUM":2.5,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -573,7 +623,27 @@
         "COVERAGE":"DENTAL",
         "CURRENT_PREMIUM":17.31,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
+    },
+    {
+        "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
+        "INV_DATE":"01\/17\/25",
+        "INV_NUMBER":null,
+        "BILLING_PERIOD":"02\/01\/25 to 02\/28\/25",
+        "LASTNAME":"Fayson",
+        "FIRSTNAME":"Bryonne",
+        "MIDDLENAME":null,
+        "SSN":null,
+        "POLICYID":null,
+        "MEMBERID":null,
+        "PLAN_NAME":"Vision",
+        "PLAN_TYPE":null,
+        "COVERAGE":"VISION",
+        "CURRENT_PREMIUM":7.42,
+        "ADJUSTMENT_PREMIUM":null,
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -591,7 +661,8 @@
         "COVERAGE":"VISION",
         "CURRENT_PREMIUM":8.28,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -609,7 +680,8 @@
         "COVERAGE":null,
         "CURRENT_PREMIUM":2.75,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -627,7 +699,8 @@
         "COVERAGE":"DENTAL",
         "CURRENT_PREMIUM":17.31,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -645,7 +718,8 @@
         "COVERAGE":"VISION",
         "CURRENT_PREMIUM":15.88,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -663,7 +737,8 @@
         "COVERAGE":null,
         "CURRENT_PREMIUM":2.5,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -681,7 +756,8 @@
         "COVERAGE":null,
         "CURRENT_PREMIUM":2.5,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -699,7 +775,27 @@
         "COVERAGE":"DENTAL",
         "CURRENT_PREMIUM":17.31,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
+    },
+    {
+        "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
+        "INV_DATE":"01\/17\/25",
+        "INV_NUMBER":null,
+        "BILLING_PERIOD":"02\/01\/25 to 02\/28\/25",
+        "LASTNAME":"Harvey",
+        "FIRSTNAME":"PaytonL",
+        "MIDDLENAME":null,
+        "SSN":null,
+        "POLICYID":null,
+        "MEMBERID":null,
+        "PLAN_NAME":"Vision",
+        "PLAN_TYPE":null,
+        "COVERAGE":"VISION",
+        "CURRENT_PREMIUM":7.42,
+        "ADJUSTMENT_PREMIUM":null,
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -717,7 +813,8 @@
         "COVERAGE":"VISION",
         "CURRENT_PREMIUM":23.0,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -735,7 +832,8 @@
         "COVERAGE":null,
         "CURRENT_PREMIUM":2.5,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -753,7 +851,8 @@
         "COVERAGE":null,
         "CURRENT_PREMIUM":2.5,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -771,7 +870,8 @@
         "COVERAGE":"DENTAL",
         "CURRENT_PREMIUM":17.31,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -789,7 +889,8 @@
         "COVERAGE":"VISION",
         "CURRENT_PREMIUM":7.42,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -807,7 +908,8 @@
         "COVERAGE":null,
         "CURRENT_PREMIUM":2.5,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -825,7 +927,8 @@
         "COVERAGE":null,
         "CURRENT_PREMIUM":2.75,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -843,7 +946,8 @@
         "COVERAGE":null,
         "CURRENT_PREMIUM":2.5,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -861,7 +965,8 @@
         "COVERAGE":"DENTAL",
         "CURRENT_PREMIUM":17.31,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -879,7 +984,8 @@
         "COVERAGE":"VISION",
         "CURRENT_PREMIUM":19.9,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -897,7 +1003,8 @@
         "COVERAGE":null,
         "CURRENT_PREMIUM":4.0,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -915,7 +1022,8 @@
         "COVERAGE":null,
         "CURRENT_PREMIUM":2.5,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -933,7 +1041,8 @@
         "COVERAGE":null,
         "CURRENT_PREMIUM":2.75,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -951,7 +1060,8 @@
         "COVERAGE":"DENTAL",
         "CURRENT_PREMIUM":17.31,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -969,7 +1079,8 @@
         "COVERAGE":"VISION",
         "CURRENT_PREMIUM":14.43,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -987,7 +1098,8 @@
         "COVERAGE":null,
         "CURRENT_PREMIUM":2.5,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -1005,7 +1117,8 @@
         "COVERAGE":"DENTAL",
         "CURRENT_PREMIUM":17.31,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -1023,7 +1136,8 @@
         "COVERAGE":"VISION",
         "CURRENT_PREMIUM":12.74,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -1041,7 +1155,8 @@
         "COVERAGE":"DENTAL",
         "CURRENT_PREMIUM":4.0,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -1059,7 +1174,8 @@
         "COVERAGE":null,
         "CURRENT_PREMIUM":5.25,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -1077,7 +1193,8 @@
         "COVERAGE":"DENTAL",
         "CURRENT_PREMIUM":17.31,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -1095,7 +1212,27 @@
         "COVERAGE":"VISION",
         "CURRENT_PREMIUM":7.42,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
+    },
+    {
+        "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
+        "INV_DATE":"01\/17\/25",
+        "INV_NUMBER":null,
+        "BILLING_PERIOD":"02\/01\/25 to 02\/28\/25",
+        "LASTNAME":"Proechel",
+        "FIRSTNAME":"Greg",
+        "MIDDLENAME":null,
+        "SSN":null,
+        "POLICYID":null,
+        "MEMBERID":null,
+        "PLAN_NAME":"TotalPremium",
+        "PLAN_TYPE":null,
+        "COVERAGE":null,
+        "CURRENT_PREMIUM":55.07,
+        "ADJUSTMENT_PREMIUM":null,
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -1113,7 +1250,8 @@
         "COVERAGE":"DENTAL",
         "CURRENT_PREMIUM":2.5,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -1131,7 +1269,8 @@
         "COVERAGE":null,
         "CURRENT_PREMIUM":2.5,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -1149,7 +1288,8 @@
         "COVERAGE":"DENTAL",
         "CURRENT_PREMIUM":17.31,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -1167,7 +1307,27 @@
         "COVERAGE":"VISION",
         "CURRENT_PREMIUM":7.42,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
+    },
+    {
+        "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
+        "INV_DATE":"01\/17\/25",
+        "INV_NUMBER":null,
+        "BILLING_PERIOD":"02\/01\/25 to 02\/28\/25",
+        "LASTNAME":"Sarmiento",
+        "FIRSTNAME":"DanielA",
+        "MIDDLENAME":null,
+        "SSN":null,
+        "POLICYID":null,
+        "MEMBERID":null,
+        "PLAN_NAME":"TotalPremium",
+        "PLAN_TYPE":null,
+        "COVERAGE":null,
+        "CURRENT_PREMIUM":39.93,
+        "ADJUSTMENT_PREMIUM":null,
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -1185,7 +1345,8 @@
         "COVERAGE":null,
         "CURRENT_PREMIUM":2.75,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -1203,7 +1364,27 @@
         "COVERAGE":"DENTAL",
         "CURRENT_PREMIUM":17.31,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
+    },
+    {
+        "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
+        "INV_DATE":"01\/17\/25",
+        "INV_NUMBER":null,
+        "BILLING_PERIOD":"02\/01\/25 to 02\/28\/25",
+        "LASTNAME":"Stealey",
+        "FIRSTNAME":"Eric",
+        "MIDDLENAME":null,
+        "SSN":null,
+        "POLICYID":null,
+        "MEMBERID":null,
+        "PLAN_NAME":"TotalPremium",
+        "PLAN_TYPE":null,
+        "COVERAGE":null,
+        "CURRENT_PREMIUM":35.94,
+        "ADJUSTMENT_PREMIUM":null,
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -1221,7 +1402,8 @@
         "COVERAGE":null,
         "CURRENT_PREMIUM":44.0,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -1239,7 +1421,27 @@
         "COVERAGE":"DENTAL",
         "CURRENT_PREMIUM":17.31,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
+    },
+    {
+        "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
+        "INV_DATE":"01\/17\/25",
+        "INV_NUMBER":null,
+        "BILLING_PERIOD":"02\/01\/25 to 02\/28\/25",
+        "LASTNAME":"Tovar",
+        "FIRSTNAME":"Frank",
+        "MIDDLENAME":null,
+        "SSN":null,
+        "POLICYID":null,
+        "MEMBERID":null,
+        "PLAN_NAME":"TotalPremium",
+        "PLAN_TYPE":null,
+        "COVERAGE":null,
+        "CURRENT_PREMIUM":82.48,
+        "ADJUSTMENT_PREMIUM":null,
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -1257,7 +1459,8 @@
         "COVERAGE":null,
         "CURRENT_PREMIUM":2.5,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -1275,7 +1478,8 @@
         "COVERAGE":"DENTAL",
         "CURRENT_PREMIUM":17.31,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -1293,7 +1497,27 @@
         "COVERAGE":"VISION",
         "CURRENT_PREMIUM":7.42,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
+    },
+    {
+        "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
+        "INV_DATE":"01\/17\/25",
+        "INV_NUMBER":null,
+        "BILLING_PERIOD":"02\/01\/25 to 02\/28\/25",
+        "LASTNAME":"Winters",
+        "FIRSTNAME":"Mitchell",
+        "MIDDLENAME":null,
+        "SSN":null,
+        "POLICYID":null,
+        "MEMBERID":null,
+        "PLAN_NAME":"TotalPremium",
+        "PLAN_TYPE":null,
+        "COVERAGE":null,
+        "CURRENT_PREMIUM":40.5,
+        "ADJUSTMENT_PREMIUM":null,
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -1311,7 +1535,8 @@
         "COVERAGE":"DENTAL",
         "CURRENT_PREMIUM":2.5,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     },
     {
         "SOURCE_FILE":"Guardian Rocca Feb-25 Inv 2.pdf",
@@ -1329,6 +1554,7 @@
         "COVERAGE":"DENTAL",
         "CURRENT_PREMIUM":2.5,
         "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
+        "PRICING_ADJUSTMENT":null,
+        "TOTAL_AMOUNT":709.78
     }
 ]

@@ -70,11 +70,53 @@ class ClaimsAnalyzer:
         # Convert JSON to formatted string
         formatted_json = json.dumps(claims_json, indent=2)
         
-        # System prompt (controls behavior)
-        system_prompt = """
+        # Detect if this is an Invoice or a Claims document
+        is_invoice = False
+        first_item = {}
+        if isinstance(claims_json, dict):
+            if "LINE_ITEMS" in claims_json:
+                is_invoice = True
+                first_item = claims_json.get("LINE_ITEMS", [{}])[0] if claims_json.get("LINE_ITEMS") else {}
+            elif "claims" in claims_json:
+                first_item = claims_json.get("claims", [{}])[0] if claims_json.get("claims") else {}
+                if "CURRENT_PREMIUM" in first_item or "INV_DATE" in claims_json.get("HEADER", {}):
+                    is_invoice = True
+        elif isinstance(claims_json, list) and claims_json:
+            first_item = claims_json[0]
+            if "CURRENT_PREMIUM" in first_item:
+                is_invoice = True
+
+        if is_invoice:
+            # INVOICE SUMMARY PROMPT
+            system_prompt = """
+You are an expert insurance billing auditor. Analyze the provided premium invoice JSON and generate a professional summary.
+
+Sections:
+1. **Invoice Overview**
+   - Billing Period & Invoice Date
+   - Total Premium Amount (if present in header)
+   - Calculated Total (sum of all CURRENT_PREMIUM and ADJUSTMENT_PREMIUM)
+   
+2. **Breakdown by Coverage**
+   - Summarize totals for each PLAN_NAME (e.g., Medical, Dental, Vision)
+   - Count of members in each plan
+   
+3. **Adjustment Summary**
+   - Total retroactive adjustments/credits
+   - Identification of significant adjustments
+
+4. **Member Insights**
+   - Total member count
+   - Identification of highest premium members
+   
+Format the output with clear headers and bullet points. Use currency formatting.
+"""
+        else:
+            # CLAIMS SUMMARY PROMPT (Existing)
+            system_prompt = """
 You are an insurance claim analyst AI with expertise in workers' compensation and liability claims.
 
-Analyze the provided claims JSON and generate a comprehensive, professional summary with the following sections:
+Analyze the provided claims JSON and generate a comprehensive, professional summary:
 
 1. **Overall Statistics**
    - Total number of claims
@@ -82,35 +124,25 @@ Analyze the provided claims JSON and generate a comprehensive, professional summ
    - Total incurred amount
    - Total paid (breakdown: medical + indemnity + expense)
    - Total reserves
-   - Litigated claims count (Yes/No)
+   - Litigated claims count
 
 2. **Financial Insights**
-   - Highest incurred claim (include claim ID and amount)
-   - Lowest incurred claim (include claim ID and amount)
+   - Highest/Lowest incurred claims
    - Average incurred per claim
-   - Claims with high reserve risk (reserves > 50% of incurred)
-   - Payment velocity (paid/incurred ratio)
-
+   - Claims with high reserve risk
+   
 3. **Injury & Medical Insights**
-   - Most common injury types (top 3-5)
+   - Most common injury types
    - Body parts most frequently affected
-   - Status distribution (open/closed/pending)
-   - Average days to closure (if date information available)
-
+   
 4. **Risk Flags & Recommendations**
-   - Claims requiring immediate attention
-   - Potential fraud indicators (if any patterns detected)
-   - Cost containment opportunities
 
 Format the output professionally with clear headers and bullet points.
-Use currency formatting for dollar amounts (e.g., $123,456.78).
-Round percentages to 1 decimal place.
-Do not repeat the raw JSON data.
 """
         
         # User prompt (actual data)
         user_prompt = f"""
-Here is the extracted claims JSON data for analysis:
+Here is the extracted data JSON for analysis:
 
 {formatted_json}
 

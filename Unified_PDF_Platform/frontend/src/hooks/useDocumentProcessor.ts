@@ -120,12 +120,24 @@ export function useDocumentProcessor() {
           // Invoice format: [...] (flat array of records)
           const records = Array.isArray(schema) ? schema : [];
 
-          // Calculate sum of ONLY CURRENT_PREMIUM across all records for the summary box
-          totalValue = records.reduce((sum: number, rec: any) => {
-            const current = parseFloat(String(rec.CURRENT_PREMIUM || 0).replace(/[^0-9.-]+/g, ""));
-            const currVal = isNaN(current) ? 0 : current;
-            return sum + currVal;
-          }, 0);
+          // Calculate total value: prioritize TOTAL_AMOUNT from header/records, 
+          // fallback to sum of CURRENT_PREMIUM + ADJUSTMENT_PREMIUM
+          const firstRecord = records[0] || {};
+          const headerTotal = parseFloat(String(firstRecord.TOTAL_AMOUNT || 0).replace(/[^0-9.-]+/g, ""));
+
+          if (!isNaN(headerTotal) && headerTotal > 0) {
+            totalValue = headerTotal;
+          } else {
+            totalValue = records.reduce((sum: number, rec: any) => {
+              const current = parseFloat(String(rec.CURRENT_PREMIUM || 0).replace(/[^0-9.-]+/g, ""));
+              const adjustment = parseFloat(String(rec.ADJUSTMENT_PREMIUM || 0).replace(/[^0-9.-]+/g, ""));
+
+              const currVal = isNaN(current) ? 0 : current;
+              const adjVal = isNaN(adjustment) ? 0 : adjustment;
+
+              return sum + currVal + adjVal;
+            }, 0);
+          }
         }
 
         const metadata = {

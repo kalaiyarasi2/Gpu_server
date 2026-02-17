@@ -121,7 +121,8 @@ REQUIRED_FIELDS = [
     "COVERAGE",
     "CURRENT_PREMIUM",
     "ADJUSTMENT_PREMIUM",
-    "PRICING_ADJUSTMENT"
+    "PRICING_ADJUSTMENT",
+    "TOTAL_AMOUNT"
 ]
 
 
@@ -504,7 +505,8 @@ Output: `{{"LASTNAME": "ANAND", "FIRSTNAME": "ARJUN", "MEMBERID": "2543915", "SS
   "HEADER": {{
     "INV_DATE": null,
     "INV_NUMBER": null,
-    "BILLING_PERIOD": null
+    "BILLING_PERIOD": null,
+    "TOTAL_AMOUNT": null
   }},
   "LINE_ITEMS": [
     {{
@@ -530,8 +532,12 @@ Output: `{{"LASTNAME": "ANAND", "FIRSTNAME": "ARJUN", "MEMBERID": "2543915", "SS
 
 ### CRITICAL EXTRACTION RULES (STRICT ADHERENCE REQUIRED):
 
-1. **IGNORE SUMMARY TABLES**: 
-   - DO NOT extract data from sections titled "Summary of Activity", "Summary of Current Premiums", "Payment Summary", or "Totals".
+1. **HEADER TOTALS**:
+   - YOU MUST identify the grand total of the invoice (often labeled "Total Payment Due", "Total Amount Due", or "Current Premium Total") and map it to `TOTAL_AMOUNT` in the `HEADER` section.
+   - DO NOT extract this grand total as an individual line item.
+
+2. **IGNORE SUMMARY TABLES IN LINE_ITEMS**: 
+   - DO NOT extract data from sections titled "Summary of Activity", "Summary of Current Premiums", "Payment Summary", or "Totals" as members in the `LINE_ITEMS` array.
    - THESE ARE NOT INDIVIDUAL LINE ITEMS. 
    - ERROR CASE: Never link planholder names found in headers (e.g., "Alicia Keel") to document-level totals found in summary tables.
 

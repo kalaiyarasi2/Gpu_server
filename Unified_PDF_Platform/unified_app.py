@@ -1,5 +1,7 @@
 import os
 import shutil
+import logging
+from typing import List, Dict
 from pathlib import Path
 from fastapi import FastAPI, File, UploadFile, HTTPException, Request
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
@@ -8,6 +10,11 @@ from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
+
+# Import ClaimsAnalyzer for summary feature
+import sys
+sys.path.append(str(Path(__file__).parent.parent / "Insurance_pdf_extractor-main" / "backend"))
+from summary_for_json import ClaimsAnalyzer
 
 # Import our router logic
 from unified_router import UnifiedRouter
@@ -157,6 +164,43 @@ async def download_file(filepath: str):
         media_type = 'application/octet-stream'
         
     return FileResponse(path=file_path, filename=filename, media_type=media_type)
+
+@app.post("/api/claim-summary")
+async def get_claim_summary(request: Request):
+    """
+    Generate an AI summary for provided data (Claims or Invoices)
+    """
+    try:
+        data = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON payload"}, status_code=400)
+
+    if not data or 'claims' not in data:
+        # Check if it's a list directly
+        if isinstance(data, list):
+            claims_data = {'claims': data}
+        else:
+            return JSONResponse({'error': 'No data provided (expected "claims" field)'}, status_code=400)
+    else:
+        claims_data = data
+
+    try:
+        # Initialize analyzer with API key from environment
+        analyzer = ClaimsAnalyzer(api_key=os.getenv("OPENAI_API_KEY"))
+        summary = analyzer.generate_claim_summary(claims_data)
+
+        return {
+            'success': True,
+            'summary': summary
+        }
+
+    except Exception as e:
+        print(f"❌ Error generating summary: {e}")
+        return JSONResponse({
+            'error': str(e),
+            'success': False
+        }, status_code=500)
+
 @app.get("/{path:path}", response_class=HTMLResponse)
 async def serve_frontend(request: Request, path: str = ""):
     """Serve the React frontend for any non-API routes."""
