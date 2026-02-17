@@ -77,6 +77,7 @@ You are an insurance claim analyst AI with expertise in workers' compensation an
 Analyze the provided claims JSON and generate a comprehensive, professional summary with the following sections:
 
 1. **Overall Statistics**
+   - Carrier Name
    - Total number of claims
    - Open vs Closed status breakdown
    - Total incurred amount

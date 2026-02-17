@@ -65,11 +65,11 @@ class InsuranceClaim:
     indemnity_reserve: Optional[float] = None
     expense_paid: Optional[float] = None
     expense_reserve: Optional[float] = None
-    recovery: Optional[float] = None
-    deductible: Optional[float] = None
     total_incurred: Optional[float] = None
-    litigation: Optional[str] = None
+    litigation: Optional[str] = "N"
     reopen: Optional[str] = "False"
+    carrier_name: Optional[str] = None
+    policy_number: Optional[str] = None
     confidence_score: Optional[float] = None
     extraction_metadata: Optional[Dict] = None
 
@@ -78,6 +78,7 @@ class InsuranceClaim:
 class LossRunReport:
     """Complete Loss Run Report with multiple claims"""
     policy_number: Optional[str] = None
+    carrier_name: Optional[str] = None
     insured_name: Optional[str] = None
     report_date: Optional[str] = None
     policy_period: Optional[str] = None
@@ -791,12 +792,15 @@ Extract EVERY SINGLE CLAIM from this document.
 Return JSON:
 {{
   "policy_number": "string or null",
+  "carrier_name": "string (e.g. AmTrust, Berkshire Hathaway) or null",
   "insured_name": "string or null",
   "report_date": "YYYY-MM-DD or null",
   "policy_period": "string or null",
   "claims": [
     {{
       "employee_name": "full name",
+      "carrier_name": "same as top level or specific for claim",
+      "policy_number": "same as top level or specific for claim",
       "claim_number": "claim number",
       "injury_date_time": "YYYY-MM-DD",
       "claim_year": 2020,
@@ -812,10 +816,8 @@ Return JSON:
       "indemnity_reserve": "string",
       "expense_paid": "string",
       "expense_reserve": "string",
-      "recovery": "string",
-      "deductible": "string",
       "total_incurred": "string",
-      "litigation": "Yes or No or null (ONLY if explicitly present)"
+      "litigation": "Y if explicitly Yes/Y, else N"
     }}
   ]
 }}
@@ -1095,15 +1097,25 @@ Follow the format-specific instructions above. Validate your extractions."""
         # Numeric fields to clean
         num_fields = [
             "medical_paid", "medical_reserve", "indemnity_paid", "indemnity_reserve",
-            "expense_paid", "expense_reserve", "recovery", "deductible", "total_incurred"
+            "expense_paid", "expense_reserve", "total_incurred"
         ]
         
         seen_claim_numbers = {} # claim_number -> (claim_obj, quality_score)
+        
+        # Extract top-level default metadata
+        default_policy = data.get("policy_number")
+        default_carrier = data.get("carrier_name")
         
         for claim in data["claims"]:
             claim_num = str(claim.get("claim_number", "")).strip()
             if not claim_num:
                 continue
+                
+            # 0. Metadata Propagation
+            if not claim.get("policy_number") and default_policy:
+                claim["policy_number"] = default_policy
+            if not claim.get("carrier_name") and default_carrier:
+                claim["carrier_name"] = default_carrier
                 
             # 1. Normalize Status
             raw_status = str(claim.get("status", "")).upper().strip()
@@ -1119,16 +1131,16 @@ Follow the format-specific instructions above. Validate your extractions."""
             
             # 1b. Normalize Litigation
             litigation_val = claim.get("litigation")
-            if litigation_val is None:
-                claim["litigation"] = None
+            # Default to "N" and normalize Y/N
+            raw_litigation = str(litigation_val or "N").upper().strip()
+            if raw_litigation in ["Y", "YES", "TRUE"]:
+                claim["litigation"] = "Y"
             else:
-                raw_litigation = str(litigation_val).upper().strip()
-                if raw_litigation in ["Y", "YES", "TRUE"]:
-                    claim["litigation"] = "Yes"
-                elif raw_litigation in ["N", "NO", "FALSE"]:
-                    claim["litigation"] = "No"
-                else:
-                    claim["litigation"] = None
+                claim["litigation"] = "N"
+            
+            # 1c. Explicitly remove fields requested for removal
+            claim.pop('recovery', None)
+            claim.pop('deductible', None)
             
             # 2. Normalize Injury Type (MED/COMP)
             raw_type = str(claim.get("injury_type", "")).upper()
@@ -1175,51 +1187,20 @@ Follow the format-specific instructions above. Validate your extractions."""
             ind_res = claim.get('indemnity_reserve', 0.0) or 0.0
             exp_paid = claim.get('expense_paid', 0.0) or 0.0
             exp_res = claim.get('expense_reserve', 0.0) or 0.0
-            recovery = claim.get('recovery', 0.0) or 0.0
-            deductible = claim.get('deductible', 0.0) or 0.0
             reported_total = claim.get('total_incurred', 0.0) or 0.0
             
             # Simple sum for gross check
             calc_sum = med_paid + med_res + ind_paid + ind_res + exp_paid + exp_res
-            # Net sum for net check (most common)
-            calc_net = calc_sum - recovery - deductible
             
-            # Check if calc_sum matches perfectly or calc_net matches
+            # Check if calc_sum matches perfectly
             quality_score = 0.5
-            err_net = abs(calc_net - reported_total)
-            err_gross = abs(calc_sum - reported_total)
+            err_sum = abs(calc_sum - reported_total)
             
-            if err_net < 1.0 or err_gross < 1.0:
+            if err_sum < 1.0:
                 quality_score = 1.0
             
             claim["math_valid"] = (quality_score == 1.0)
-            claim["math_diff"] = round(min(err_net, err_gross), 2)
-            
-            # Specific fix for "Reserve vs Incurred" (Boyce Case)
-            # If we picked up a 'Gross' number as a reserve, the math will fail.
-            # We try adjusting the reserve downwards if a recovery exists.
-            if quality_score < 1.0 and recovery > 0:
-                for cat in ["medical", "indemnity", "expense"]:
-                    r_f = f"{cat}_reserve"
-                    if claim.get(r_f) > recovery:
-                        # Try subtracting recovery from this reserve
-                        test_res = claim.get(r_f) - recovery
-                        test_sum = (calc_sum - claim.get(r_f) + test_res) - recovery
-                        if abs(test_sum - reported_total) < 1.0:
-                            claim[r_f] = test_res
-                            quality_score = 1.0
-                            break
-
-            # AmTrust specific fix for Watson/Duarte cases where numbers might be duplicated
-            for cat in ["medical", "indemnity", "expense"]:
-                p_f = f"{cat}_paid"
-                r_f = f"{cat}_reserve"
-                if claim.get(p_f) > 0 and claim.get(p_f) == claim.get(r_f):
-                    if quality_score < 1.0:
-                        alt_sum = (calc_sum - claim.get(r_f)) - recovery
-                        if abs(alt_sum - reported_total) < 1.0:
-                            claim[r_f] = 0.0
-                            quality_score = 1.0
+            claim["math_diff"] = round(err_sum, 2)
             
             # 5. Name Normalization (Last, First)
             # If name is "First Last", convert to "Last, First"
@@ -1317,7 +1298,7 @@ Follow the format-specific instructions above. Validate your extractions."""
         indemnity_incurred = indemnity_paid + indemnity_reserve
         expense_incurred = expense_paid + expense_reserve
         
-        calculated_total = (medical_incurred + indemnity_incurred + expense_incurred) - recovery - deductible
+        calculated_total = (medical_incurred + indemnity_incurred + expense_incurred)
         
         # Validate total incurred
         if abs(calculated_total - total_incurred) > tolerance:
@@ -1384,18 +1365,15 @@ Return a JSON object with this structure:
       "indemnity_reserve": "string",
       "expense_paid": "string",
       "expense_reserve": "string",
-      "recovery": "string",
-      "deductible": "string",
       "total_incurred": "string",
-      "litigation": "Yes or No or null (ONLY if explicitly present)"
+      "litigation": "Y if explicitly Yes/Y, else N"
     }}
   ]
 }}
 
 STRICT RULES:
 1. DO NOT include any claims NOT in the list above.
-2. Ensure math balances perfectly.
-3. Check if 'Total Incurred' includes or excludes 'Recovery'.
+2. Ensure math balances perfectly (Med+Ind+Exp = Total).
 
 TEXT TO ANALYZE:
 {all_text}
@@ -1432,6 +1410,8 @@ Return a JSON object with this structure:
 
 {{
   "employee_name": "full claimant name",
+  "carrier_name": "insurance company name",
+  "policy_number": "policy identifier",
   "claim_number": "{target_claim_number}",
   "injury_date_time": "YYYY-MM-DD",
   "claim_year": 2020,
@@ -1447,10 +1427,8 @@ Return a JSON object with this structure:
   "indemnity_reserve": 0.0,
   "expense_paid": 0.0,
   "expense_reserve": 0.0,
-  "recovery": 0.0,
-  "deductible": 0.0,
   "total_incurred": 0.0,
-  "litigation": "Yes or No or null (ONLY if explicitly present)"
+  "litigation": "Y if explicitly Yes/Y, else N"
 }}
 
 RULES:
@@ -1458,7 +1436,8 @@ RULES:
 2. Extract ONLY that claim's data
 3. Ignore all other claims in the document
 4. Status codes: C=Closed, O=Open, REOP=Reopened
-5. Remove $ and commas from amounts
+5. Litigation: If the document explicitly shows 'Yes' or 'Y' for legal/litigation status, return 'Y'. Otherwise, return 'N'.
+6. Remove $ and commas from amounts
 
 TEXT TO ANALYZE:
 {all_text}
