@@ -1,0 +1,839 @@
+
+[[PAGE_1]]
+Aetna Pg.1of19
+Attn:BillingStatementDist
+P.O.BOX818023
+ClevelandOH44181-8023
+BLHACQUISITIONSCO., LLC
+BLHACQUISITIONSCO.,LLC PreparedDate:01/26/25
+BETHKEGERISE InvoiceNumber:J2131952
+9007BRITTANYWAY TriadNumber:1367
+TAMPAFL33619-0000 AccountNumber:118631052
+BillPackage:1001
+CoveragePeriod:02/01/25-02/28/25
+PaymentDueDate:02/01/25
+SUMMARYOFACCOUNT:
+OpeningBalance $101,853.83
+PaidDate01/10/25PaymentID:202501090000 $101,853.83
+TotalPaymentsReceivedSinceLastInvoice $101,853.83
+CurrentInforceCharges $116,069.20
+RetroactivityCharges $16,392.75
+CurrentAdmin/OtherAdjustmentCharges $0.00
+CurrentProgram&Othercharges $0.00
+CurrentNetCharges $132,461.95
+AMOUNTDUE: $132,461.95
+Totalamountdueincludesthepremiumduetoyourhealthplan,aswellasanyservicefeeyouarepayingyour
+brokerasoutlinedintheexecutedbillingandcollectionagreement.Pleaserefertoyourcopyofthebillingand
+collectionagreementfordetails.Ifyouhaveanyquestions,pleasecontactyourAccountManager.
+ImportantNoticetoInsuredCustomers--PleaseRead:Thetotalamountisdueonthefirstdayofthemonthly
+coverageperiod.Ifthetotalamountisnotreceivedbytheendofthegraceperiod,thecontractwillbeterminated.Youwill
+beliableforthetotalamountdueforallperiodsofcoverage(includingthegraceperiod)unlessyouprovideatleast30
+daysofadvancewrittennoticeofyourintenttoterminate.Ifyouhavemorethanoneinvoice,youmustpayeachinvoice
+separatelyorsupplysupportdetailingtheamounttoapplytoeachinvoice.Ifyoufailtosupplythissupportyourpayment
+willbeappliedproportionatelytoeachinvoiceforthatmonth.Ifthetotalamountdueforallinvoicesisnotreceived,you
+maybeinarrearsonallinvoices,andsubjecttotermination.
+AetnaandAetnaBusinessplansadministeredbyAetnawillappearasALICorAHMonyourfinancialinstitutionstatement
+Payonlinehttp://www.aetna.com/employer-plans/index.htmlorcall877-404-7115.Paybycheckpleaseincludeyourinvoice
+numberand/oraccountnumberonyourcheck.
+Wanttogopaperless?Justcall888-981-2881foreBusinessoptionsorbillingquestions. ThankyouforyourBusiness.
+Detach & return withpayment inthe enclosed envelope.
+PreparedDate:01/26/25
+InvoiceNumber:J2131952
+TriadNumber:1367
+Please make checks payable to: AccountNumber:118631052
+BillPackage:1001
+CoveragePeriod:02/01/25-02/28/25
+AETNA
+P.O.BOX804735
+Please Pay By Amount Due
+CHICAGO, IL 60680- 4158
+February01,2025 $132,461.95
+CheckBoxforChangeofAddress.SeeReverse.
+02 1367 0000000118631052 1001 J2131952 00013246195 3
+
+[[PAGE_2]]
+Pg.2of19
+*PlanKey
+Pleasereferencethiskeywhilereviewingmembershipatbenefitlevel.
+Product SpecificPlanType *Type
+Medical OAPOS 0023
+PPO 0024
+InformedHealthLine 0106
+*TransType TransTypeDefinition
+N NewEmployee
+T TerminatedEmployee
+C ChangedEmployee
+R ReinstatedEmployee
+FamilyCode Description
+1 EE
+2 EE+Spouse
+3 EE+Child(ren)
+4 EE+Family
+Please insert Change of Address information in the space provided
+Name
+Addr1
+Addr2
+City,State,Zip
+
+[[PAGE_3]]
+Pg.3of19
+PreparedDate:01/26/25
+InvoiceNumber:J2131952
+TriadNumber:1367
+AccountNumber: 118631052
+BillPackage:1001
+CoveragePeriod:02/01/25-02/28/25
+BLHACQUISITIONSCO., LLC
+CURRENT INFORCE CHARGES
+Empl Empl Medical Total
+Name ID
+*Type Amount
+1600OAMCH.S.A
+ACTIVE
+Arnold,Stephanie xxxxx2387 1 0023 745.01 $745.01
+0106 0.00
+Brammer,Lori-ann xxxxx8154 2 0023 1,638.94 $1,638.94
+0106 0.00
+Breland,Gregory xxxxx5993 2 0023 1,638.94 $1,638.94
+0106 0.00
+Chandler,Sherrill xxxxx1516 1 0023 745.01 $745.01
+0106 0.00
+Cochran,William xxxxx7986 1 0023 745.01 $745.01
+0106 0.00
+Currence,Christopher xxxxx1109 1 0023 745.01 $745.01
+0106 0.00
+Estradavillalobos,Bruno xxxxx6999 1 0023 745.01 $745.01
+0106 0.00
+Frierson,Roberta xxxxx7493 1 0023 745.01 $745.01
+0106 0.00
+Garcia,Jennifer xxxxx1565 1 0023 745.01 $745.01
+0106 0.00
+Getz,Christopher xxxxx3684 1 0023 745.01 $745.01
+0106 0.00
+Grady,Douglas xxxxx1226 1 0023 745.01 $745.01
+0106 0.00
+Hernandez,Johana xxxxx1069 1 0023 745.01 $745.01
+0106 0.00
+Jamerson,Marquita xxxxx3987 1 0023 745.01 $745.01
+0106 0.00
+Jarvis,Robert xxxxx9105 1 0023 745.01 $745.01
+0106 0.00
+Junker,Dennis xxxxx0036 1 0023 745.01 $745.01
+*SeePlanKey
+FamilyCode
+
+[[PAGE_4]]
+Pg.4of19
+PreparedDate:01/26/25
+InvoiceNumber:J2131952
+TriadNumber:1367
+AccountNumber: 118631052
+BillPackage:1001
+CoveragePeriod:02/01/25-02/28/25
+BLHACQUISITIONSCO., LLC
+CURRENT INFORCE CHARGESCONT.
+Empl Empl Medical Total
+Name ID
+*Type Amount
+(cont.)
+0106 0.00
+Kopp,Rachael xxxxx1039 1 0023 745.01 $745.01
+0106 0.00
+Lanier,Joseph xxxxx7171 2 0023 1,638.94 $1,638.94
+0106 0.00
+Longoria,Ryan xxxxx8636 1 0023 745.01 $745.01
+0106 0.00
+Martin,Robert xxxxx8015 1 0023 745.01 $745.01
+0106 0.00
+McElyea,Jason xxxxx3057 1 0023 745.01 $745.01
+0106 0.00
+Michalowicz,Robert xxxxx5495 4 0023 2,309.44 $2,309.44
+0106 0.00
+Nguyen,Nha xxxxx9979 1 0023 745.01 $745.01
+0106 0.00
+Parish,Jason xxxxx0202 1 0023 745.01 $745.01
+0106 0.00
+Pavini,Anthony xxxxx0727 1 0023 745.01 $745.01
+0106 0.00
+Pelkey,Vicki xxxxx6035 1 0023 745.01 $745.01
+0106 0.00
+Petersen,Zach xxxxx6366 1 0023 745.01 $745.01
+0106 0.00
+Reed,John xxxxx9342 1 0023 745.01 $745.01
+0106 0.00
+Richard,Jeremy xxxxx2285 1 0023 745.01 $745.01
+0106 0.00
+Rojano,Eddy xxxxx7992 1 0023 745.01 $745.01
+0106 0.00
+*SeePlanKey
+FamilyCode
+
+[[PAGE_5]]
+Pg.5of19
+PreparedDate:01/26/25
+InvoiceNumber:J2131952
+TriadNumber:1367
+AccountNumber: 118631052
+BillPackage:1001
+CoveragePeriod:02/01/25-02/28/25
+BLHACQUISITIONSCO., LLC
+CURRENT INFORCE CHARGESCONT.
+Empl Empl Medical Total
+Name ID
+*Type Amount
+(cont.)
+Rudrick,Jeffrey xxxxx0773 1 0023 745.01 $745.01
+0106 0.00
+Stanley,Tiana xxxxx1629 1 0023 745.01 $745.01
+0106 0.00
+Tabbi,Joseph xxxxx8481 1 0023 745.01 $745.01
+0106 0.00
+Triassi,Peter xxxxx5143 1 0023 745.01 $745.01
+0106 0.00
+Wenstrom,Kim xxxxx7285 1 0023 745.01 $745.01
+0106 0.00
+1600OAMCH.S.A
+$29,576.56 $29,576.56
+ACTIVESubtotal
+2500OAMCHSA
+ACTIVE
+Acosta,Stephanie xxxxx0012 1 0023 646.61 $646.61
+0106 0.00
+Amaya,Kevin xxxxx4155 1 0023 646.61 $646.61
+0106 0.00
+Anderson,Brianna xxxxx7348 1 0023 646.61 $646.61
+0106 0.00
+Casey,Natalie xxxxx4055 1 0023 646.61 $646.61
+0106 0.00
+DeLacruz,Francisco xxxxx7573 1 0023 646.61 $646.61
+0106 0.00
+Fleenor,Maurice xxxxx8696 1 0023 646.61 $646.61
+0106 0.00
+Fyke,April xxxxx4455 1 0023 646.61 $646.61
+0106 0.00
+Jordan,Kenneth xxxxx9201 1 0023 646.61 $646.61
+0106 0.00
+*SeePlanKey
+FamilyCode
+
+[[PAGE_6]]
+Pg.6of19
+PreparedDate:01/26/25
+InvoiceNumber:J2131952
+TriadNumber:1367
+AccountNumber: 118631052
+BillPackage:1001
+CoveragePeriod:02/01/25-02/28/25
+BLHACQUISITIONSCO., LLC
+CURRENT INFORCE CHARGESCONT.
+Empl Empl Medical Total
+Name ID
+*Type Amount
+(cont.)
+Lowe,Timothy xxxxx5134 3 0023 1,228.53 $1,228.53
+0106 0.00
+Maenle,Logan xxxxx5116 1 0023 646.61 $646.61
+0106 0.00
+Pollard,Kimoni xxxxx0730 1 0023 646.61 $646.61
+0106 0.00
+Quintana,Rachel xxxxx2365 1 0023 646.61 $646.61
+0106 0.00
+Reid,William xxxxx0919 1 0023 646.61 $646.61
+0106 0.00
+Roberts,Abigail xxxxx2924 1 0023 646.61 $646.61
+0106 0.00
+Rodriguez,Teresa xxxxx2556 2 0023 1,422.53 $1,422.53
+0106 0.00
+Sherman,Ashley xxxxx0276 4 0023 2,004.44 $2,004.44
+0106 0.00
+Simmons,Johnathan xxxxx8470 3 0023 1,228.53 $1,228.53
+0106 0.00
+Vautrot,Gabriel xxxxx2155 1 0023 646.61 $646.61
+0106 0.00
+Welby,Ian xxxxx5845 1 0023 646.61 $646.61
+0106 0.00
+White,Steven xxxxx1214 1 0023 646.61 $646.61
+0106 0.00
+Williams,Destiny xxxxx7994 1 0023 646.61 $646.61
+0106 0.00
+Wittig,April xxxxx2727 1 0023 646.61 $646.61
+0106 0.00
+*SeePlanKey
+FamilyCode
+
+[[PAGE_7]]
+Pg.7of19
+PreparedDate:01/26/25
+InvoiceNumber:J2131952
+TriadNumber:1367
+AccountNumber: 118631052
+BillPackage:1001
+CoveragePeriod:02/01/25-02/28/25
+BLHACQUISITIONSCO., LLC
+CURRENT INFORCE CHARGESCONT.
+Empl Empl Medical Total
+Name ID
+*Type Amount
+(cont.)
+2500OAMCHSA
+$17,523.01 $17,523.01
+ACTIVESubtotal
+2500OAMCHSA
+COBRA
+May,Brendan xxxxx5364 1 0023 646.61 $646.61
+0106 0.00
+2500OAMCHSA
+$646.61 $646.61
+COBRASubtotal
+4500OAMCH.S.A
+ACTIVE
+Anderson,Stephanie xxxxx5821 4 0023 1,873.43 $1,873.43
+0106 0.00
+Appollis,Kellan xxxxx6482 1 0023 616.31 $616.31
+0106 0.00
+Barrientos,Maritza xxxxx8399 1 0023 616.31 $616.31
+0106 0.00
+D'Silva,Gareth xxxxx0373 1 0023 616.31 $616.31
+0106 0.00
+Davis,Jerris xxxxx6739 1 0023 616.31 $616.31
+0106 0.00
+Dehart,Brian xxxxx4937 2 0023 1,355.84 $1,355.84
+0106 0.00
+Dennis,Allen xxxxx5964 1 0023 616.31 $616.31
+0106 0.00
+Flory,Alexis xxxxx0146 1 0023 616.31 $616.31
+0106 0.00
+Garcia,Christian xxxxx5133 1 0023 616.31 $616.31
+0106 0.00
+Goss,Alexandrea xxxxx9288 1 0023 616.31 $616.31
+0106 0.00
+Granado,Anthony xxxxx3779 1 0023 616.31 $616.31
+*SeePlanKey
+FamilyCode
+
+[[PAGE_8]]
+Pg.8of19
+PreparedDate:01/26/25
+InvoiceNumber:J2131952
+TriadNumber:1367
+AccountNumber: 118631052
+BillPackage:1001
+CoveragePeriod:02/01/25-02/28/25
+BLHACQUISITIONSCO., LLC
+CURRENT INFORCE CHARGESCONT.
+Empl Empl Medical Total
+Name ID
+*Type Amount
+(cont.)
+0106 0.00
+Hosler,Jonathan xxxxx3472 1 0023 616.31 $616.31
+0106 0.00
+Lascola,Max xxxxx2770 1 0023 616.31 $616.31
+0106 0.00
+Lowder,Layton xxxxx0015 1 0023 616.31 $616.31
+0106 0.00
+Morrison,Tiffany xxxxx3760 1 0023 616.31 $616.31
+0106 0.00
+Mouton,Joanne xxxxx4530 1 0023 616.31 $616.31
+0106 0.00
+Noernberg,Jillian xxxxx0917 3 0023 1,170.99 $1,170.99
+0106 0.00
+Noray,Chanelle xxxxx7174 2 0023 1,355.84 $1,355.84
+0106 0.00
+Pearson,Latifah xxxxx0505 1 0023 616.31 $616.31
+0106 0.00
+Powell,Christopher xxxxx0592 1 0023 616.31 $616.31
+0106 0.00
+Sawyer,Lindsay xxxxx9274 1 0023 616.31 $616.31
+0106 0.00
+Smith,Robert xxxxx5141 1 0023 616.31 $616.31
+0106 0.00
+Sorbello,Mickelini xxxxx8140 1 0023 616.31 $616.31
+0106 0.00
+Stewart,Scarlet xxxxx8309 1 0023 616.31 $616.31
+0106 0.00
+Stintsman,Blake xxxxx2570 1 0023 616.31 $616.31
+0106 0.00
+*SeePlanKey
+FamilyCode
+
+[[PAGE_9]]
+Pg.9of19
+PreparedDate:01/26/25
+InvoiceNumber:J2131952
+TriadNumber:1367
+AccountNumber: 118631052
+BillPackage:1001
+CoveragePeriod:02/01/25-02/28/25
+BLHACQUISITIONSCO., LLC
+CURRENT INFORCE CHARGESCONT.
+Empl Empl Medical Total
+Name ID
+*Type Amount
+(cont.)
+Sweet,Melissa xxxxx0213 4 0023 1,873.43 $1,873.43
+0106 0.00
+Urbay,David xxxxx8171 1 0023 616.31 $616.31
+0106 0.00
+Videsvasquez,Jhonatan xxxxx1078 1 0023 616.31 $616.31
+0106 0.00
+Wilkerson,Ryan xxxxx0792 1 0023 616.31 $616.31
+0106 0.00
+Williams,Alyssa xxxxx3922 1 0023 616.31 $616.31
+0106 0.00
+4500OAMCH.S.A
+$23,037.28 $23,037.28
+ACTIVESubtotal
+5000SJOAMCACTIVE
+Araya,Xaveria xxxxx1258 1 0023 536.75 $536.75
+0106 0.00
+Beach,Scott xxxxx4294 1 0023 536.75 $536.75
+0106 0.00
+Black,Michelle xxxxx5093 1 0023 536.75 $536.75
+0106 0.00
+Boyd,Zoe xxxxx3607 1 0023 536.75 $536.75
+0106 0.00
+Burks,Linda xxxxx8439 1 0023 536.75 $536.75
+0106 0.00
+Choe,Icksoo xxxxx4990 1 0023 536.75 $536.75
+0106 0.00
+Coimbra,Austin xxxxx8936 1 0023 536.75 $536.75
+0106 0.00
+Covey,Thurman xxxxx9136 1 0023 536.75 $536.75
+0106 0.00
+*SeePlanKey
+FamilyCode
+
+[[PAGE_10]]
+Pg.10of19
+PreparedDate:01/26/25
+InvoiceNumber:J2131952
+TriadNumber:1367
+AccountNumber: 118631052
+BillPackage:1001
+CoveragePeriod:02/01/25-02/28/25
+BLHACQUISITIONSCO., LLC
+CURRENT INFORCE CHARGESCONT.
+Empl Empl Medical Total
+Name ID
+*Type Amount
+(cont.)
+Culbert,Stephen xxxxx7903 4 0023 1,422.53 $1,422.53
+0106 0.00
+Culp,Benjamin xxxxx2160 1 0023 536.75 $536.75
+0106 0.00
+Dibble,Elizabeth xxxxx7449 1 0023 536.75 $536.75
+0106 0.00
+Doherty,Alisha xxxxx3542 1 0023 536.75 $536.75
+0106 0.00
+Duff,Ryan xxxxx5707 1 0023 536.75 $536.75
+0106 0.00
+Gamble,Victoria xxxxx8858 1 0023 536.75 $536.75
+0106 0.00
+Gerard,Nicholas xxxxx2387 1 0023 536.75 $536.75
+0106 0.00
+Gerwe,Rachel xxxxx6835 3 0023 1,355.84 $1,355.84
+0106 0.00
+Gonzales,Erasmo xxxxx7430 1 0023 536.75 $536.75
+0106 0.00
+Gonzales,Stacy xxxxx4842 1 0023 536.75 $536.75
+0106 0.00
+Hartlep,Steve xxxxx6445 1 0023 536.75 $536.75
+0106 0.00
+Hollins,Arika xxxxx4878 1 0023 536.75 $536.75
+0106 0.00
+Jackson,Christiane xxxxx3169 3 0023 1,355.84 $1,355.84
+0106 0.00
+Johnson,Christian xxxxx1420 1 0023 536.75 $536.75
+0106 0.00
+Jones,Kristen xxxxx6288 1 0023 536.75 $536.75
+*SeePlanKey
+FamilyCode
+
+[[PAGE_11]]
+Pg.11of19
+PreparedDate:01/26/25
+InvoiceNumber:J2131952
+TriadNumber:1367
+AccountNumber: 118631052
+BillPackage:1001
+CoveragePeriod:02/01/25-02/28/25
+BLHACQUISITIONSCO., LLC
+CURRENT INFORCE CHARGESCONT.
+Empl Empl Medical Total
+Name ID
+*Type Amount
+(cont.)
+0106 0.00
+Jordan,Stephanie xxxxx5000 1 0023 536.75 $536.75
+0106 0.00
+Jurgens,Jessica xxxxx4004 1 0023 536.75 $536.75
+0106 0.00
+Khosrozadeh,Natalie xxxxx3206 1 0023 536.75 $536.75
+0106 0.00
+Krooss,Destiny xxxxx8065 1 0023 536.75 $536.75
+0106 0.00
+Kuykendall,Justin xxxxx2312 1 0023 536.75 $536.75
+0106 0.00
+Loud,Michelle xxxxx9555 1 0023 536.75 $536.75
+0106 0.00
+Marotti,Jessica xxxxx5283 1 0023 536.75 $536.75
+0106 0.00
+McCoyIV,William xxxxx2791 1 0023 536.75 $536.75
+0106 0.00
+Mrlik,Michael xxxxx6897 2 0023 1,180.85 $1,180.85
+0106 0.00
+Murphy,John xxxxx2830 2 0023 1,180.85 $1,180.85
+0106 0.00
+O'Dell,Emily xxxxx5190 1 0023 536.75 $536.75
+0106 0.00
+Parker,Patrice xxxxx4769 1 0023 536.75 $536.75
+0106 0.00
+Renesto,Patricia xxxxx8752 1 0023 536.75 $536.75
+0106 0.00
+Richardson,Jeremiah xxxxx6042 1 0023 536.75 $536.75
+0106 0.00
+*SeePlanKey
+FamilyCode
+
+[[PAGE_12]]
+Pg.12of19
+PreparedDate:01/26/25
+InvoiceNumber:J2131952
+TriadNumber:1367
+AccountNumber: 118631052
+BillPackage:1001
+CoveragePeriod:02/01/25-02/28/25
+BLHACQUISITIONSCO., LLC
+CURRENT INFORCE CHARGESCONT.
+Empl Empl Medical Total
+Name ID
+*Type Amount
+(cont.)
+Scialdone,Lorie xxxxx3842 2 0023 1,180.85 $1,180.85
+0106 0.00
+Selman,James xxxxx3621 4 0023 1,422.53 $1,422.53
+0106 0.00
+Skinner,Robert xxxxx8804 1 0023 536.75 $536.75
+0106 0.00
+Smith,Heather xxxxx3706 3 0023 1,355.84 $1,355.84
+0106 0.00
+Spain,Netrecia xxxxx8179 1 0023 536.75 $536.75
+0106 0.00
+Stofer,Andrea xxxxx3504 1 0023 536.75 $536.75
+0106 0.00
+Sturtevant,Bree xxxxx6467 1 0023 536.75 $536.75
+0106 0.00
+Tashman,David xxxxx4004 2 0023 1,180.85 $1,180.85
+0106 0.00
+Tipay,Mary xxxxx7423 1 0023 536.75 $536.75
+0106 0.00
+Valentine,Eugenie xxxxx2223 4 0023 1,422.53 $1,422.53
+0106 0.00
+Vaughan,Erwin xxxxx7970 1 0023 536.75 $536.75
+0106 0.00
+Wheeler,Thomas xxxxx8662 3 0023 1,355.84 $1,355.84
+0106 0.00
+Williams,Richard xxxxx1787 1 0023 536.75 $536.75
+0106 0.00
+Wilson,Jason xxxxx4282 1 0023 536.75 $536.75
+0106 0.00
+Wright,Brian xxxxx3688 4 0023 1,422.53 $1,422.53
+*SeePlanKey
+FamilyCode
+
+[[PAGE_13]]
+Pg.13of19
+PreparedDate:01/26/25
+InvoiceNumber:J2131952
+TriadNumber:1367
+AccountNumber: 118631052
+BillPackage:1001
+CoveragePeriod:02/01/25-02/28/25
+BLHACQUISITIONSCO., LLC
+CURRENT INFORCE CHARGESCONT.
+Empl Empl Medical Total
+Name ID
+*Type Amount
+(cont.)
+0106 0.00
+Zuber,Elizabeth xxxxx0513 1 0023 536.75 $536.75
+0106 0.00
+5000SJOAMCACTIVE
+$37,843.63 $37,843.63
+Subtotal
+1600PPOH.S.A
+ACTIVE
+Haumesser,Jeff xxxxx2816 1 0024 745.01 $745.01
+0106 0.00
+Lewis,Renita xxxxx9113 1 0024 745.01 $745.01
+0106 0.00
+Queensen,Lisa xxxxx1817 1 0024 745.01 $745.01
+0106 0.00
+1600PPOH.S.AACTIVE
+$2,235.03 $2,235.03
+Subtotal
+2500PPOH.S.A
+ACTIVE
+Thornburg,Kayla xxxxx9268 1 0024 646.61 $646.61
+0106 0.00
+2500PPOH.S.AACTIVE
+$646.61 $646.61
+Subtotal
+4500PPOH.S.A
+ACTIVE
+Nifong,Shelby xxxxx2529 1 0024 616.31 $616.31
+0106 0.00
+Utrera,Maria xxxxx3451 1 0024 616.31 $616.31
+0106 0.00
+4500PPOH.S.AACTIVE
+$1,232.62 $1,232.62
+Subtotal
+5000SJPPOACTIVE
+Culpepper,Catherine xxxxx9290 2 0024 1,180.85 $1,180.85
+0106 0.00
+*SeePlanKey
+FamilyCode
+
+[[PAGE_14]]
+Pg.14of19
+PreparedDate:01/26/25
+InvoiceNumber:J2131952
+TriadNumber:1367
+AccountNumber: 118631052
+BillPackage:1001
+CoveragePeriod:02/01/25-02/28/25
+BLHACQUISITIONSCO., LLC
+CURRENT INFORCE CHARGESCONT.
+Empl Empl Medical Total
+Name ID
+*Type Amount
+(cont.)
+Frisby,Nathan xxxxx0645 1 0024 536.75 $536.75
+0106 0.00
+Gleason,Lynnette xxxxx6310 1 0024 536.75 $536.75
+0106 0.00
+Hagins,Tahshon xxxxx1512 1 0024 536.75 $536.75
+0106 0.00
+Yeager,Bayleigh xxxxx7770 1 0024 536.75 $536.75
+0106 0.00
+5000SJPPOACTIVE
+$3,327.85 $3,327.85
+Subtotal
+TotalDueforaboveCoverages $116,069.20 $116,069.20
+*SeePlanKey
+FamilyCode
+
+[[PAGE_15]]
+Pg.15of19
+PreparedDate:01/26/25
+InvoiceNumber:J2131952
+TriadNumber:1367
+AccountNumber:118631052
+BillPackage:1001
+CoveragePeriod:02/01/25-02/28/25
+BLHACQUISITIONSCO., LLC
+RETROACTIVITY CHARGES/CREDITS
+Empl Empl * Eff Mths Medical Total
+T
+Name ID Date Imp
+r
+a *Type Amount
+n
+s
+Benfield,Sean xxxxx9315 N 01/01/25 1 0023 1,415.46 $1,415.46
+0106 0.00
+Calzada,Jose xxxxx6525 N 01/01/25 1 0023 745.01 $745.01
+0106 0.00
+Frierson,Roberta xxxxx7493 C 01/01/25 1 0023 (893.93) $(893.93)
+0106 0.00
+Gerwe,Rachel xxxxx6835 T 01/01/25 1 0023 (1,415.46) $(1,415.46)
+0106 0.00
+Gerwe,Rachel xxxxx6835 C 01/01/25 1 0023 1,355.84 $1,355.84
+0106 0.00
+Lanier,Joseph xxxxx7171 N 01/01/25 1 0023 1,638.94 $1,638.94
+0106 0.00
+Loud,Michelle xxxxx9555 T 01/01/25 1 0023 (745.01) $(745.01)
+0106 0.00
+Loud,Michelle xxxxx9555 C 01/01/25 1 0023 536.75 $536.75
+0106 0.00
+Michalowicz,Robert xxxxx5495 N 01/01/25 1 0023 2,309.44 $2,309.44
+0106 0.00
+Parish,Jason xxxxx0202 T 01/01/25 1 0023 98.40 $98.40
+0106 0.00
+Pelkey,Vicki xxxxx6035 T 01/01/25 1 0023 208.26 $208.26
+0106 0.00
+Sawyer,Lindsay xxxxx9274 T 01/01/25 1 0023 (128.70) $(128.70)
+0106 0.00
+Simmons,Johnathan xxxxx8470 T 01/01/25 1 0023 (1,415.46) $(1,415.46)
+0106 0.00
+Simmons,Johnathan xxxxx8470 C 01/01/25 1 0023 1,228.53 $1,228.53
+0106 0.00
+Tabbi,Joseph xxxxx8481 T 01/01/25 1 0023 98.40 $98.40
+0106 0.00
+*SeePlanKey
+
+[[PAGE_16]]
+Pg.16of19
+PreparedDate:01/26/25
+InvoiceNumber:J2131952
+TriadNumber:1367
+AccountNumber:118631052
+BillPackage:1001
+CoveragePeriod:02/01/25-02/28/25
+BLHACQUISITIONSCO., LLC
+RETROACTIVITY CHARGES/CREDITSCONT.
+Empl Empl * Eff Mths Medical Total
+T
+Name ID Date Imp
+r
+a *Type Amount
+n
+s
+Acosta,Stephanie xxxxx0012 N 01/01/25 1 0023 646.61 $646.61
+0106 0.00
+Amaya,Kevin xxxxx4155 N 01/01/25 1 0023 646.61 $646.61
+0106 0.00
+Anderson,Stephanie xxxxx5821 T 01/01/25 1 0023 450.90 $450.90
+0106 0.00
+Armendariz,Armando xxxxx0403 T 11/30/24 1 0023 (1,032.31) $(1,032.31)
+0106 0.00
+Casey,Natalie xxxxx4055 N 01/01/25 1 0023 646.61 $646.61
+0106 0.00
+Choe,Icksoo xxxxx4990 T 01/01/25 1 0023 (109.86) $(109.86)
+0106 0.00
+Maenle,Logan xxxxx5116 N 01/01/25 1 0023 646.61 $646.61
+0106 0.00
+Noernberg,Jillian xxxxx0917 T 01/01/25 1 0023 (57.54) $(57.54)
+0106 0.00
+Pollard,Kimoni xxxxx0730 N 01/01/25 1 0023 646.61 $646.61
+0106 0.00
+Rodriguez,Teresa xxxxx2556 N 01/01/25 1 0023 1,422.53 $1,422.53
+0106 0.00
+Sneddon,Matthew xxxxx9341 T 12/31/24 1 0023 (646.61) $(646.61)
+0106 0.00
+Vautrot,Gabriel xxxxx2155 N 01/01/25 1 0023 646.61 $646.61
+0106 0.00
+White,Steven xxxxx1214 T 01/01/25 1 0023 (616.31) $(616.31)
+0106 0.00
+White,Steven xxxxx1214 C 01/01/25 1 0023 646.61 $646.61
+0106 0.00
+Arredondo,Luis xxxxx8463 T 12/31/24 1 0023 (616.31) $(616.31)
+0106 0.00
+*SeePlanKey
+
+[[PAGE_17]]
+Pg.17of19
+PreparedDate:01/26/25
+InvoiceNumber:J2131952
+TriadNumber:1367
+AccountNumber:118631052
+BillPackage:1001
+CoveragePeriod:02/01/25-02/28/25
+BLHACQUISITIONSCO., LLC
+RETROACTIVITY CHARGES/CREDITSCONT.
+Empl Empl * Eff Mths Medical Total
+T
+Name ID Date Imp
+r
+a *Type Amount
+n
+s
+(cont.)
+Dennis,Allen xxxxx5964 N 01/01/25 1 0023 616.31 $616.31
+0106 0.00
+Granado,Anthony xxxxx3779 N 01/01/25 1 0023 616.31 $616.31
+0106 0.00
+Hathaway,Andrew xxxxx1286 T 12/31/24 1 0023 (616.31) $(616.31)
+0106 0.00
+Morrison,Tiffany xxxxx3760 N 01/01/25 1 0023 616.31 $616.31
+0106 0.00
+Noray,Chanelle xxxxx7174 N 01/01/25 1 0023 1,355.84 $1,355.84
+0106 0.00
+Videsvasquez,Jhonatan xxxxx1078 N 01/01/25 1 0023 616.31 $616.31
+0106 0.00
+Araya,Xaveria xxxxx1258 N 01/01/25 1 0023 536.75 $536.75
+0106 0.00
+Beach,Scott xxxxx4294 N 01/01/25 1 0023 536.75 $536.75
+0106 0.00
+Burks,Linda xxxxx8439 N 01/01/25 1 0023 536.75 $536.75
+0106 0.00
+Coimbra,Austin xxxxx8936 N 01/01/25 1 0023 536.75 $536.75
+0106 0.00
+Garcia,Steven xxxxx4814 T 12/31/24 1 0023 (536.75) $(536.75)
+0106 0.00
+Gerard,Nicholas xxxxx2387 N 01/01/25 1 0023 536.75 $536.75
+0106 0.00
+Gonzales,Erasmo xxxxx7430 N 01/01/25 1 0023 536.75 $536.75
+0106 0.00
+Hartlep,Steve xxxxx6445 N 01/01/25 1 0023 536.75 $536.75
+0106 0.00
+Jurgens,Jessica xxxxx4004 N 01/01/25 1 0023 536.75 $536.75
+*SeePlanKey
+
+[[PAGE_18]]
+Pg.18of19
+PreparedDate:01/26/25
+InvoiceNumber:J2131952
+TriadNumber:1367
+AccountNumber:118631052
+BillPackage:1001
+CoveragePeriod:02/01/25-02/28/25
+BLHACQUISITIONSCO., LLC
+RETROACTIVITY CHARGES/CREDITSCONT.
+Empl Empl * Eff Mths Medical Total
+T
+Name ID Date Imp
+r
+a *Type Amount
+n
+s
+(cont.)
+0106 0.00
+Roberson,Dalton xxxxx2077 T 12/31/24 1 0023 (1,180.85) $(1,180.85)
+0106 0.00
+Spain,Netrecia xxxxx8179 N 01/01/25 1 0023 536.75 $536.75
+0106 0.00
+Trahan,Rachel xxxxx4616 T 12/31/24 1 0023 (536.75) $(536.75)
+0106 0.00
+Valentine,Eugenie xxxxx2223 N 01/01/25 1 0023 1,422.53 $1,422.53
+0106 0.00
+Williams,Richard xxxxx1787 N 01/01/25 1 0023 536.75 $536.75
+0106 0.00
+Zuber,Elizabeth xxxxx0513 N 01/01/25 1 0023 536.75 $536.75
+0106 0.00
+Culpepper,Catherine xxxxx9290 T 01/01/25 1 0024 (241.68) $(241.68)
+0106 0.00
+TotalDueforaboveCoverages $16,392.75 $16,392.75
+*SeePlanKey
+CurrentAdmin/OtherAdjustments Date Amount Remarks
+TotalAdmin/OtherAdjustments $0.00
+TotalRetroactivity/Admin/OtherAdjustments $16,392.75
+
+[[PAGE_19]]
+Pg.19of19
+PreparedDate:01/26/25
+BLHACQUISITIONSCO., LLC
+InvoiceNumber:J2131952
+TriadNumber:1367
+AccountNumber:118631052
+BillPackage:1001
+CoveragePeriod:02/01/25-02/28/25
+BENEFIT SNAPSHOT CURRENT MEMBERSHIP
+RecordedEmpl/Volume
+Empl/
+Product *PlanType Description Amount
+Volume
+Medical 023 EE 115 $72,050.39
+EE+Spouse 10 $13,774.43
+EE+Child(ren) 7 $9,051.41
+EE+Family 8 $13,750.86
+Subtotal $108,627.09
+Medical 024 EE 10 $6,261.26
+EE+Spouse 1 $1,180.85
+Subtotal $7,442.11
+Total $116,069.20
+*SeePlanKey
+ACTIVE CONTROL-SUFFIX-ACCOUNTS (CSA)REFLECTED IN THIS INVOICE
+0193711-010-00001AND00101;0193711-011-00001AND00101;0193711-012-00001AND00101;0193711-013-00001AND00101;0193711-014-00001
+0193711-015-00001AND00101;0193711-016-00001AND00101;0193711-017-00001AND00101
