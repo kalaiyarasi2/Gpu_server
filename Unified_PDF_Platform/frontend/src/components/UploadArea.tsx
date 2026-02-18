@@ -16,8 +16,14 @@ const UploadArea = ({ onFilesSelected, disabled }: UploadAreaProps) => {
       e.preventDefault();
       setIsDragOver(false);
       if (disabled) return;
+      const allowedTypes = [
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/vnd.ms-excel",
+        "text/csv"
+      ];
       const files = Array.from(e.dataTransfer.files).filter(
-        (f) => f.type === "application/pdf"
+        (f) => allowedTypes.includes(f.type) || f.name.endsWith(".xlsx") || f.name.endsWith(".xls") || f.name.endsWith(".csv")
       );
       if (files.length) onFilesSelected(files);
     },
@@ -48,7 +54,7 @@ const UploadArea = ({ onFilesSelected, disabled }: UploadAreaProps) => {
       <input
         ref={inputRef}
         type="file"
-        accept=".pdf"
+        accept=".pdf,.xlsx,.xls,.csv"
         multiple
         className="hidden"
         onChange={handleChange}
@@ -63,10 +69,10 @@ const UploadArea = ({ onFilesSelected, disabled }: UploadAreaProps) => {
         </div>
         <div>
           <p className="text-lg font-semibold text-foreground">
-            {isDragOver ? "Drop PDF files here" : "Drag & Drop PDF Files"}
+            {isDragOver ? "Drop files here" : "Drag & Drop Files"}
           </p>
           <p className="text-sm text-muted-foreground mt-1">
-            or click to browse • Supports multiple files • PDF only (max 50MB each)
+            or click to browse • Supports multiple files • PDF, Excel & CSV (max 50MB each)
           </p>
         </div>
         <Button

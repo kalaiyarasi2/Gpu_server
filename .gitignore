@@ -3,7 +3,7 @@
 Unified_PDF_Platform/.env
 venv/
 __pycache__/
-unified_outputs/unified_outputs
+unified_PDF_Platform/unified_outputs
 insurance_pdf_extractor-main/backend/outputs
 sources/
 Unified_PDF_Platform/uploads

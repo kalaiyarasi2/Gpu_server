@@ -122,8 +122,7 @@ export function useDocumentProcessor() {
                         // Fallback: manual sum if no total row was returned
                         totalValue = records.reduce((sum: number, rec: any) => {
                             const current = parseFloat(String(rec.CURRENT_PREMIUM || 0).replace(/[^0-9.-]+/g, ""));
-                            const adjustment = parseFloat(String(rec.ADJUSTMENT_PREMIUM || 0).replace(/[^0-9.-]+/g, ""));
-                            return sum + (isNaN(current) ? 0 : current) + (isNaN(adjustment) ? 0 : adjustment);
+                            return sum + (isNaN(current) ? 0 : current);
                         }, 0);
                     }
                 }

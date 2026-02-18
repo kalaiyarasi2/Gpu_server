@@ -48,7 +48,7 @@ app.add_middleware(
 frontend_dist_path = BASE_DIR / "frontend" / "dist"
 if frontend_dist_path.exists():
     app.mount("/assets", StaticFiles(directory=str(frontend_dist_path / "assets")), name="assets")
-    print(f"✓ Mounted frontend assets from {frontend_dist_path / 'assets'}")
+    print(f"[OK] Mounted frontend assets from {frontend_dist_path / 'assets'}")
 else:
     print(f"⚠️ Warning: Frontend dist folder not found at {frontend_dist_path}. Run build first.")
 
@@ -57,8 +57,9 @@ else:
 async def extract_document(file: UploadFile = File(...)):
     print(f"\n[Unified][API] Received request for: {file.filename}")
     
-    if not file.filename.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Only PDF files are supported")
+    file_ext = Path(file.filename).suffix.lower()
+    if file_ext not in [".pdf", ".xlsx", ".xls", ".csv"]:
+        raise HTTPException(status_code=400, detail="Only PDF, Excel and CSV files are supported")
     
     file_path = UPLOAD_DIR / file.filename
     try:

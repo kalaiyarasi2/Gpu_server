@@ -1,7 +1,9 @@
-import { Download, FileJson, BarChart3, Building2, RotateCcw, HardHat, FileText } from "lucide-react";
+import { Download, FileJson, BarChart3, Building2, RotateCcw, HardHat, FileText, Table as TableIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { DocumentFile } from "@/types/extractor";
 import JsonViewer from "./JsonViewer";
+import TableView from "./TableView";
 
 interface ResultsPanelProps {
   document: DocumentFile | null;
@@ -9,6 +11,7 @@ interface ResultsPanelProps {
 }
 
 const ResultsPanel = ({ document, onReprocess }: ResultsPanelProps) => {
+  // ... (previous guard clauses remain same)
   if (!document) {
     return (
       <div className="flex flex-col items-center justify-center h-64 text-muted-foreground gap-3">
@@ -19,6 +22,7 @@ const ResultsPanel = ({ document, onReprocess }: ResultsPanelProps) => {
   }
 
   if (document.stage === "error") {
+    // ... (retry button logic)
     return (
       <div className="p-6 bg-destructive/5 rounded-lg border border-destructive/20 flex flex-col gap-4">
         <div>
@@ -58,6 +62,11 @@ const ResultsPanel = ({ document, onReprocess }: ResultsPanelProps) => {
   const isInvoice = docType === "INVOICE";
   const wcMeta = metadata?.work_comp_metadata;
 
+  // Normalized data for table view
+  const tableData = metadata?.documentType === "INSURANCE"
+    ? (Array.isArray(result?.claims) ? result.claims : [])
+    : (Array.isArray(result) ? result : []);
+
   const handleDownloadJson = () => {
     const blob = new Blob([JSON.stringify(result, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -88,35 +97,6 @@ const ResultsPanel = ({ document, onReprocess }: ResultsPanelProps) => {
     } catch (error) {
       console.error("Excel download error:", error);
     }
-  };
-
-  const handleDownloadCsv = () => {
-    if (!result?.claims || !Array.isArray(result.claims)) return;
-
-    const claims = result.claims;
-    if (claims.length === 0) return;
-
-    // Get all unique keys for headers
-    const headers = Array.from(new Set(claims.flatMap(c => Object.keys(c))));
-
-    const csvRows = [
-      headers.join(','),
-      ...claims.map(row =>
-        headers.map(header => {
-          const val = row[header];
-          const escaped = ('' + (val ?? '')).replace(/"/g, '""');
-          return `"${escaped}"`;
-        }).join(',')
-      )
-    ];
-
-    const blob = new Blob([csvRows.join('\n')], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = globalThis.document.createElement("a");
-    a.href = url;
-    a.download = `${document.name.replace(".pdf", "")}_extracted.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
   };
 
   return (
@@ -214,8 +194,25 @@ const ResultsPanel = ({ document, onReprocess }: ResultsPanelProps) => {
         )}
       </div>
 
-      {/* JSON Viewer */}
-      <JsonViewer data={result} title="Raw Extraction Data" maxHeight="350px" />
+      {/* View Switcher */}
+      <Tabs defaultValue="table" className="w-full">
+        <TabsList className="grid w-[400px] grid-cols-2 mb-2">
+          <TabsTrigger value="table" className="text-xs flex items-center gap-2 font-semibold tracking-wide">
+            <TableIcon className="w-3.5 h-3.5" />
+            TABLE VIEW
+          </TabsTrigger>
+          <TabsTrigger value="json" className="text-xs flex items-center gap-2 font-semibold tracking-wide">
+            <FileJson className="w-3.5 h-3.5" />
+            JSON VIEW
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="table" className="mt-0">
+          <TableView data={tableData} title="Extracted Data Grid" maxHeight="450px" />
+        </TabsContent>
+        <TabsContent value="json" className="mt-0">
+          <JsonViewer data={result} title="Raw Extraction Data" maxHeight="450px" />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };

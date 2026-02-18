@@ -254,9 +254,14 @@ def process_with_structural_layer(pdf_path, output_excel=None):
         for field in v3.REQUIRED_FIELDS:
             if field not in df.columns: df[field] = None
         
-        # Sort or filter columns if needed
+        # Sort or filter columns if needed (Layer 5/7 alignment)
         cols = ['SOURCE_FILE'] + [f for f in v3.REQUIRED_FIELDS if f in df.columns]
-        df = df[cols]
+        # Ensure all 15 fields are present
+        for field in v3.REQUIRED_FIELDS:
+            if field not in cols:
+                df[field] = None
+        
+        df = df[['SOURCE_FILE'] + v3.REQUIRED_FIELDS]
         
         # FIXED: Keep all rows - each benefit type should be a separate row
         # unless it is the specialized "TOTAL" row

@@ -105,7 +105,7 @@ def check_text_quality(text: str) -> float:
 # Configuration
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-# Define the fields to extract (Expanded for Universal Extractor)
+# Define the fields to extract (Standardized 15 fields for 7-Layer Pipeline)
 REQUIRED_FIELDS = [
     "INV_DATE",
     "INV_NUMBER",
@@ -510,15 +510,16 @@ Output: `{{"LASTNAME": "ANAND", "FIRSTNAME": "ARJUN", "MEMBERID": "2543915", "SS
     {{
       "LASTNAME": null,
       "FIRSTNAME": null,
+      "MIDDLENAME": null,
+      "SSN": null,
+      "POLICYID": null,
       "MEMBERID": null,
       "PLAN_NAME": null,
       "PLAN_TYPE": null,
-      "CURRENT_PREMIUM": null,
       "COVERAGE": null,
+      "CURRENT_PREMIUM": null,
       "ADJUSTMENT_PREMIUM": null,
-      "PRICING_ADJUSTMENT": null,
-      "PRICING_MODEL": null,
-      "SSN": null
+      "PRICING_ADJUSTMENT": null
     }}
   ]
 }}
@@ -1142,44 +1143,52 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
             
             for item in merged_items:
                 row = {"SOURCE_FILE": source_filename}
+                # Ensure all required fields are present (even as None/empty)
                 for field in REQUIRED_FIELDS:
-                    row[field] = None
+                    row[field] = item.get(field) # Will be None if missing
                 
+                row.update(header)
                 row.update(item)
+                # Remove internal fields that shouldn't be in Excel
+                for internal_field in ["PRICING_MODEL", "RELATIONSHIP"]:
+                    if internal_field in row:
+                        del row[internal_field]
                 
-                # STRICT SCHEMA ENFORCEMENT: Only allow REQUIRED_FIELDS + SOURCE_FILE
-                clean_row = {"SOURCE_FILE": row.get("SOURCE_FILE")}
-                for field in REQUIRED_FIELDS:
-                    clean_row[field] = row.get(field)
-                row = clean_row
+                # Check for total row type
+                idx_p = str(row.get("PLAN_NAME", "") or "").upper()
+                idx_f = str(row.get("FIRSTNAME", "") or "").upper()
+                idx_l = str(row.get("LASTNAME", "") or "").upper()
+                is_total = any(kw in idx_p or kw in idx_f or kw in idx_l for kw in ["TOTAL", "GRAND TOTAL"])
                 
-                is_total_row = (str(item.get("PLAN_NAME", "") or "").upper() == "TOTAL" or 
-                               str(item.get("FIRSTNAME", "") or "").upper() == "INVOICE TOTAL" or
-                               str(item.get("LASTNAME", "") or "").upper() == "TOTAL")
-                
-                if is_total_row:
-                    # Clear metadata for special rows
-                    row["SOURCE_FILE"] = None
-                    row.update({k: None for k in header.keys()})
-                    row["LASTNAME"] = " " # Anchor
+                if is_total:
+                    # Clear text labels for the final Excel output (leave only the amount)
+                    fields_to_clear = [
+                        "PLAN_NAME", "FIRSTNAME", "LASTNAME", "MEMBERID", "SSN", 
+                        "PLAN_TYPE", "COVERAGE", "MIDDLENAME", "POLICYID",
+                        "SOURCE_FILE", "INV_DATE", "INV_NUMBER", "BILLING_PERIOD"
+                    ]
+                    for field in fields_to_clear:
+                        if field in row:
+                            row[field] = None
                     total_rows.append(row)
                 else:
-                    row.update(header)
-                    # Remove internal fields
-                    for internal_field in ["PRICING_MODEL", "RELATIONSHIP"]:
-                        if internal_field in row:
-                            del row[internal_field]
                     member_rows.append(row)
             
-            # PHASE 2: Final assembly
-            # Add all members first
-            rows.extend(member_rows)
-            
-            # Add only the FINAL total row if any exist
-            if total_rows:
-                # We assume the last total row extracted is the grand total
-                final_total = total_rows[-1]
-                rows.append(final_total)
+            # PHASE 2: Reassemble with total rows at the bottom
+            # [V3][REFINEMENT] If no total row exists OR none have a premium, add a calculated one
+            has_valid_total = any(to_float(tr.get("CURRENT_PREMIUM")) > 0 for tr in total_rows)
+            if not total_rows or not has_valid_total:
+                print(f"    [V3][INFO] No valid total row found in extraction. Calculating manual total...")
+                calc_total = sum(to_float(mr.get("CURRENT_PREMIUM")) for mr in member_rows)
+                if calc_total > 0:
+                    manual_total = {field: None for field in REQUIRED_FIELDS}
+                    manual_total["CURRENT_PREMIUM"] = calc_total
+                    # Use a marker that our router respects to hide it from UI but keep in Excel
+                    # Actually, we'll just keep it clean.
+                    total_rows.append(manual_total)
+                    print(f"    [V3][INFO] Added calculated total: ${calc_total:,.2f}")
+
+            rows = member_rows + total_rows
                 
     else:
         # Fallback for legacy/error case
