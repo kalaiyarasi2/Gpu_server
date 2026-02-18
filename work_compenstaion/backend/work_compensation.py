@@ -12,6 +12,7 @@ import os
 import json
 import base64
 from typing import Dict, List, Optional, Tuple
+from config import config
 from dataclasses import dataclass, asdict
 from datetime import datetime
 import re
@@ -47,59 +48,131 @@ class PageExtraction:
     confidence: float
 
 
-@dataclass
-class InsuranceClaim:
-    """Insurance Claim Data Structure"""
-    employee_name: Optional[str] = None
-    claim_number: Optional[str] = None
-    injury_date_time: Optional[str] = None
-    claim_year: Optional[int] = None
-    status: Optional[str] = None
-    injury_description: Optional[str] = None
-    body_part: Optional[str] = None
-    injury_type: Optional[str] = None
-    claim_class: Optional[str] = None
-    medical_paid: Optional[float] = None
-    medical_reserve: Optional[float] = None
-    indemnity_paid: Optional[float] = None
-    indemnity_reserve: Optional[float] = None
-    expense_paid: Optional[float] = None
-    expense_reserve: Optional[float] = None
-    total_incurred: Optional[float] = None
-    litigation: Optional[str] = "N"
-    reopen: Optional[str] = "False"
-    carrier_name: Optional[str] = None
-    policy_number: Optional[str] = None
-    confidence_score: Optional[float] = None
-    extraction_metadata: Optional[Dict] = None
-
-
-@dataclass
-class LossRunReport:
-    """Complete Loss Run Report with multiple claims"""
-    policy_number: Optional[str] = None
-    carrier_name: Optional[str] = None
-    insured_name: Optional[str] = None
-    report_date: Optional[str] = None
-    policy_period: Optional[str] = None
-    claims: Optional[List[InsuranceClaim]] = None
-    extraction_metadata: Optional[Dict] = None
-    
-    def __post_init__(self):
-        if self.claims is None:
-            self.claims = []
-    
-    @property
-    def total_claims(self) -> int:
-        """Return total number of claims"""
-        return len(self.claims) if self.claims else 0
-    
-    @property
-    def total_incurred_all(self) -> float:
-        """Return sum of all incurred amounts"""
-        if not self.claims:
-            return 0.0
-        return sum(claim.total_incurred or 0 for claim in self.claims)
+# NEW SCHEMA DEFINITION
+WORKERS_COMP_SCHEMA = {
+    "name": "insurance_response",
+    "description": "Schema for an insurance response containing demographics, rating by state, general questions, and prior carriers.",
+    "strict": True,
+    "schema": {
+        "type": "object",
+        "properties": {
+            "data": {
+                "type": "object",
+                "properties": {
+                    "demographics": {
+                        "type": "object",
+                        "properties": {
+                            "applicantName": { "type": "string" },
+                            "businessDescription": { "type": "string" },
+                            "email": { "type": "string" },
+                            "fein": { "type": "string" },
+                            "mailingStreet": { "type": "string" },
+                            "mailingCity": { "type": "string" },
+                            "mailingState": { "type": "string" },
+                            "mailingZip": { "type": "string" },
+                            "officePhone": { "type": "string" },
+                            "mobilePhone": { "type": "string" },
+                            "website": { "type": "string" },
+                            "yearsInBusiness": { "type": ["number", "string"] },
+                            "sicCode": { "type": ["number", "string"] },
+                            "naicsCode": { "type": ["number", "string"] },
+                            "proposedEffectiveDate": { "type": "string" },
+                            "proposedExpirationDate": { "type": "string" },
+                            "wcStates": { "type": "string" },
+                            "agencyCustomerId": { "type": "string" }
+                        },
+                        "required": [
+                            "applicantName", "mailingStreet", "mailingCity", "mailingState", "mailingZip",
+                            "officePhone", "mobilePhone", "email", "website", "yearsInBusiness",
+                            "sicCode", "naicsCode", "fein", "proposedEffectiveDate", "proposedExpirationDate",
+                            "wcStates", "businessDescription", "agencyCustomerId"
+                        ],
+                        "additionalProperties": False
+                    },
+                    "generalQuestions": {
+                        "type": "object",
+                        "properties": {
+                            "q1": { "type": "string" }, "q2": { "type": "string" }, "q3": { "type": "string" },
+                            "q4": { "type": "string" }, "q5": { "type": "string" }, "q6": { "type": "string" },
+                            "q7": { "type": "string" }, "q8": { "type": "string" }, "q9": { "type": "string" },
+                            "q10": { "type": "string" }, "q11": { "type": "string" }, "q12": { "type": "string" },
+                            "q13": { "type": "string" }, "q14": { "type": "string" }, "q15": { "type": "string" },
+                            "q16": { "type": "string" }, "q17": { "type": "string" }, "q18": { "type": "string" },
+                            "q19": { "type": "string" }, "q20": { "type": "string" }, "q21": { "type": "string" },
+                            "q22": { "type": "string" }, "q23": { "type": "string" }, "q24": { "type": "string" }
+                        },
+                        "required": ["q1","q2","q3","q4","q5","q6","q7","q8","q9","q10","q11","q12","q13","q14","q15","q16","q17","q18","q19","q20","q21","q22","q23","q24"],
+                        "additionalProperties": False
+                    },
+                    "priorCarriers": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "year": { "type": "number" },
+                                "carrierName": { "type": "string" },
+                                "policyNumber": { "type": "string" },
+                                "experienceMod": { "type": ["number", "string"] },
+                                "annualPremium": { "type": ["number", "string"] },
+                                "numberOfClaims": { "type": ["number", "string"] },
+                                "amountPaid": { "type": ["number", "string"] },
+                                "reserveAmount": { "type": ["number", "string"] }
+                            },
+                            "required": ["year","carrierName","policyNumber","annualPremium","experienceMod","numberOfClaims","amountPaid","reserveAmount"],
+                            "additionalProperties": False
+                        }
+                    },
+                    "ratingByState": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "state": { "type": "string" },
+                                "classCode": { "type": "number" },
+                                "fullTimeEmployees": { "type": ["number", "string"] },
+                                "partTimeEmployees": { "type": ["number", "string"] },
+                                "estAnnualPayroll": { "type": ["number", "string"] },
+                                "ratePer100Payroll": { "type": ["number", "string"] },
+                                "estAnnualPremium": { "type": ["number", "string"] }
+                            },
+                            "required": ["state","classCode","fullTimeEmployees","partTimeEmployees","estAnnualPayroll","ratePer100Payroll","estAnnualPremium"],
+                            "additionalProperties": False
+                        }
+                    },
+                    "individuals": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": { "type": "string" },
+                                "title": { "type": "string" },
+                                "ownershipPercentage": { "type": ["number", "string"] },
+                                "included": { "type": "string" }
+                            },
+                            "required": ["name", "title", "ownershipPercentage", "included"],
+                            "additionalProperties": False
+                        }
+                    },
+                    "premiumCalculation": {
+                        "type": "object",
+                        "properties": {
+                            "totalEstimatedAnnualPremium": { "type": ["number", "string"] },
+                            "experienceModification": { "type": ["number", "string"] },
+                            "minimumPremium": { "type": ["number", "string"] },
+                            "depositPremium": { "type": ["number", "string"] }
+                        },
+                        "required": ["totalEstimatedAnnualPremium", "experienceModification", "minimumPremium", "depositPremium"],
+                        "additionalProperties": False
+                    }
+                },
+                "required": ["demographics","ratingByState","generalQuestions","priorCarriers", "individuals", "premiumCalculation"],
+                "additionalProperties": False
+            }
+        },
+        "required": ["data"],
+        "additionalProperties": False
+    }
+}
 
 
 class EnhancedInsuranceExtractor:
@@ -133,7 +206,17 @@ class EnhancedInsuranceExtractor:
                 print(f"📸 SCANNED PDF DETECTED: Using Tesseract OCR fallback")
                 from ocr_text import OCRPDFExtractor
                 ocr_extractor = OCRPDFExtractor(pdf_path)
-                return ocr_extractor.extract()
+                return ocr_extractor.extract(
+                    dpi=config.OCR_DPI,
+                    psm_mode=config.OCR_PSM_MODE,
+                    enhancements={
+                        'contrast': config.OCR_CONTRAST,
+                        'sharpness': config.OCR_SHARPNESS,
+                        'grayscale': config.OCR_GRAYSCALE,
+                        'binarize': config.OCR_BINARIZE,
+                        'edge_enhance': config.OCR_EDGE_ENHANCE
+                    }
+                )
             else:
                 print(f"📄 DIGITAL PDF DETECTED: Using Hybrid Extraction (pdfplumber + pymupdf fallback)")
                 from pdf_plumber import extract_pdf_hybrid
@@ -142,6 +225,65 @@ class EnhancedInsuranceExtractor:
                 
                 if info.get('fallback_used'):
                     print(f"   ℹ️ Hybrid Extraction recovered {len(info.get('recovered_claims', []))} claims using Smart Append")
+
+                # STAGE 3: ACORD Recovery Pass
+                # If we see ACORD but don't see typical headers, it might be a "Digital Scan"
+                # (A PDF that has some text but the main form content is an image)
+                should_run_ocr_recovery = False
+                
+                # Check for ACORD keyword or signature patterns
+                has_acord_keyword = "ACORD" in text.upper()
+                
+                # Use alphanumeric character count for more accurate density check
+                # (filters out thousands of spaces/pipes from pdfplumber)
+                alnum_text_len = len(re.sub(r'[^a-zA-Z0-9]', '', text))
+                avg_alnum_per_page = alnum_text_len / len(metadata) if len(metadata) > 0 else 0
+                
+                is_very_low_density = alnum_text_len < 100 * len(metadata) # Less than 100 alnum chars per page average
+                
+                if has_acord_keyword:
+                    # Check for missing Agency ID which is usually at the top
+                    if "AGENCY CUSTOMER ID" not in text.upper() and "ATOTALS" not in text.upper():
+                        print(f"   ⚠️ ACORD form detected but key headers missing. Triggering OCR recovery...")
+                        should_run_ocr_recovery = True
+                    elif alnum_text_len < 400 * len(metadata): # Low alnum density for ACORD
+                        print(f"   ⚠️ Low text density detected for ACORD ({alnum_text_len} alnum chars for {len(metadata)} pages). Triggering OCR recovery...")
+                        should_run_ocr_recovery = True
+                elif is_very_low_density and alnum_text_len > 0:
+                    print(f"   ⚠️ Extremely low text density detected ({alnum_text_len} alnum chars). Triggering OCR recovery pass...")
+                    should_run_ocr_recovery = True
+
+                if should_run_ocr_recovery:
+                    try:
+                        from ocr_text import OCRPDFExtractor
+                        ocr_extractor = OCRPDFExtractor(pdf_path)
+                        ocr_text, ocr_meta = ocr_extractor.extract(
+                            dpi=config.OCR_DPI,
+                            psm_mode=config.OCR_PSM_MODE,
+                            verbose=False,
+                            enhancements={
+                                'contrast': config.OCR_CONTRAST,
+                                'sharpness': config.OCR_SHARPNESS,
+                                'grayscale': config.OCR_GRAYSCALE,
+                                'binarize': config.OCR_BINARIZE,
+                                'edge_enhance': config.OCR_EDGE_ENHANCE
+                            }
+                        )
+                        
+                        # Merge metadata
+                        for i, page in enumerate(ocr_meta):
+                            if i < len(metadata):
+                                metadata[i]["ocr_text"] = page.get("raw_text", "")
+                        
+                        # Append OCR text as a recovery block
+                        text += "\n\n" + "="*80 + "\n"
+                        text += "OCR RECOVERY BLOCK\n"
+                        text += "="*80 + "\n\n"
+                        text += ocr_text
+                        
+                        print(f"   ✅ OCR recovery complete. Added to extracted text.")
+                    except Exception as ocr_err:
+                        print(f"   ⚠️ OCR recovery failed: {ocr_err}")
                     
                 return text, metadata
                 
@@ -598,43 +740,22 @@ DOCUMENT SAMPLE:
         """
         print(f"\n🔍 STAGE 1: Analyzing document format...")
         
-        prompt = f"""You are analyzing an insurance loss run report to understand its structure.
+        prompt = f"""You are analyzing a Workers' Compensation application form to understand its structure.
 
 Your task: Describe HOW the data is organized in this document so we can extract it accurately.
 
-Carrier name: The insurance company that issued the policy and is financially responsible for the claims.
-
-Answer these questions to help us extract data accurately:
-
-1. What is the Carrier Name (Insurance Company)? 
-   Definition: The insurance company that issued the policy and is financially responsible for the claims.
-   Instructions:
-   - Look for explicit mentions of an insurance company name.
-   - Common indicators: Header/footer names, Copyright lines, Branding at top (e.g., State Fund Online), "Insurance Company", "Insurance Co.", etc.
-   - Do NOT return: Insured name, Brokerage name, District office, or Policyholder name.
-   - If the carrier is clearly implied by document branding (e.g., "State Compensation Insurance Fund", "Stonetrust", or markers like "Report ID: 677" suggesting AmTrust North America), return that.
-   - If no carrier can be confidently identified, return null.
-
-2. How are claims organized? (one per row, multi-row per claim, one per page?)
-3. How are financial amounts presented?
-   - Simple columns (Ind Paid, Med Paid, etc.)?
-   - Complex multi-row tables (Incurred/Paid/Reserves rows)?
-4. IMPORTANT: Determine the EXACT row order for financial data (e.g., Row 1: Reserves, Row 2: Payments, Row 3: Incurred).
-5. How are the numeric columns ordered? (e.g., Med, Ind, LAE/Exp, Total)
-6. Are there specific labels that anchor the rows? (e.g., "Payments", "Payments:", "Reserves")
+Answer these questions:
+1. What is the business/applicant name?
+2. Are there tables for "Rating by State" or "Class Codes"?
+3. Is there a section for "Prior Carriers" or "Loss History"?
+4. Are there "General Questions" with Y/N answers?
 
 Return JSON:
 {{
-  "insurer": "company name",
-  "format_type": "simple_columns" or "complex_multi_row" or "mixed",
-  "claim_layout": "one_per_row" or "multi_row_per_claim" or "one_per_page",
-  "financial_mapping": {{
-    "row_1": "label",
-    "row_2": "label",
-    "row_3": "label",
-    "column_order": ["field1", "field2", "..."],
-    "dynamic_instruction": "A custom extraction rule you generate specifically for this layout"
-  }},
+  "applicant": "business name",
+  "has_rating_table": true/false,
+  "has_prior_carriers": true/false,
+  "has_questions": true/false,
   "special_notes": "any quirks or unusual formatting",
   "confidence": 0.0-1.0
 }}
@@ -642,7 +763,7 @@ Return JSON:
 DOCUMENT TEXT (first 8000 chars):
 {text[:8000]}
 
-Return ONLY the JSON. Ensure the dynamic_instruction is highly technical and specific about which line to read for 'Paid' vs 'Reserves'."""
+Return ONLY the JSON."""
 
         try:
             response = self.client.chat.completions.create(
@@ -655,9 +776,7 @@ Return ONLY the JSON. Ensure the dynamic_instruction is highly technical and spe
             
             format_info = json.loads(response.choices[0].message.content)
             
-            print(f"   ✓ Format detected: {format_info.get('format_type', 'unknown')}")
-            print(f"   ✓ Insurer: {format_info.get('insurer', 'unknown')}")
-            print(f"   ✓ Claim layout: {format_info.get('claim_layout', 'unknown')}")
+            print(f"   ✓ Format detected: {format_info.get('applicant', 'unknown')}")
             print(f"   ✓ Confidence: {format_info.get('confidence', 0.0):.2%}")
             
             return format_info
@@ -672,292 +791,53 @@ Return ONLY the JSON. Ensure the dynamic_instruction is highly technical and spe
     def _extract_all_claims(self, all_text: str) -> Dict:
         """
         UNIVERSAL EXTRACTION: Works with ANY format
-        Uses a three-stage approach:
-        1. Pre-Discovery: Detect all valid Claim IDs (Master List)
-        2. Format Analysis: Understand the layout
-        3. Constrained Extraction: Extract only those IDs
+        Optimized for Workers' Compensation Application forms.
         """
-        # STAGE 0: Pre-Discovery (Master List)
-        detected_claims_info = self._detect_claim_numbers_ai(all_text)
-        master_claim_list = [c["claim_number"] for c in detected_claims_info.get("claim_numbers", [])]
-        
-        if not master_claim_list:
-            print("   ⚠️ No unique claim numbers discovered. Falling back to layout-only extraction.")
-            master_list_str = "No pre-detected list available. Detect claims dynamically."
-        else:
-            print(f"   ✓ Pre-discovered {len(master_claim_list)} valid claim IDs.")
-            master_list_str = ", ".join(master_claim_list)
-            
         # STAGE 1: Analyze document format
         format_info = self._analyze_document_format(all_text)
         
-        # STAGE 2: Build adaptive extraction prompt
-        print(f"\n🎯 STAGE 2: Extracting claims using constrained adaptive prompt...")
+        # STAGE 2: Build extraction prompt
+        print(f"\n🎯 STAGE 2: Extracting application data using Workers' Comp schema...")
         
-        # Build format-specific instructions
-        format_type = format_info.get('format_type', 'unknown')
-        financial_mapping = format_info.get('financial_mapping', {})
-        dynamic_rules = financial_mapping.get('dynamic_instruction', 'Extract all financial fields carefully.')
-        
-        # Injected Accuracy Constraints
-        accuracy_constraints = f"""
-=== ACCURACY CONSTRAINTS (MANDATORY) ===
-1. MASTER CLAIM LIST: {master_list_str}
-2. 🛑 ZERO-PHANTOM POLICY: Extract ONLY claims from the MASTER CLAIM LIST above. 
-   - NEVER include placeholder names like 'John Smith', 'Jane Doe', or 'Jane Smith'. 
-   - These are calibration examples and NOT real data in this document.
-   - If a claim ID is not in the list, DO NOT extract it.
-3. 🛑 FIELD INTEGRITY: Do NOT swap Medical and Indemnity columns. Check headers for each row.
-4. 🛑 CURRENCY: Remove all symbols ($, ,) and return numbers as floats.
-5. 🛑 LITIGATION: ONLY extract if explicitly present (e.g., 'Litigated: Y', 'Litigation: No'). 
-   - If there is NO mention of litigation, you MUST return null. 
-   - NEVER assume 'No' if the field is missing.
-"""
-        
-        if format_type == 'complex_multi_row':
-            financial_instructions = f"""
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🔴 FORMAT CALIBRATION (Mandatory) 🔴
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-This document uses a strict 3-Row by 4-Column structure. Use these examples to CALIBRATE your mapping:
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🔴 FORMAT CALIBRATION (Mandatory) 🔴
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-CALIBRATION 1: Sample John (9999999) -> MED=966, INDEM=2,926, EXP=173.
-CALIBRATION 2: Tester Jane (8888888) -> EXPENSE PAID=1,427.
-CALIBRATION 3: User Example (7777777) -> MEDICAL RESERVE=6,862. (Sum with Paid 26,303 = 33,165).
-CALIBRATION 4: Placeholder Alex (6666666) -> EXPENSE RESERVE=0. 
-
-⚠️ COLUMN ORDER: 1. MEDICAL, 2. INDEMNITY, 3. EXPENSE / LAE.
-
-⚠️ INDEMNITY CALCULATION:
-- If you see both "TD" (Temporary Disability) and "PD" (Permanent Disability) for a single claim, YOU MUST SUM THEM.
-- medical_paid = Medical Paid
-- medical_reserve = Medical Outstanding
-- indemnity_paid = TD Paid + PD Paid
-- indemnity_reserve = TD Outstanding + PD Outstanding
-- expense_paid = Expense Paid
-- expense_reserve = Expense Outstanding
-
-⚠️ STATUS MAPPING (Strict):
-- "C" -> "Closed"
-- "O" -> "Open"
-- "R", "RC", "REOP" -> "Reopened"
-
-⚠️ MATH CHECKSUM:
-Paid + Reserve == Incurred (For each category).
-Sum of (M, I, E) = Total.
-If the math doesn't match perfectly, you have swapped Columns or missed PD/TD summation!
-"""
-        elif format_type == 'simple_columns':
-            financial_instructions = """
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-✅ SIMPLE COLUMNAR FORMAT DETECTED ✅
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-This format has clearly labeled columns. Extract values directly:
-- Look for columns: Ind Paid, Ind Resv, Med Paid, Med Resv, Exp Paid, Exp Resv, Total Inc
-- Each claim is one row
-- Read values directly from the columns
-- NO complex calculations needed
-
-MAPPING:
-- medical_paid = "Med Paid" column
-- medical_reserve = "Med Resv" column
-- indemnity_paid = "Ind Paid" column
-- indemnity_reserve = "Ind Resv" column
-- expense_paid = "Exp Paid" column
-- expense_reserve = "Exp Resv" column
-- recovery = "Recov" column
-- total_incurred = "Total Inc" column
-"""
-        else:
-            financial_instructions = """
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⚠️ UNKNOWN/MIXED FORMAT DETECTED ⚠️
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Carefully analyze each claim's structure and extract accordingly.
-Look for patterns in how financial data is presented.
-Validate your extractions by checking if Paid + Reserve = Incurred.
-"""
-        
-        # Build the complete extraction prompt
-        prompt = f"""You are an expert at extracting structured data from insurance loss run reports.
+        prompt = f"""You are an expert at extracting structured data from Workers' Compensation application forms.
 
 DOCUMENT FORMAT ANALYSIS:
 {json.dumps(format_info, indent=2)}
-
-{financial_instructions}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📋 EXTRACTION TASK
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-{accuracy_constraints}
+Extract ALL available information from the application form into the requested JSON structure.
 
-Extract EVERY SINGLE CLAIM from this document.
+=== KEY SECTIONS TO EXTRACT ===
 
-Return JSON:
-{{
-  "policy_number": "string or null",
-  "carrier_name": "Insurance company name (The entity financially responsible) or null",
-  "insured_name": "string or null",
-  "report_date": "YYYY-MM-DD or null",
-  "policy_period": "string or null",
-  "claims": [
-    {{
-      "employee_name": "full name",
-      "carrier_name": "The insurance company for this claim or report",
-      "policy_number": "same as top level or specific for claim",
-      "claim_number": "claim number",
-      "injury_date_time": "YYYY-MM-DD",
-      "claim_year": 2020,
-      "status": "Open or Closed or Reopened",
-      "reopen": "True or False",
-      "injury_description": "description",
-      "body_part": "body part or null",
-      "injury_type": "Indemnity or Medical Only or Expense",
-      "claim_class": "class code or null",
-      "medical_paid": "string (e.g. '1,973.00')",
-      "medical_reserve": "string",
-      "indemnity_paid": "string",
-      "indemnity_reserve": "string",
-      "expense_paid": "string",
-      "expense_reserve": "string",
-      "total_incurred": "string",
-      "litigation": "Yes if explicitly Yes/Y, else No"
-    }}
-  ]
-}}
+1. DEMOGRAPHICS:
+   - Applicant Name, Business Description, FEIN
+   - Contact Info (Email, Phone, Website)
+   - Mailing Address
+   - SIC/NAICS codes, Years in Business
+   - Proposed Policy Dates and States
+   - Agency Customer ID (often found in headers like "Agency Customer ID" or "ATOTALS-01")
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-� GENERAL EXTRACTION RULES (Apply to ALL formats)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2. GENERAL QUESTIONS:
+   - Extract q1 through q24 as "Y" or "N".
+   - OCR often misreads checkmarks as fragments (z, 2, <, =, x, 9, |).
+   - If no explanation is provided for a question, it is usually "N".
 
+3. PRIOR CARRIERS:
+   - Extract a list of previous insurance carriers including year, carrier name, policy number, and financial history.
 
-1. CLAIM NUMBER vs POLICY NUMBER - CRITICAL DISTINCTION
-   
-   ⚠️ MOST IMPORTANT RULE: DO NOT confuse policy numbers with claim numbers!
-   
-   **POLICY NUMBERS:**
-   - Identify an entire insurance policy (covers multiple claims over a time period)
-   - Examples: SWC1364773, TWC4172502, ZAWCI9740001, Policy #12345
-   - Appear REPEATEDLY throughout the document (same number for multiple claims)
-   - Found in fields labeled: "Policy Number", "Policy #", "Pol #", "Policy No"
-   - ❌ DO NOT use policy numbers as claim numbers!
-   
-   **CLAIM NUMBERS:**
-   - Identify a SINGLE claim/incident (one employee's injury)
-   - Each claim number is UNIQUE - appears only ONCE in the document
-   - Examples: 3510012, 20825, DEL22003452, Claim#20677
-   - Found in fields labeled: "Claim #", "Claim No", "Claim Number", "Converted #"
-   
-   **FORMAT-SPECIFIC GUIDANCE:**
-   
-   A. **AmTrust Format:**
-      - Policy Number: SWC1364773 or TWC4172502 (appears at top of each claim)
-      - Claim Number: Look for "Converted #" field (e.g., 3510012, 3543022)
-      - ✅ USE: The "Converted #" value
-      - ❌ IGNORE: The "Policy Number" value
-   
-   B. **FCBIF Format:**
-      - Claim Number: Look for "Claim#" followed by number (e.g., Claim# 20825)
-      - ✅ USE: The number after "Claim#"
-   
-   C. **DeliverRe Format:**
-      - Claim Number: Starts with "DEL" (e.g., DEL22003452)
-      - ✅ USE: The DEL-prefixed number
+4. RATING BY STATE:
+   - Extract the rating information per state/class code, including employee counts and payroll.
 
-   D. **Strict Identification Rules (CRITICAL):**
-      - **NO SUFFIX INVENTION**: Do NOT append characters to a number unless you see them in the raw text.
-      - **CRWC Blacklist**: Numbers starting with `CRWC` are POLICY NUMBERS. Never extract them as claims. 
-      - **Berkshire Homestates**: Claim numbers are 8-digit integers found next to the name (e.g., `44096049`).
-      - **BiBERK (N9WC)**: These *do* have literal suffixes in the text (e.g., `-001`). Extract them exactly.
-      - **Literal Match**: If the row says `44062808`, yours must be `44062808`. Do NOT add `-01`, `-02` etc.
-   
-   **VALIDATION:**
-   - If you see the SAME number appearing for multiple different employees → It's a POLICY number, NOT a claim number
-   - If each employee has a DIFFERENT number → Those are CLAIM numbers ✓
-   
-   **GOLDEN RULE:** When in doubt, look for:
-   - "Claim #:", "Claim No:", "Claim Number:", "Converted #" → These introduce CLAIM numbers
-   - "Policy Number", "Policy #", "Pol #" → These introduce POLICY numbers (ignore these!)
+5. INDIVIDUALS INCLUDED/EXCLUDED:
+   - Extract Officers, Owners, and Partners from the "INDIVIDUALS INCLUDED/EXCLUDED" table.
+   - Include Name, Title, Ownership %, and "Y" if included, "N" if excluded.
 
-   E. **State Fund Online / Loss Analysis Report (CRITICAL)**:
-      - Columns "Est. Comp" and "Est. Medical" represent the **TOTAL INCURRED** (Paid + Reserve).
-      - DO NOT treat these as Reserves.
-      - Calculate: Reserve = Estimated value - Paid value.
-      - If Estimated == Paid, then Reserve = 0.
-
-    F. **AmTrust North America Layout (CRITICAL)**:
-       - AmTrust uses a 4-row block per financial category:
-         1. **Reserves** (Top row)
-         2. **Payments** (Second row)
-         3. **Recoveries** (Third row)
-         4. **Incurred** (Bottom row - Total)
-       - DO NOT map the "Incurred" value to "Reserves". 
-       - Always verify: Incurred = Reserves + Payments - Recoveries.
-       - Since the schema lacks a "Recoveries" field, you MUST prioritize matching the final "Incurred" value.
-       - If Payments - Recoveries = Incurred, extract the Net Paid values (Payments - Recoveries) to ensure math validation (Paid + Reserve == Incurred) passes.
-
-
-2. EMPLOYEE NAME
-   - Look for "Claimant:", "Employee Name:", or similar labels
-   - Extract full name as shown
-
-3. DATES - CRITICAL: USE DATE OF LOSS (DOL)
-   - ALWAYS use "DOL" or "Date of Loss" for injury_date_time
-   - DO NOT use "Date Rcvd" or "First Aware" - these are reporting dates
-   - Convert all dates to YYYY-MM-DD format
-   - Look for: "DOL:", "Loss Date:", "Injury Date:", "Occ Date:", "Accident Date:"
-
-4. STATUS
-   - C or Closed or RECLOSED → "Closed"
-   - O or Open → "Open"
-   - REOP or Reopened or R or RC or REOPEN → "Reopened"
-
-5. INJURY TYPE
-   - Medical or MED or MEDI or "Medical Only" or "Record Only" → "Medical Only"
-   - Indemnity or COMP or Compensation or TTD or TPD or PPD → "Indemnity"
-   - Expense or LAE or Service → "Expense"
-
-6. BODY PART
-   - Extract from "Nature of Injury", "Body Part", "Part Injured" fields
-   - If not found, use null
-
-7. INJURY DESCRIPTION
-   - Look for "Nature of Injury:", "Cause of Injury:", "Loss Description:", "Accident Description:"
-   - Extract the description text
-
-8. CLAIM CLASS
-   - Look for "Class Code:", "Class:", "Class Cd"
-   - Extract the code (e.g., "7721", "7231")
-   - If not found, use null
-
-9. NUMBERS
-   - Remove all $ signs and commas
-   - Convert to decimal numbers
-   - "$51,068.57" → 51068.57
-
-10. NULL VALUES
-    - Use null for truly missing data
-    - Use 0.0 for financial fields that are zero
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-✅ VALIDATION CHECKLIST FOR EACH CLAIM
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Before adding a claim to your JSON, verify:
-
-✓ claim_number is extracted
-✓ employee_name is extracted
-✓ injury_date_time is in YYYY-MM-DD format
-✓ status is "Open", "Closed", or "Reopened"
-✓ All financial values are numbers (not strings)
-✓ Financial calculations balance (Paid + Reserve ≈ Incurred)
+6. PREMIUM CALCULATION:
+   - Extract the total estimated annual premium, experience modification factor, minimum premium, and deposit premium.
+   - Look for "TOTAL ESTIMATED ANNUAL PREMIUM", "EXPERIENCE MODIFICATION", "MINIMUM PREMIUM", "DEPOSIT".
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📄 TEXT TO ANALYZE
@@ -969,21 +849,9 @@ Before adding a claim to your JSON, verify:
 🎯 YOUR RESPONSE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Return ONLY the JSON object. No explanations. No markdown. Just the JSON.
+Return ONLY the JSON object following the strict schema provided.
+"""
 
-Extract ALL claims. Do not skip any claim.
-
-⚠️ CRITICAL REMINDER:
-- This document may have MULTIPLE POLICY PERIODS or MULTIPLE POLICY SECTIONS
-- You MUST scan the ENTIRE document from beginning to end
-- Extract claims from ALL policy sections, NOT just the first one
-- Continue extracting until you reach the end of the document
-- Do NOT stop extraction after finding the first policy section totals
-
-Follow the format-specific instructions above. Validate your extractions."""
-
-        # Step 1: Initial Extraction Attempt
-        data = {"claims": []}
         try:
             response = self.client.chat.completions.create(
                 model="gpt-4o",
@@ -991,323 +859,84 @@ Follow the format-specific instructions above. Validate your extractions."""
                     "role": "user",
                     "content": prompt
                 }],
-                response_format={"type": "json_object"},
+                response_format={
+                    "type": "json_schema",
+                    "json_schema": WORKERS_COMP_SCHEMA
+                },
                 max_tokens=8000,
                 temperature=0.0
             )
             
             response_text = response.choices[0].message.content
-            initial_data = json.loads(response_text)
+            data = json.loads(response_text)
             
-            # Check consistency
-            if "claims" in initial_data:
-                data = initial_data
-            elif isinstance(initial_data, dict):
-                # Maybe it returned a single object instead of a list
-                data = {"claims": [initial_data]}
-            
-            # Step 1.5: Mathematical Self-Correction Loop
-            failed_math_claims = [c.get("claim_number") for c in data.get("claims", []) if not c.get("math_valid", True)]
-            
-            if failed_math_claims:
-                print(f"   ⚠️  MATH VALIDATION FAILED for {len(failed_math_claims)} claim(s). Triggering self-correction...")
-                print(f"   Failed IDs: {', '.join(str(c) for c in failed_math_claims)}")
-                
-                # Use a smaller batch size for correction to ensure focus
-                correction_batch_size = 3
-                for i in range(0, len(failed_math_claims), correction_batch_size):
-                    batch = failed_math_claims[i:i + correction_batch_size]
-                    print(f"   🔄 Correction Batch {i//correction_batch_size + 1}: {', '.join(str(c) for c in batch)}")
-                    
-                    try:
-                        correction_data = self._extract_missing_claims_by_number(all_text, data, batch, is_correction=True)
-                        if correction_data and "claims" in correction_data:
-                            # The post-processing logic in _extract_missing_claims_by_number will handle merging
-                            # We just need to ensure the updated claims are added/replaced
-                            for updated_claim in correction_data["claims"]:
-                                # Data will be updated via deduplication in next post_process
-                                data["claims"].append(updated_claim)
-                    except Exception as e:
-                        print(f"      ⚠️ Correction attempt failed: {e}")
-                
-                # Re-run post-processing to merge corrected claims
-                data = self._post_process_claims(data)
+            # Post-processing (simplified for the new schema)
+            return self._post_process_claims(data)
                 
         except Exception as e:
-            print(f"   ⚠️  Initial extraction or correction failed: {e}")
-            data = {"claims": []}
-
-        # Step 2: Verification & Recovery (ALWAYS RUNS)
-        try:
-            # VALIDATION CHECK: Use AI to detect claim numbers
-            detected_claims_info = self._detect_claim_numbers_ai(all_text)
-            claims_in_text = detected_claims_info.get('total_unique_claims', 0)
-            claims_extracted = len(data.get("claims", []))
-            
-            if claims_in_text > claims_extracted:
-                print(f"\n   ⚠️  INCOMPLETE EXTRACTION DETECTED")
-                print(f"   Claims detected by AI: {claims_in_text}")
-                print(f"   Claims extracted: {claims_extracted}")
-                print(f"   Missing: {claims_in_text - claims_extracted}")
-                
-                # Get list of missing claim numbers
-                detected_numbers = [c["claim_number"] for c in detected_claims_info.get("claim_numbers", [])]
-                extracted_numbers = [c.get("claim_number") for c in data.get("claims", [])]
-                missing_numbers = list(set(detected_numbers) - set(extracted_numbers))
-                
-                if missing_numbers:
-                    print(f"   Attempting to extract {len(missing_numbers)} missing claims in batches...")
-                        
-                    # Process in batches of 5 to avoid timeouts/limits
-                    batch_size = 5
-                    for i in range(0, len(missing_numbers), batch_size):
-                        batch = missing_numbers[i:i + batch_size]
-                        print(f"   🔄 Recovery Batch {i//batch_size + 1}: {', '.join(batch)}")
-                            
-                        # RETRY LOGIC for each batch
-                        max_retries = 2
-                        for attempt in range(max_retries):
-                            try:
-                                retry_data = self._extract_missing_claims_by_number(all_text, data, batch)
-                                if retry_data and "claims" in retry_data:
-                                    new_claims = retry_data["claims"]
-                                    if new_claims:
-                                        # Check for math validity in this batch too
-                                        failed_in_batch = [c.get("claim_number") for c in new_claims if not c.get("math_valid", True)]
-                                        if failed_in_batch and attempt < max_retries - 1:
-                                            print(f"      ⚠️  Math fail in recovery batch. Retrying correction for: {', '.join(str(c) for c in failed_in_batch)}")
-                                            correction_data = self._extract_missing_claims_by_number(all_text, data, failed_in_batch, is_correction=True)
-                                            if correction_data and "claims" in correction_data:
-                                                # Replace failed claims with corrected ones
-                                                valid_new_claims = [c for c in new_claims if str(c.get("claim_number")) not in [str(x) for x in failed_in_batch]]
-                                                valid_new_claims.extend(correction_data["claims"])
-                                                new_claims = valid_new_claims
-                                        
-                                        data["claims"].extend(new_claims)
-                                        print(f"      ✓ Retrieved {len(new_claims)} claims in this batch")
-                                        break # Success
-                            except Exception as e:
-                                print(f"      ⚠️  Recovery batch attempt {attempt+1} failed: {e}")
-                                    
-                        # Final merge check
-                    data = self._post_process_claims(data)
-                final_count = len(data.get("claims", []))
-                print(f"   ✓ Recovery complete. Final count: {final_count}/{claims_in_text}")
-            else:
-                print(f"   ✓ All claims accounted for ({claims_in_text} total)")
-                # Unconditionally run post-processing even if no claims were missing
-                # to ensure claim_year and other normalizations are applied.
-                data = self._post_process_claims(data)
-                
-        except Exception as e:
-            print(f"   ❌ Error in recovery phase: {e}")
+            print(f"   ⚠️  Extraction failed: {e}")
             import traceback
             traceback.print_exc()
-
-        return data
+            return {"data": {}}
             
 
-    
+    def _to_float(self, val) -> float:
+        """Safe conversion to float"""
+        if val is None:
+            return 0.0
+        if isinstance(val, (int, float)):
+            return float(val)
+        if isinstance(val, str):
+            # Keep only digits, dots, and minus signs
+            clean_val = re.sub(r'[^\d.-]', '', val)
+            try:
+                return float(clean_val) if clean_val else 0.0
+            except:
+                return 0.0
+        return 0.0
+
     def _post_process_claims(self, data: Dict) -> Dict:
         """
-        Post-process extracted claims to fix formatting and field mapping
-        Cleanup and deduplicate claims using math-driven quality scores.
+        Post-process extracted application data.
+        Performs numeric cleanup for financial fields in ratingByState and priorCarriers.
         """
-        if "claims" not in data or not data["claims"]:
+        if "data" not in data:
             return data
             
-        # Status Mapping
-        status_map = {
-            'C': 'Closed', 'CL': 'Closed', 'CLOSED': 'Closed', 'RECLOSED': 'Closed',
-            'O': 'Open', 'OP': 'Open', 'OPEN': 'Open',
-            'R': 'Reopened', 'RC': 'Reopened', 'REOP': 'Reopened', 'REOPENED': 'Reopened', 'REOPEN': 'Reopened'
-        }
+        inner_data = data["data"]
         
-        # Numeric fields to clean
-        num_fields = [
-            "medical_paid", "medical_reserve", "indemnity_paid", "indemnity_reserve",
-            "expense_paid", "expense_reserve", "total_incurred"
-        ]
-        
-        seen_claim_numbers = {} # claim_number -> (claim_obj, quality_score)
-        
-        # Extract top-level default metadata
-        default_policy = data.get("policy_number")
-        default_carrier = data.get("carrier_name")
-        
-        for claim in data["claims"]:
-            claim_num = str(claim.get("claim_number", "")).strip()
-            if not claim_num:
-                continue
-                
-            # 0. Metadata Propagation
-            if not claim.get("policy_number") and default_policy:
-                claim["policy_number"] = default_policy
-            if not claim.get("carrier_name") and default_carrier:
-                claim["carrier_name"] = default_carrier
-            
-            # Guard against calibration hallucinations from the prompt
-            current_carrier = str(claim.get("carrier_name") or "").lower()
-            if current_carrier in ["insurance company name", "the insurance company for this claim or report"]:
-                claim["carrier_name"] = default_carrier if default_carrier else None
-                
-            # 1. Normalize Status
-            raw_status = str(claim.get("status", "")).upper().strip()
-            claim["status"] = status_map.get(raw_status, raw_status)
-            
-            # 1a-1. Handle Reopen flag
-            if claim["status"] == "Reopened":
-                claim["reopen"] = "True"
-            else:
-                # If AI didn't provide it or it's not "True"
-                if claim.get("reopen") not in ["True", "False"]:
-                    claim["reopen"] = "False"
-            
-            # 1b. Normalize Litigation
-            litigation_val = claim.get("litigation")
-            # Default to "N" and normalize Y/N
-            raw_litigation = str(litigation_val or "N").upper().strip()
-            if raw_litigation in ["Y", "YES", "TRUE"]:
-                claim["litigation"] = "Yes"
-            else:
-                claim["litigation"] = "No"
-            
-            # 1c. Explicitly remove fields requested for removal
-            claim.pop('recovery', None)
-            claim.pop('deductible', None)
-            
-            # 2. Normalize Injury Type (Indemnity, Medical Only, Expense)
-            raw_type = str(claim.get("injury_type", "")).upper()
-            if any(x in raw_type for x in ["COMP", "TTD", "TPD", "PPD", "INDEMNITY", "INDEM"]):
-                claim["injury_type"] = "Indemnity"
-            elif any(x in raw_type for x in ["MED", "MEDICAL", "MEDICAL ONLY"]):
-                claim["injury_type"] = "Medical Only"
-            elif any(x in raw_type for x in ["EXP", "EXPENSE"]):
-                claim["injury_type"] = "Expense"
-            
-            # 3. Numeric cleanup
-            for field in num_fields:
-                val = claim.get(field)
-                if isinstance(val, str):
-                    clean_val = re.sub(r'[^\d.]', '', val)
-                    try:
-                        claim[field] = float(clean_val) if clean_val else 0.0
-                    except:
-                        claim[field] = 0.0
-                elif val is None:
-                    claim[field] = 0.0
+        # 1. ratingByState Cleanup
+        if "ratingByState" in inner_data and isinstance(inner_data["ratingByState"], list):
+            for entry in inner_data["ratingByState"]:
+                for field in ["fullTimeEmployees", "partTimeEmployees", "estAnnualPayroll", "ratePer100Payroll", "estAnnualPremium"]:
+                    val = entry.get(field)
+                    if isinstance(val, str):
+                        clean_val = re.sub(r'[^\d.]', '', val)
+                        try:
+                            entry[field] = float(clean_val) if clean_val else 0.0
+                        except:
+                            entry[field] = 0.0
+                    elif val is None:
+                        entry[field] = 0.0
 
-            # 3b. MED-only Guardrail: If injury_type is Medical Only, Indemnity MUST be 0
-            if claim.get("injury_type") == "Medical Only":
-                claim["indemnity_paid"] = 0.0
-                claim["indemnity_reserve"] = 0.0
+        # 2. priorCarriers Cleanup
+        if "priorCarriers" in inner_data and isinstance(inner_data["priorCarriers"], list):
+            for carrier in inner_data["priorCarriers"]:
+                for field in ["annualPremium", "experienceMod", "numberOfClaims", "amountPaid", "reserveAmount"]:
+                    carrier[field] = self._to_float(carrier.get(field))
 
-            # 3c. Extract Claim Year from Injury Date
-            injury_date = str(claim.get("injury_date_time", "")).strip()
-            claim["claim_year"] = None
-            if injury_date:
-                # Expecting YYYY-MM-DD or MM/DD/YYYY
-                # Try finding 4 digits that start with 19 or 20
-                match = re.search(r'(?:19|20)\d{2}', injury_date)
-                if match:
-                    try:
-                        claim["claim_year"] = int(match.group(0))
-                    except:
-                        pass
+        # 3. Individuals Cleanup
+        if "individuals" in inner_data and isinstance(inner_data["individuals"], list):
+            for ind in inner_data["individuals"]:
+                if "ownershipPercentage" in ind:
+                    ind["ownershipPercentage"] = self._to_float(ind["ownershipPercentage"])
 
-            # 4. Calculate Quality Score (Checksum Match)
-            # Use same logic as _validate_financial_data for consistency
-            med_paid = claim.get('medical_paid', 0.0) or 0.0
-            med_res = claim.get('medical_reserve', 0.0) or 0.0
-            ind_paid = claim.get('indemnity_paid', 0.0) or 0.0
-            ind_res = claim.get('indemnity_reserve', 0.0) or 0.0
-            exp_paid = claim.get('expense_paid', 0.0) or 0.0
-            exp_res = claim.get('expense_reserve', 0.0) or 0.0
-            reported_total = claim.get('total_incurred', 0.0) or 0.0
-            
-            # Simple sum for gross check
-            calc_sum = med_paid + med_res + ind_paid + ind_res + exp_paid + exp_res
-            
-            # Check if calc_sum matches perfectly
-            quality_score = 0.5
-            err_sum = abs(calc_sum - reported_total)
-            
-            if err_sum < 1.0:
-                quality_score = 1.0
-            
-            claim["math_valid"] = (quality_score == 1.0)
-            claim["math_diff"] = round(err_sum, 2)
-            
-            # 5. Name Normalization (Last, First)
-            # If name is "First Last", convert to "Last, First"
-            raw_name = str(claim.get("employee_name", "")).strip()
-            if raw_name and "," not in raw_name:
-                name_parts = raw_name.split()
-                if len(name_parts) >= 2:
-                    # Heuristic: Assume last word is surname for simple cases
-                    # "John Smith" -> "Smith, John"
-                    # "John M. Smith" -> "Smith, John M."
-                    last = name_parts[-1]
-                    first = " ".join(name_parts[:-1])
-                    claim["employee_name"] = f"{last}, {first}"
-            
-            # 7. Deduplicate using Seen dictionary
-            claim_num = str(claim.get("claim_number", "unknown")).strip()
-            if claim_num != "unknown":
-                if claim_num not in seen_claim_numbers:
-                    seen_claim_numbers[claim_num] = (claim, quality_score)
-                else:
-                    existing_claim, old_score = seen_claim_numbers[claim_num]
-                    # If this one has better math, keep it
-                    if quality_score > old_score:
-                        seen_claim_numbers[claim_num] = (claim, quality_score)
-                    elif quality_score == old_score:
-                        # If scores equal, keep the one with more data
-                        new_count = sum(1 for f in num_fields if claim.get(f, 0) > 0)
-                        old_count = sum(1 for f in num_fields if existing_claim.get(f, 0) > 0)
-                        if new_count > old_count:
-                            seen_claim_numbers[claim_num] = (claim, quality_score)
-            
-        # Rebuild claims list and apply global filters
-        final_claims = []
-        for claim, quality_score in seen_claim_numbers.values():
-            # PHANTOM FILTER: Remove calibration placeholders
-            name_raw = str(claim.get("employee_name", "")).lower().strip()
-            name_clean = name_raw.replace(",", "").replace(".", "").strip()
-            
-            # Catch calibration examples and phantom placeholders
-            phantom_names = [
-                "john smith", "doe john", "john doe", "smith jane", "jane smith", 
-                "alice johnson", "johnson alice", "michael johnson", "johnson michael"
-            ]
-            if name_clean in phantom_names:
-                print(f"      🗑️  Filtering phantom calibration claim: {claim.get('employee_name')}")
-                continue
-                
-            if any(f in name_raw for f in ["placeholder", "test person"]):
-                continue
-                
-            # GLOBAL NAME NORMALIZATION (Ensure Last, First)
-            raw_name = str(claim.get("employee_name", "")).strip()
-            if raw_name and "," not in raw_name:
-                name_parts = raw_name.split()
-                if len(name_parts) >= 2:
-                    last = name_parts[-1]
-                    first = " ".join(name_parts[:-1])
-                    claim["employee_name"] = f"{last}, {first}"
-                    
-            final_claims.append(claim)
-            
-        data["claims"] = final_claims
-        
-        # Log final validation results
-        for claim in data["claims"]:
-            is_valid, errors = self._validate_financial_data(claim)
-            if not is_valid:
-                print(f"   ⚠️  Financial validation warnings for {claim.get('claim_number')}:")
-                for error in errors:
-                    print(f"      - {error}")
-                    
+        # 4. Premium Calculation Cleanup
+        if "premiumCalculation" in inner_data and isinstance(inner_data["premiumCalculation"], dict):
+            calc = inner_data["premiumCalculation"]
+            for field in ["totalEstimatedAnnualPremium", "experienceModification", "minimumPremium", "depositPremium"]:
+                calc[field] = self._to_float(calc.get(field))
+                        
         return data
     
     def _validate_financial_data(self, claim: Dict) -> Tuple[bool, List[str]]:
@@ -1325,8 +954,6 @@ Follow the format-specific instructions above. Validate your extractions."""
         indemnity_reserve = claim.get('indemnity_reserve', 0.0) or 0.0
         expense_paid = claim.get('expense_paid', 0.0) or 0.0
         expense_reserve = claim.get('expense_reserve', 0.0) or 0.0
-        recovery = claim.get('recovery', 0.0) or 0.0
-        deductible = claim.get('deductible', 0.0) or 0.0
         total_incurred = claim.get('total_incurred', 0.0) or 0.0
         
         # Calculate expected totals
@@ -1334,7 +961,7 @@ Follow the format-specific instructions above. Validate your extractions."""
         indemnity_incurred = indemnity_paid + indemnity_reserve
         expense_incurred = expense_paid + expense_reserve
         
-        calculated_total = (medical_incurred + indemnity_incurred + expense_incurred)
+        calculated_total = medical_incurred + indemnity_incurred + expense_incurred
         
         # Validate total incurred
         if abs(calculated_total - total_incurred) > tolerance:
@@ -1401,15 +1028,17 @@ Return a JSON object with this structure:
       "indemnity_reserve": "string",
       "expense_paid": "string",
       "expense_reserve": "string",
-      "total_incurred": "string",
-      "litigation": "Y if explicitly Yes/Y, else N"
+      "recovery": "string",
+      "deductible": "string",
+      "total_incurred": "string"
     }}
   ]
 }}
 
 STRICT RULES:
 1. DO NOT include any claims NOT in the list above.
-2. Ensure math balances perfectly (Med+Ind+Exp = Total).
+2. Ensure math balances perfectly.
+3. Check if 'Total Incurred' includes or excludes 'Recovery'.
 
 TEXT TO ANALYZE:
 {all_text}
@@ -1446,13 +1075,10 @@ Return a JSON object with this structure:
 
 {{
   "employee_name": "full claimant name",
-  "carrier_name": "insurance company name",
-  "policy_number": "policy identifier",
   "claim_number": "{target_claim_number}",
   "injury_date_time": "YYYY-MM-DD",
   "claim_year": 2020,
   "status": "Open/Closed/REOP",
-  "reopen": "True or False",
   "injury_description": "cause of injury",
   "body_part": "injured body part",
   "injury_type": "COMP/MEDI/etc",
@@ -1463,8 +1089,9 @@ Return a JSON object with this structure:
   "indemnity_reserve": 0.0,
   "expense_paid": 0.0,
   "expense_reserve": 0.0,
-  "total_incurred": 0.0,
-  "litigation": "Y if explicitly Yes/Y, else N"
+  "recovery": 0.0,
+  "deductible": 0.0,
+  "total_incurred": 0.0
 }}
 
 RULES:
@@ -1472,8 +1099,7 @@ RULES:
 2. Extract ONLY that claim's data
 3. Ignore all other claims in the document
 4. Status codes: C=Closed, O=Open, REOP=Reopened
-5. Litigation: If the document explicitly shows 'Yes' or 'Y' for legal/litigation status, return 'Y'. Otherwise, return 'N'.
-6. Remove $ and commas from amounts
+5. Remove $ and commas from amounts
 
 TEXT TO ANALYZE:
 {all_text}
@@ -1512,56 +1138,23 @@ Return ONLY the JSON object for claim {target_claim_number}."""
     
     def validate_extraction(self, data: Dict, original_text: str) -> Dict:
         """
-        Validate that all claims in the text were extracted
+        Validate application extraction
         """
         print(f"\n🔍 Validating extraction...")
         
-        # Find all claim numbers mentioned in text
-        claim_numbers_in_text = set()
-        
-        # Pattern 1: "Claim# 20677" or "Claim #20677"
-        for match in re.finditer(r'Claim#?\s*(\d+)', original_text, re.IGNORECASE):
-            claim_numbers_in_text.add(match.group(1))
-            
-        # Get claim numbers from extracted data
-        if "claims" in data:
-            # Multi-claim format
-            claim_numbers_extracted = {
-                str(claim.get("claim_number", "")) 
-                for claim in data.get("claims", [])
-                if claim.get("claim_number")
-            }
-        else:
-            # Single claim format
-            claim_num = data.get("claim_number")
-            claim_numbers_extracted = {str(claim_num)} if claim_num else set()
-        
-        # Check for missing claims
-        missing_claims = claim_numbers_in_text - claim_numbers_extracted
-        extra_claims = claim_numbers_extracted - claim_numbers_in_text
+        is_complete = "data" in data and bool(data["data"].get("demographics", {}).get("applicantName"))
         
         validation_report = {
-            "total_in_text": len(claim_numbers_in_text),
-            "total_extracted": len(claim_numbers_extracted),
-            "missing_claims": list(missing_claims),
-            "extra_claims": list(extra_claims),
-            "is_complete": len(missing_claims) == 0
+            "is_complete": is_complete,
+            "has_demographics": "demographics" in data.get("data", {}),
+            "has_rating": len(data.get("data", {}).get("ratingByState", [])) > 0,
+            "has_prior_carriers": len(data.get("data", {}).get("priorCarriers", [])) > 0
         }
         
-        # Print report
-        print(f"   Claims in text: {len(claim_numbers_in_text)}")
-        print(f"   Claims extracted: {len(claim_numbers_extracted)}")
-        
-        if missing_claims:
-            print(f"   ⚠️  MISSING: {', '.join(missing_claims)}")
-        
-        if extra_claims:
-            print(f"   ⚠️  EXTRA: {', '.join(extra_claims)}")
-        
-        if validation_report["is_complete"]:
-            print(f"   ✓ Extraction is COMPLETE")
+        if is_complete:
+            print(f"   ✓ Application extraction looks COMPLETE")
         else:
-            print(f"   ❌ Extraction is INCOMPLETE")
+            print(f"   ❌ Application extraction looks INCOMPLETE")
         
         return validation_report
 
@@ -1624,31 +1217,25 @@ Return ONLY the JSON object for claim {target_claim_number}."""
             "session_id": session_id,
             "target_claim": target_claim_number
         }
-        schema_data['extraction_metadata'] = extraction_metadata
+        # analysis_data will contain the metadata, schema_data will stay clean
         
-        # Create analysis.json with metadata and policy details (without claims)
+        # Save analysis.json (metadata only)
         analysis_data = {
             "extraction_metadata": extraction_metadata,
-            "report_date": schema_data.get("report_date"),
-            "policy_number": schema_data.get("policy_number"),
-            "insured_name": schema_data.get("insured_name"),
-            "policy_period": schema_data.get("policy_period"),
-            "total_claims": len(schema_data.get("claims", []))
+            "applicant_name": schema_data.get("data", {}).get("demographics", {}).get("applicantName"),
+            "has_rating": validation.get("has_rating"),
+            "has_prior_carriers": validation.get("has_prior_carriers")
         }
         
-        # Save analysis.json (metadata only, no claims data)
         analysis_file = session_dir / "analysis.json"
         with open(analysis_file, 'w', encoding='utf-8') as f:
             json.dump(analysis_data, f, indent=2, ensure_ascii=False)
         print(f"✓ Analysis saved: {analysis_file}")
         
-        # Save schema (ONLY claims array - clean output)
-        claims_only = {
-            "claims": schema_data.get("claims", [])
-        }
+        # Save schema (clean output)
         schema_file = session_dir / "extracted_schema.json"
         with open(schema_file, 'w', encoding='utf-8') as f:
-            json.dump(claims_only, f, indent=2, ensure_ascii=False)
+            json.dump(schema_data, f, indent=2, ensure_ascii=False)
         print(f"✓ Schema saved: {schema_file}")
         
         # Step 3: Prepare verification package (for internal use only)
@@ -1661,7 +1248,7 @@ Return ONLY the JSON object for claim {target_claim_number}."""
             "pages": pages_data,
             "combined_text": all_text,
             "combined_text_file": str(text_file),
-            "extracted_schema": claims_only,  # Use claims_only (no extra metadata)
+            "extracted_schema": schema_data,  # Use full schema_data
             "schema_file": str(schema_file),
             "summary": {
                 "total_pages": len(pages_metadata),

@@ -89,15 +89,63 @@ async def extract_document(file: UploadFile = File(...)):
             print(f"[Unified][API] Cached JSON: {json_filename} -> {json_path}")
         
         # Transform response to match frontend expectations
+        doc_type = result.get("type", "UNKNOWN")
+        
+        # Build base response
         response = {
-            "type": result.get("type", "UNKNOWN"),
+            "type": doc_type,
             "output_file": excel_filename,
             "output_json": json_filename,
             "excel": excel_path,
             "json": json_path
         }
         
+        # Add Work Compensation specific metadata
+        if doc_type == "WORK_COMPENSATION" and json_path:
+            try:
+                import json as json_lib
+                with open(json_path, "r", encoding="utf-8") as f:
+                    wc_data = json_lib.load(f)
+                
+                inner = wc_data.get("data", {})
+                demographics = inner.get("demographics", {})
+                premium_calc = inner.get("premiumCalculation", {})
+                rating_by_state = inner.get("ratingByState", [])
+                
+                # Detect form type from wcStates field or state list
+                wc_states_raw = demographics.get("wcStates", "") or ""
+                wc_states = [s.strip().upper() for s in wc_states_raw.replace(",", " ").split() if s.strip()]
+                
+                if "CA" in wc_states:
+                    form_type = "California ACORD"
+                elif "FL" in wc_states:
+                    form_type = "Florida ACORD"
+                elif wc_states:
+                    form_type = f"ACORD ({', '.join(wc_states[:3])})"
+                else:
+                    form_type = "Standard ACORD 130"
+                
+                # Get total premium
+                total_premium = premium_calc.get("totalEstimatedAnnualPremium", 0) or 0
+                if not total_premium and rating_by_state:
+                    total_premium = sum(
+                        float(r.get("estimatedAnnualPremium", 0) or 0)
+                        for r in rating_by_state
+                    )
+                
+                applicant_name = demographics.get("applicantName", "N/A")
+                
+                response["work_comp_metadata"] = {
+                    "form_type": form_type,
+                    "total_premium": total_premium,
+                    "applicant_name": applicant_name,
+                    "wc_states": wc_states
+                }
+            except Exception as meta_err:
+                print(f"[Unified][WARN] Could not extract work comp metadata: {meta_err}")
+        
         return response
+
         
     except Exception as e:
         print(f"[Unified][ERROR] {e}")

@@ -53,7 +53,13 @@ export interface DocumentMetadata {
   confidence: number;
   claims_count?: number;
   total_value?: number;
-  documentType?: "INSURANCE" | "INVOICE" | "UNKNOWN";
+  documentType?: "INSURANCE" | "INSURANCE_CLAIMS" | "INVOICE" | "WORK_COMPENSATION" | "IDENTIFICATION" | "UNKNOWN";
+  work_comp_metadata?: {
+    form_type: string;
+    total_premium: number;
+    applicant_name: string;
+    wc_states: string[];
+  } | null;
 }
 
 export interface DocumentFile {

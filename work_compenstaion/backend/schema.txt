@@ -1,0 +1,121 @@
+{
+  "description": "Schema for an insurance response containing demographics, rating by state, general questions, and prior carriers.",
+  "name": "insurance_response",
+  "schema": {
+    "additionalProperties": false,
+    "properties": {
+      "data": {
+        "additionalProperties": false,
+        "properties": {
+          "demographics": {
+            "additionalProperties": false,
+            "type": "object",
+            "properties": {
+              "applicantName": { "type": "string" },
+              "businessDescription": { "type": "string" },
+              "email": { "type": "string" },
+              "fein": { "type": "string" },
+ 
+              "mailingStreet": { "type": "string" },
+              "mailingCity": { "type": "string" },
+              "mailingState": { "type": "string" },
+ 
+              "mailingZip": { "type": "string" },
+              "officePhone": { "type": "string" },
+              "mobilePhone": { "type": "string" },
+              "website": { "type": "string" },
+ 
+              "yearsInBusiness": { "type": ["number", "string"] },
+              "sicCode": { "type": ["number", "string"] },
+              "naicsCode": { "type": ["number", "string"] },
+ 
+              "proposedEffectiveDate": { "type": "string" },
+              "proposedExpirationDate": { "type": "string" },
+              "wcStates": { "type": "string" }
+            },
+            "required": [
+              "applicantName",
+              "mailingStreet",
+              "mailingCity",
+              "mailingState",
+              "mailingZip",
+              "officePhone",
+              "mobilePhone",
+              "email",
+              "website",
+              "yearsInBusiness",
+              "sicCode",
+              "naicsCode",
+              "fein",
+              "proposedEffectiveDate",
+              "proposedExpirationDate",
+              "wcStates",
+              "businessDescription"
+            ]
+          },
+ 
+          "generalQuestions": {
+            "additionalProperties": false,
+            "type": "object",
+            "properties": {
+              "q1": { "type": "string" }, "q2": { "type": "string" }, "q3": { "type": "string" },
+              "q4": { "type": "string" }, "q5": { "type": "string" }, "q6": { "type": "string" },
+              "q7": { "type": "string" }, "q8": { "type": "string" }, "q9": { "type": "string" },
+              "q10": { "type": "string" }, "q11": { "type": "string" }, "q12": { "type": "string" },
+              "q13": { "type": "string" }, "q14": { "type": "string" }, "q15": { "type": "string" },
+              "q16": { "type": "string" }, "q17": { "type": "string" }, "q18": { "type": "string" },
+              "q19": { "type": "string" }, "q20": { "type": "string" }, "q21": { "type": "string" },
+              "q22": { "type": "string" }, "q23": { "type": "string" }, "q24": { "type": "string" }
+            },
+            "required": ["q1","q2","q3","q4","q5","q6","q7","q8","q9","q10","q11","q12","q13","q14","q15","q16","q17","q18","q19","q20","q21","q22","q23","q24"]
+          },
+ 
+          "priorCarriers": {
+            "type": "array",
+            "items": {
+              "additionalProperties": false,
+              "type": "object",
+              "properties": {
+                "year": { "type": "number" },
+                "carrierName": { "type": "string" },
+                "policyNumber": { "type": "string" },
+                "experienceMod": { "type": ["number", "string"] },
+ 
+                "annualPremium": { "type": ["number", "string"] },
+                "numberOfClaims": { "type": ["number", "string"] },
+                "amountPaid": { "type": ["number", "string"] },
+                "reserveAmount": { "type": ["number", "string"] }
+              },
+              "required": ["year","carrierName","policyNumber","annualPremium","experienceMod","numberOfClaims","amountPaid","reserveAmount"]
+            }
+          },
+ 
+          "ratingByState": {
+            "type": "array",
+            "items": {
+              "additionalProperties": false,
+              "type": "object",
+              "properties": {
+                "state": { "type": "string" },
+                "classCode": { "type": "number" },
+ 
+                "fullTimeEmployees": { "type": ["number", "string"] },
+                "partTimeEmployees": { "type": ["number", "string"] },
+ 
+                "estAnnualPayroll": { "type": ["number", "string"] },
+                "ratePer100Payroll": { "type": ["number", "string"] },
+                "estAnnualPremium": { "type": ["number", "string"] }
+              },
+              "required": ["state","classCode","fullTimeEmployees","partTimeEmployees","estAnnualPayroll","ratePer100Payroll","estAnnualPremium"]
+            }
+          }
+        },
+        "required": ["demographics","ratingByState","generalQuestions","priorCarriers"],
+        "type": "object"
+      }
+    },
+    "required": ["data"],
+    "type": "object"
+  },
+  "strict": true
+}

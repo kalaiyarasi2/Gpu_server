@@ -1,4 +1,4 @@
-import { Download, FileJson, BarChart3, Building2, RotateCcw } from "lucide-react";
+import { Download, FileJson, BarChart3, Building2, RotateCcw, HardHat, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { DocumentFile } from "@/types/extractor";
 import JsonViewer from "./JsonViewer";
@@ -53,6 +53,10 @@ const ResultsPanel = ({ document, onReprocess }: ResultsPanelProps) => {
   }
 
   const { result, metadata } = document;
+  const docType = metadata?.documentType;
+  const isWorkComp = docType === "WORK_COMPENSATION";
+  const isInvoice = docType === "INVOICE";
+  const wcMeta = metadata?.work_comp_metadata;
 
   const handleDownloadJson = () => {
     const blob = new Blob([JSON.stringify(result, null, 2)], { type: "application/json" });
@@ -118,36 +122,79 @@ const ResultsPanel = ({ document, onReprocess }: ResultsPanelProps) => {
   return (
     <div className="space-y-4 animate-slide-up">
       {/* Summary cards */}
-      <div className="grid grid-cols-3 gap-3">
-        <div className="p-3 rounded-lg bg-muted/50 border border-border">
-          <div className="flex items-center gap-2 mb-1">
-            <Building2 className="w-3.5 h-3.5 text-primary" />
-            <span className="text-[11px] text-muted-foreground font-medium">Insurer</span>
+      {isWorkComp ? (
+        /* Work Comp: only Form Type + Confidence */
+        <div className="grid grid-cols-2 gap-3">
+          <div className="p-3 rounded-lg bg-muted/50 border border-border">
+            <div className="flex items-center gap-2 mb-1">
+              <HardHat className="w-3.5 h-3.5 text-primary" />
+              <span className="text-[11px] text-muted-foreground font-medium">Form Type</span>
+            </div>
+            <p className="text-sm font-semibold text-foreground truncate">
+              {wcMeta?.form_type || metadata?.insurer || "N/A"}
+            </p>
           </div>
-          <p className="text-sm font-semibold text-foreground truncate">{metadata?.insurer || "N/A"}</p>
+          <div className="p-3 rounded-lg bg-muted/50 border border-border">
+            <div className="flex items-center gap-2 mb-1">
+              <FileText className="w-3.5 h-3.5 text-primary" />
+              <span className="text-[11px] text-muted-foreground font-medium">Confidence</span>
+            </div>
+            <p className="text-sm font-semibold text-foreground">
+              {metadata?.confidence ? `${metadata.confidence}%` : "N/A"}
+            </p>
+          </div>
         </div>
-        <div className="p-3 rounded-lg bg-muted/50 border border-border">
-          <div className="flex items-center gap-2 mb-1">
-            <BarChart3 className="w-3.5 h-3.5 text-primary" />
-            <span className="text-[11px] text-muted-foreground font-medium">
-              {metadata?.documentType === "INVOICE" ? "Total Value" : "Claims Found"}
+      ) : (
+        /* Insurance / Invoice: original 3-card layout */
+        <div className="grid grid-cols-3 gap-3">
+          <div className="p-3 rounded-lg bg-muted/50 border border-border">
+            <div className="flex items-center gap-2 mb-1">
+              <Building2 className="w-3.5 h-3.5 text-primary" />
+              <span className="text-[11px] text-muted-foreground font-medium">Insurer</span>
+            </div>
+            <p className="text-sm font-semibold text-foreground truncate">{metadata?.insurer || "N/A"}</p>
+          </div>
+          <div className="p-3 rounded-lg bg-muted/50 border border-border">
+            <div className="flex items-center gap-2 mb-1">
+              <BarChart3 className="w-3.5 h-3.5 text-primary" />
+              <span className="text-[11px] text-muted-foreground font-medium">
+                {isInvoice ? "Total Value" : "Claims Found"}
+              </span>
+            </div>
+            <p className="text-sm font-semibold text-foreground">
+              {isInvoice
+                ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(metadata?.total_value || 0)
+                : (metadata?.claims_count || result?.claims?.length || 0)
+              }
+            </p>
+          </div>
+          <div className="p-3 rounded-lg bg-muted/50 border border-border">
+            <div className="flex items-center gap-2 mb-1">
+              <FileText className="w-3.5 h-3.5 text-primary" />
+              <span className="text-[11px] text-muted-foreground font-medium">Confidence</span>
+            </div>
+            <p className="text-sm font-semibold text-foreground">
+              {metadata?.confidence ? `${metadata.confidence}%` : "N/A"}
+            </p>
+          </div>
+        </div>
+      )}
+
+
+      {/* WC States badge row for Work Comp */}
+      {isWorkComp && wcMeta?.wc_states && wcMeta.wc_states.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          <span className="text-[11px] text-muted-foreground font-medium self-center">States:</span>
+          {wcMeta.wc_states.map((state) => (
+            <span
+              key={state}
+              className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-primary/10 text-primary border border-primary/20"
+            >
+              {state}
             </span>
-          </div>
-          <p className="text-sm font-semibold text-foreground">
-            {metadata?.documentType === "INVOICE"
-              ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(metadata?.total_value || 0)
-              : (metadata?.claims_count || result?.claims?.length || 0)
-            }
-          </p>
+          ))}
         </div>
-        <div className="p-3 rounded-lg bg-muted/50 border border-border">
-          <div className="flex items-center gap-2 mb-1">
-            <FileJson className="w-3.5 h-3.5 text-primary" />
-            <span className="text-[11px] text-muted-foreground font-medium">Confidence</span>
-          </div>
-          <p className="text-sm font-semibold text-foreground">{metadata?.confidence ? `${metadata.confidence}%` : "N/A"}</p>
-        </div>
-      </div>
+      )}
 
       {/* Actions */}
       <div className="flex gap-2">

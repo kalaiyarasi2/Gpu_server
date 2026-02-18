@@ -21,46 +21,94 @@ if POPPLER_PATH and os.path.exists(POPPLER_PATH):
 else:
     print("⚠️ Warning: POPPLER_PATH not set or invalid. OCR may not work for scanned PDFs.")
 
-# Add Insurance backend to Python path for module imports
+# Base Directory
 BASE_DIR = Path(__file__).parent
-INSURANCE_BACKEND_DIR = BASE_DIR.parent / "Insurance_pdf_extractor-main/backend"
-sys.path.insert(0, str(INSURANCE_BACKEND_DIR))
-
-# Import Insurance extractor as module
-try:
-    from chunked_extractor import ChunkedInsuranceExtractor
-    INSURANCE_MODULE_AVAILABLE = True
-    print("✓ Insurance extractor module loaded successfully")
-except ImportError as e:
-    INSURANCE_MODULE_AVAILABLE = False
-    print(f"⚠️ Warning: Could not import Insurance extractor module: {e}")
-    print("   Will fall back to subprocess method if needed.")
 
 # Configuration for paths
 INVOICE_SCRIPT = BASE_DIR.parent / "Invoice_pdf_extractor/Invoice_Extraction-main/universal_pdf_extractor_v3.py"
 STRUCTURAL_INVOICE_SCRIPT = BASE_DIR.parent / "Invoice_pdf_extractor/Invoice_Extraction-main/structural_pdf_extractor.py"
 INSURANCE_SCRIPT = BASE_DIR.parent / "Insurance_pdf_extractor-main/backend/chunked_extractor.py"
+INSURANCE_BACKEND_DIR = BASE_DIR.parent / "Insurance_pdf_extractor-main/backend"
 INSURANCE_OUTPUT_DIR = INSURANCE_BACKEND_DIR / "outputs"
+
+# Work Compensation Paths
+WORK_COMP_BACKEND_DIR = BASE_DIR.parent / "work_compenstaion/backend"
+WORK_COMP_OUTPUT_DIR = WORK_COMP_BACKEND_DIR / "outputs"
+
 OUTPUT_BASE = BASE_DIR / "unified_outputs"
 OUTPUT_BASE.mkdir(exist_ok=True)
+
+# Helper to load extractor classes from different backends
+def get_extractor_class(backend_dir):
+    import sys
+    orig_path = sys.path.copy()
+    try:
+        if str(backend_dir) not in sys.path:
+            sys.path.insert(0, str(backend_dir))
+        
+        # Remove from sys.modules to force reload from this specific path
+        # This prevents collisions between same-named modules in different backends
+        modules_to_clear = ['chunked_extractor', 'pdf_detector', 'pdf_rotation', 'ocr_text', 'pdf_plumber']
+        for mod in modules_to_clear:
+            if mod in sys.modules:
+                del sys.modules[mod]
+            
+        import chunked_extractor
+        return chunked_extractor.ChunkedInsuranceExtractor
+    except Exception as e:
+        print(f"⚠️ Error loading extractor from {backend_dir}: {e}")
+        return None
+    finally:
+        sys.path = orig_path
+
+from contextlib import contextmanager
+
+@contextmanager
+def backend_context(backend_dir):
+    """Context manager to temporarily set sys.path for extractor execution."""
+    import sys
+    orig_path = sys.path.copy()
+    try:
+        if str(backend_dir) not in sys.path:
+            sys.path.insert(0, str(backend_dir))
+        yield
+    finally:
+        sys.path = orig_path
 
 class UnifiedRouter:
     def __init__(self):
         self.client = OpenAI(api_key=OPENAI_API_KEY)
         
-        # Initialize Insurance extractor if module is available
-        if INSURANCE_MODULE_AVAILABLE:
+        # Initialize Insurance extractor
+        print("\n🔍 Initializing Extractors...")
+        InsuranceClass = get_extractor_class(INSURANCE_BACKEND_DIR)
+        if InsuranceClass:
             try:
-                self.insurance_extractor = ChunkedInsuranceExtractor(
+                self.insurance_extractor = InsuranceClass(
                     api_key=OPENAI_API_KEY,
                     output_dir=str(INSURANCE_OUTPUT_DIR)
                 )
-                print("✓ ChunkedInsuranceExtractor initialized")
+                print("✓ Insurance Extractor (Claims) initialized")
             except Exception as e:
-                print(f"⚠️ Warning: Could not initialize Insurance extractor: {e}")
+                print(f"⚠️ Failed to init Insurance Extractor: {e}")
                 self.insurance_extractor = None
         else:
             self.insurance_extractor = None
+
+        # Initialize Work Comp extractor
+        WorkCompClass = get_extractor_class(WORK_COMP_BACKEND_DIR)
+        if WorkCompClass:
+            try:
+                self.work_comp_extractor = WorkCompClass(
+                    api_key=OPENAI_API_KEY,
+                    output_dir=str(WORK_COMP_OUTPUT_DIR)
+                )
+                print("✓ Work Compensation Extractor initialized")
+            except Exception as e:
+                print(f"⚠️ Failed to init Work Comp Extractor: {e}")
+                self.work_comp_extractor = None
+        else:
+            self.work_comp_extractor = None
 
     def extract_snippet(self, pdf_path, max_pages=2):
         """Extract first few pages of text for classification using PyMuPDF."""
@@ -101,15 +149,30 @@ FILENAME: {filename}
 EXTRACTED TEXT (MAY BE NOISY/SCANNED):
 {text if not is_noisy else "[TEXT LAYER CORRUPTED OR SCANNED - USE FILENAME HINT]"}
 
-CLASSIFICATION RULES:
-1. **INVOICE**: Financial invoice, billing statement, premium notice, health insurance bill, payment receipt
-2. **INSURANCE**: Insurance claim, loss run report, claim summary, workers compensation report, liability report
-3. **Filename Analysis**: If text is corrupted/noisy, analyze the filename for keywords:
-   - Keywords suggesting INSURANCE: "claim", "loss", "run", "comp", "liability", "CCMSI", "BerkleyNet", "AmTrust", "workers"
-   - Keywords suggesting INVOICE: "invoice", "bill", "payment", "premium", "statement"
-4. **Default for Insurance Carriers**: If filename contains known insurance carrier names (CCMSI, BerkleyNet, AmTrust, Sedgwick, etc.), classify as INSURANCE
-5. Output MUST be exactly ONE word: INVOICE or INSURANCE
-6. If completely uncertain, prefer INSURANCE for documents with carrier names
+CLASSIFICATION RULES (apply in this strict priority order):
+
+1. **WORK_COMPENSATION** (HIGHEST PRIORITY - check FIRST):
+   - Workers' Compensation Application forms, ACORD 130, ACORD 133, WC renewal applications.
+   - Key indicators: "WORKERS COMPENSATION APPLICATION", "ACORD 130", "ACORD 133", "Rating by State", "Payroll", "Class Code", "Experience Modification", "WC States", "NAICS", "SIC", "YRS IN BUS", "SOLE PROPRIETOR", "CORPORATION", "PARTNERSHIP".
+   - Filename keywords: "acord", "acord 130", "wc app", "workers comp", "work comp", "compensation application".
+   - If the document contains a workers' comp application form, classify as WORK_COMPENSATION even if it mentions premiums.
+
+2. **IDENTIFICATION**: Personal IDs like Passport, Driver's License, SSN Card, State ID.
+   - Key indicators: "Date of Birth", "License No", "Passport No", "Social Security".
+
+3. **INSURANCE_CLAIMS**: Insurance claim reports, loss run reports, claim summaries, liability reports.
+   - Key indicators: "Loss Run", "Claim Number", "Claim Count", "Incurred", "Reserve", "Paid Losses", "Policy Year".
+   - Filename keywords: "claim", "loss", "run", "liability", "CCMSI", "BerkleyNet", "AmTrust".
+
+4. **INVOICE** (LOWEST PRIORITY - only if none of the above match):
+   - Financial invoice, billing statement, premium notice, health insurance bill, payment receipt.
+   - Key indicators: "Invoice Date", "Amount Due", "Amount Billed", "Billing Period", "Member ID", "Premium Period".
+   - Filename keywords: "invoice", "bill", "payment", "statement".
+   - DO NOT classify as INVOICE if the document contains workers' comp application fields.
+
+5. **Filename Analysis**: If text is corrupted/noisy, analyze the filename for keywords above.
+
+6. Output MUST be exactly ONE word: INVOICE, INSURANCE_CLAIMS, WORK_COMPENSATION, or IDENTIFICATION.
 
 OUTPUT:"""
 
@@ -123,14 +186,22 @@ OUTPUT:"""
             classification = response.choices[0].message.content.strip().upper()
             print(f"\n✅ AI Response: {classification}")
 
-            if "INVOICE" in classification:
+            if "WORK_COMPENSATION" in classification:
+                print("\n👷 Classification Result: WORK_COMPENSATION")
+                print("   → Will route to Work Compensation Extractor")
+                return "WORK_COMPENSATION"
+            elif "IDENTIFICATION" in classification:
+                print("\n🆔 Classification Result: IDENTIFICATION")
+                print("   → Will route to Identification Extractor")
+                return "IDENTIFICATION"
+            elif "INSURANCE_CLAIMS" in classification or "INSURANCE" == classification:
+                print("\n🏥 Classification Result: INSURANCE_CLAIMS")
+                print("   → Will route to Insurance (Claims) Extractor")
+                return "INSURANCE_CLAIMS"
+            elif "INVOICE" in classification:
                 print("\n📊 Classification Result: INVOICE")
                 print("   → Will route to Invoice Extractor")
                 return "INVOICE"
-            elif "INSURANCE" in classification:
-                print("\n🏥 Classification Result: INSURANCE")
-                print("   → Will route to Insurance Extractor")
-                return "INSURANCE"
             else:
                 print(f"\n❓ Classification Result: UNKNOWN")
                 print(f"   AI returned: {classification}")
@@ -173,6 +244,7 @@ OUTPUT:"""
                 print(f"  [Debug] Running command: {' '.join(cmd)}")
                 try:
                     import subprocess
+                    import sys
                     process = subprocess.Popen(
                         cmd,
                         stdout=subprocess.PIPE,
@@ -220,11 +292,11 @@ OUTPUT:"""
 
             # For structural extractor, output file is auto-named
             if use_structural and script_to_use == STRUCTURAL_INVOICE_SCRIPT:
-                result = run_with_logging(["python", str(script_to_use), str(pdf_path)], 900)
+                result = run_with_logging([sys.executable, str(script_to_use), str(pdf_path)], 900)
                 # Structural extractor creates its own output file
                 output_xlsx = Path(pdf_path).parent / "extracted_data_structural.xlsx"
             else:
-                result = run_with_logging(["python", str(script_to_use), str(pdf_path), str(output_xlsx)], 600)
+                result = run_with_logging([sys.executable, str(script_to_use), str(pdf_path), str(output_xlsx)], 900)
             
             if result.returncode != 0:
                 print(f"\n❌ Extraction Failed (Exit Code: {result.returncode})")
@@ -270,11 +342,12 @@ OUTPUT:"""
             print("\n⏳ Processing... (this may take 1-2 minutes)\n")
             
             try:
-                # Call the main processing method
-                result = self.insurance_extractor.process_pdf_with_verification(
-                    pdf_path=pdf_path,
-                    target_claim_number=None  # Extract all claims
-                )
+                # Call the main processing method within the correct backend context
+                with backend_context(INSURANCE_BACKEND_DIR):
+                    result = self.insurance_extractor.process_pdf_with_verification(
+                        pdf_path=pdf_path,
+                        target_claim_number=None  # Extract all claims
+                    )
                 
                 print("✅ Insurance extractor completed successfully!")
                 print("\n🔍 Locating output files...")
@@ -317,7 +390,7 @@ OUTPUT:"""
             print("\n⏳ Processing... (this may take 1-2 minutes)\n")
             
             result = subprocess.run(
-                ["python", str(INSURANCE_SCRIPT), str(pdf_path)],
+                [sys.executable, str(INSURANCE_SCRIPT), str(pdf_path)],
                 capture_output=True,
                 text=True,
                 cwd=str(INSURANCE_SCRIPT.parent),
@@ -354,6 +427,107 @@ OUTPUT:"""
                 print(f"\n❌ Insurance Extraction Failed (Exit Code: {result.returncode})")
                 print(f"Error Details:\n{result.stderr}")
                 return {"error": result.stderr}
+
+    def run_work_compensation_extractor(self, pdf_path):
+        """Run the work compensation extractor using direct module import."""
+        print("\n" + "="*70)
+        print("👷 STEP 2: RUNNING WORK COMPENSATION EXTRACTOR")
+        print("="*70)
+        print(f"📂 Input: {pdf_path}")
+        
+        if self.work_comp_extractor:
+            print(f"🔧 Method: Direct Module Import (WorkCompExtractor)")
+            print("\n⏳ Processing... (this may take 1-2 minutes)\n")
+            
+            try:
+                # Call the main processing method within the correct backend context
+                with backend_context(WORK_COMP_BACKEND_DIR):
+                    result = self.work_comp_extractor.process_pdf_with_verification(
+                        pdf_path=pdf_path,
+                        target_claim_number=None
+                    )
+                
+                print("✅ Work Compensation extractor completed successfully!")
+                
+                # Extract session information
+                session_dir = Path(result.get("session_dir"))
+                schema_file = session_dir / "extracted_schema.json"
+                
+                if schema_file.exists():
+                    excel_path = self.json_to_xlsx(schema_file)
+                    return {
+                        "type": "WORK_COMPENSATION",
+                        "json": str(schema_file),
+                        "excel": excel_path,
+                        "session_dir": str(session_dir)
+                    }
+                else:
+                    return {"error": "Schema file not found after extraction"}
+                    
+            except Exception as e:
+                print(f"\n❌ Work Comp Extraction Error: {e}")
+                return {"error": f"Work Comp extraction failed: {str(e)}"}
+        else:
+            print("\n❌ Error: Work Comp Extractor not initialized.")
+            return {"error": "Work Comp Extractor not available"}
+
+    def run_identification_extractor(self, pdf_path):
+        """Extract personal information from IDs (Passport, DL, SSN) using GPT-4o-mini."""
+        print("\n" + "="*70)
+        print("🆔 STEP 2: RUNNING IDENTIFICATION EXTRACTOR")
+        print("="*70)
+        print(f"📂 Input: {pdf_path}")
+
+        try:
+            # Extract text first
+            text = self.extract_snippet(pdf_path, max_pages=1)
+            
+            prompt = f"""You are an ID document analyzer. Extract information from this Identification Document.
+            
+            EXTRACTED TEXT:
+            {text}
+            
+            Extract fields like: Full Name, Document Number (Passport # / DL #), State/Country, Date of Birth, Expiration Date.
+            Identify the DOCUMENT TYPE (e.g. PASSPORT, DRIVER LICENSE, SSN CARD).
+            
+            Return JSON:
+            {{
+                "document_type": "...",
+                "full_name": "...",
+                "document_number": "...",
+                "state_country": "...",
+                "dob": "...",
+                "expiration_date": "...",
+                "extracted_fields": {{ ... any other fields ... }}
+            }}
+            """
+
+            response = self.client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{"role": "user", "content": prompt}],
+                response_format={"type": "json_object"},
+                temperature=0
+            )
+            
+            data = json.loads(response.choices[0].message.content)
+            
+            # Save to unified_outputs
+            output_json = OUTPUT_BASE / f"{Path(pdf_path).stem}_id.json"
+            with open(output_json, 'w') as f:
+                json.dump(data, f, indent=4)
+            
+            # Convert to Excel
+            excel_path = self.json_to_xlsx(output_json)
+            
+            return {
+                "type": "IDENTIFICATION",
+                "json": str(output_json),
+                "excel": excel_path,
+                "data": data
+            }
+        except Exception as e:
+            print(f"\n❌ ID Extraction Error: {e}")
+            return {"error": f"ID extraction failed: {str(e)}"}
 
     def xlsx_to_json(self, xlsx_path):
         """Convert Excel output to JSON."""
@@ -454,8 +628,12 @@ OUTPUT:"""
                     else:
                         print(f"❌ Structural fallback also failed: {structural_result.get('error')}")
 
-        elif doc_type == "INSURANCE":
+        elif doc_type == "INSURANCE_CLAIMS":
             result = self.run_insurance_extractor(pdf_path)
+        elif doc_type == "WORK_COMPENSATION":
+            result = self.run_work_compensation_extractor(pdf_path)
+        elif doc_type == "IDENTIFICATION":
+            result = self.run_identification_extractor(pdf_path)
         else:
             print("\n" + "="*70)
             print(f"❌ PROCESSING FAILED: UNSUPPORTED TYPE '{doc_type}'")

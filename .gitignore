@@ -6,4 +6,6 @@ __pycache__/
 unified_outputs/unified_outputs
 insurance_pdf_extractor-main/backend/outputs
 sources/
-
+Unified_PDF_Platform/uploads
+work_compenstaion/backend/outputs
+work_compenstaion/__pycache__
