@@ -283,30 +283,44 @@ def _reverse_text_block(text: str) -> str:
 
 
 def format_table(table: list[list]) -> str:
-    """Format table data into aligned text format."""
+    """
+    Format table data into aligned text format.
+    Uses tab separation for better column alignment and preserves row structure.
+    """
     if not table or not table[0]:
         return ""
     
+    # First pass: calculate column widths for alignment
     col_widths = []
     for col_idx in range(len(table[0])):
         max_width = 0
         for row in table:
             if col_idx < len(row) and row[col_idx]:
+                # Clean cell: remove newlines and extra spaces, replace with single space
                 cell_text = str(row[col_idx]).strip()
+                cell_text = ' '.join(cell_text.split())  # Replace multiple spaces/newlines with single space
                 max_width = max(max_width, len(cell_text))
-        col_widths.append(max_width)
+        # Set minimum width of 15 for better readability
+        col_widths.append(max(15, max_width))
     
     formatted_rows = []
     for row_idx, row in enumerate(table):
         formatted_cells = []
         for col_idx, cell in enumerate(row):
+            # Clean cell content: remove newlines, replace with space
             cell_text = str(cell).strip() if cell else ""
+            cell_text = ' '.join(cell_text.split())  # Normalize whitespace
+            
+            # Pad to column width for alignment
             width = col_widths[col_idx]
             formatted_cells.append(cell_text.ljust(width))
         
-        formatted_rows.append(" | ".join(formatted_cells))
+        # Use tab for cleaner separation (works better with multi-line cells)
+        formatted_rows.append("\t".join(formatted_cells))
+        
+        # Add separator after header row
         if row_idx == 0:
-            formatted_rows.append("-+-".join(["-" * w for w in col_widths]))
+            formatted_rows.append("\t".join(["-" * w for w in col_widths]))
     
     return "\n".join(formatted_rows)
 

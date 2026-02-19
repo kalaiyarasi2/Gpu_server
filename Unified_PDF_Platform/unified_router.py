@@ -551,6 +551,21 @@ class UnifiedRouter:
         else:
             self.work_comp_extractor = None
 
+    def _check_if_reversed(self, text: str) -> bool:
+        """Detect PDFs with 180°-rotated text where each line is stored reversed.
+        Common reversed markers: 'tropeR'=Report, 'ssoL'=Loss, 'diap'=paid, 'mialC'=Claim.
+        Returns True if text appears to be stored upside-down/mirrored.
+        """
+        if not text or len(text) < 50:
+            return False
+        reversed_markers = ["tropeR", "mialC", "ycailoP", "ssoL", "diap", "ecnarusnI", "noitazilitu"]
+        hits = sum(1 for m in reversed_markers if m in text or m.lower() in text.lower())
+        return hits >= 2
+
+    def _reverse_text_lines(self, text: str) -> str:
+        """Correct 180°-rotated text by reversing each line character-by-character."""
+        return '\n'.join(line[::-1] for line in text.split('\n'))
+
     def _detect_slash_noise(self, text: str) -> bool:
         """Detect garbled/encoded text that is useless for classification.
         Handles two known noise patterns:
@@ -579,7 +594,9 @@ class UnifiedRouter:
         return is_noisy
 
     def _detect_rotation_and_fix(self, pdf_path: str, tmp_dir: str) -> str:
-        """Detect and auto-fix page rotation using block geometry (from pdf_rotation.py)."""
+        """Detect and auto-fix page rotation using block geometry (from pdf_rotation.py).
+        Always returns a fitz-normalized copy so pdfplumber can read its text layer.
+        """
         try:
             doc = fitz.open(pdf_path)
             rotated_any = False
@@ -594,11 +611,14 @@ class UnifiedRouter:
                     print(f"[Snippet] Page {i+1} rotated 90°")
             rotated_path = os.path.join(tmp_dir, "rotated_snippet.pdf")
             doc.save(rotated_path)
-            doc.close()  # close once after save
+            doc.close()
             if rotated_any:
                 print(f"[Snippet] Rotation corrected → {rotated_path}")
-                return rotated_path
-            # not rotated — return original path (rotated_path is same content)
+            else:
+                print(f"[Snippet] No 90° rotation needed — using fitz-normalized copy")
+            # Always return the normalized copy: fitz re-serializes the PDF
+            # so pdfplumber can read the text layer even when the original has quirky encoding.
+            return rotated_path
         except Exception as e:
             print(f"[Snippet] Rotation check failed: {e}")
         return pdf_path
@@ -632,6 +652,11 @@ class UnifiedRouter:
                 raw = raw.strip()
                 print(f"[Snippet] Stage 1 (PyMuPDF): {len(raw)} chars")
                 if raw and not self._detect_slash_noise(raw):
+                    # Check for 180°-rotated text (reversed per line) and correct dynamically
+                    if self._check_if_reversed(raw):
+                        print("[Snippet] ⚠️ Detected 180°-rotated text encoding. Applying line reversal...")
+                        raw = self._reverse_text_lines(raw)
+                        print(f"[Snippet] Corrected sample: {raw[:120].strip()}")
                     text = raw
                 else:
                     print("[Snippet] Stage 1 output is noisy — skipping to Stage 2")
@@ -650,6 +675,11 @@ class UnifiedRouter:
                     plumber_text = plumber_text.strip()
                     print(f"[Snippet] Stage 2 (pdfplumber): {len(plumber_text)} chars")
                     if len(plumber_text) > len(text) and not self._detect_slash_noise(plumber_text):
+                        # Check for 180°-rotated text and correct dynamically
+                        if self._check_if_reversed(plumber_text):
+                            print("[Snippet] Stage 2: ⚠️ Detected reversed text. Applying correction...")
+                            plumber_text = self._reverse_text_lines(plumber_text)
+                            print(f"[Snippet] Stage 2 corrected sample: {plumber_text[:120].strip()}")
                         text = plumber_text
                     elif self._detect_slash_noise(plumber_text):
                         print("[Snippet] Stage 2 also noisy — proceeding to OCR")
@@ -684,13 +714,34 @@ class UnifiedRouter:
                         if enhancements.get('binarize'):
                             threshold = enhancements.get('threshold', 200)
                             img = img.point(lambda p: p > threshold and 255)
-                        ocr_text += pytesseract.image_to_string(img, config=custom_config, lang="eng")
+
+                        # Run OCR on normal orientation
+                        text_normal = pytesseract.image_to_string(img, config=custom_config, lang="eng")
+
+                        # Try 180°-rotated — dynamically pick best (higher alphanumeric ratio)
+                        img_180 = img.rotate(180)
+                        text_180 = pytesseract.image_to_string(img_180, config=custom_config, lang="eng")
+                        def _alnum_ratio(t):
+                            clean = re.sub(r'[^a-zA-Z0-9]', '', t)
+                            return len(clean) / max(len(t), 1)
+                        if _alnum_ratio(text_180) > _alnum_ratio(text_normal) + 0.05:
+                            print("[Snippet] Stage 3: 180°-rotated image gave better OCR — using rotated")
+                            ocr_text += text_180
+                        else:
+                            ocr_text += text_normal
+
                     ocr_text = ocr_text.strip()
+                    # Apply reversal fix if the BEST OCR result is still mirrored
+                    if ocr_text and self._check_if_reversed(ocr_text):
+                        print("[Snippet] Stage 3 OCR: ⚠️ Detected reversed text. Applying correction...")
+                        ocr_text = self._reverse_text_lines(ocr_text)
+
                     print(f"[Snippet] Stage 3 (OCR enhanced): {len(ocr_text)} chars")
                     if len(ocr_text) > len(text):
                         text = ocr_text
                 except Exception as e:
                     print(f"[Snippet] Stage 3 failed: {e}")
+
 
             # ── Stage 4: Basic OCR (300 DPI, no enhancement) ────────────────────
             if len(text) < CHAR_THRESHOLD and OCR_AVAILABLE:
@@ -705,6 +756,12 @@ class UnifiedRouter:
                     for img in images:
                         ocr_text += pytesseract.image_to_string(img, config="--oem 3 --psm 3", lang="eng")
                     ocr_text = ocr_text.strip()
+
+                    # Apply reversal fix if the OCR result is mirrored
+                    if ocr_text and self._check_if_reversed(ocr_text):
+                        print("[Snippet] Stage 4 OCR: ⚠️ Detected reversed text. Applying correction...")
+                        ocr_text = self._reverse_text_lines(ocr_text)
+
                     print(f"[Snippet] Stage 4 (basic OCR): {len(ocr_text)} chars")
                     if len(ocr_text) > len(text):
                         text = ocr_text
@@ -840,21 +897,32 @@ Return ONLY the carrier name or UNKNOWN:"""
         # No hardcoded lists needed — the model's training data covers insurance industry names.
         if is_noisy:
             try:
-                filename_prompt = f"""You are an insurance document expert. Based ONLY on the filename below, classify the document type and identify the insurance carrier or TPA.
+                filename_prompt = f"""You are an expert insurance industry document classifier. Your task is to classify the document type based ONLY on the filename.
 
 FILENAME: {filename}
 
-Use your knowledge of the insurance industry:
-- CCMSI, BerkleyNet, Key Risk, AmTrust, State Fund, FCBI = Third-party claim administrators → INSURANCE_CLAIMS
-- Files named with 'Acord', 'WC App', 'Workers Comp' = Workers comp application → WORK_COMPENSATION  
-- Files with 'Inv', 'Invoice', 'Bill' = Billing/premium document → INVOICE
-- Personal ID documents = IDENTIFICATION
+STEP 1 — ENTITY ANALYSIS:
+Ask yourself: Does the filename contain an INSURANCE CARRIER or TPA (Third-Party Administrator) company name?
+- Insurance carriers and TPAs are COMPANIES that underwrite or administer insurance policies.
+- Examples of carrier/TPA company names: Accident Fund, CCMSI, BerkleyNet, KeyRisk, Travelers, Zurich, CNA, AmTrust, Liberty Mutual, Employers, Markel, Stonetrust, FCBI, State Fund, Clear Springs.
+- If the filename contains ANY company name that underwrites or administers insurance → it is likely a LOSS RUN or CLAIMS REPORT → classify as INSURANCE_CLAIMS.
+
+STEP 2 — DOCUMENT TYPE KEYWORDS (CRITICAL):
+- **INSURANCE_CLAIMS**: "Loss Run", "Loss Analysis", "Claim Summary", "Incurred", "Reserve", "Paid Losses", "Outstanding". 
+- **IMPORTANT**: If the filename contains "Workers Compensation LOSS RUN", it MUST be classified as INSURANCE_CLAIMS.
+- **WORK_COMPENSATION**: Only for application forms (ACORD 130, ACORD 133). Key indicators: "Acord", "WC App", "Workers Comp Application".
+- **Note**: "Loss Run" keywords ALWAYS override "Workers' Comp" keywords. If both appear, classify as INSURANCE_CLAIMS.
+
+STEP 3 — OTHER TYPES:
+- "Invoice", "Inv", "Bill", "Billing" → INVOICE
+- "Passport", "Driver License", "ID Card", "SSN" → IDENTIFICATION
 
 Return exactly TWO lines:
-Line 1: WORK_COMPENSATION, IDENTIFICATION, INSURANCE_CLAIMS, or INVOICE
-Line 2: Carrier or TPA name (e.g., CCMSI, BerkleyNet) or UNKNOWN
+Line 1: INSURANCE_CLAIMS, WORK_COMPENSATION, INVOICE, or IDENTIFICATION
+Line 2: Carrier or TPA name if identified, otherwise UNKNOWN
 
 OUTPUT:"""
+
                 fn_response = self.client.chat.completions.create(
                     model="gpt-4o-mini",
                     messages=[{"role": "user", "content": filename_prompt}],
@@ -865,12 +933,12 @@ OUTPUT:"""
                 fn_provider = fn_output[1].upper() if len(fn_output) > 1 else "UNKNOWN"
                 print(f"[Filename-LLM] Classification: {fn_classification}, Provider: {fn_provider}")
 
-                if "WORK_COMPENSATION" in fn_classification:
-                    print("\n[INFO] Classification Result: WORK_COMPENSATION")
-                    return "WORK_COMPENSATION", fn_provider
-                elif "INSURANCE_CLAIMS" in fn_classification or "INSURANCE" == fn_classification:
+                if "INSURANCE_CLAIMS" in fn_classification or "INSURANCE" == fn_classification:
                     print("\n[INFO] Classification Result: INSURANCE_CLAIMS")
                     return "INSURANCE_CLAIMS", fn_provider
+                elif "WORK_COMPENSATION" in fn_classification:
+                    print("\n[INFO] Classification Result: WORK_COMPENSATION")
+                    return "WORK_COMPENSATION", fn_provider
                 elif "INVOICE" in fn_classification:
                     print("\n[INFO] Classification Result: INVOICE")
                     return "INVOICE", fn_provider
@@ -888,33 +956,26 @@ FILE FORMAT: {file_ext}
 EXTRACTED TEXT:
 {text if not is_noisy else "[TEXT LAYER CORRUPTED OR SCANNED - USE FILENAME HINT]"}
 
-CLASSIFICATION RULES:
+CLASSIFICATION STEP-BY-STEP REASONING:
 
-1. **WORK_COMPENSATION**: Workers' Compensation Application forms.
-   - Key indicators: "WORKERS COMPENSATION APPLICATION", "ACORD 130", "ACORD 133", "Rating by State", "Payroll", "Class Code", "Experience Modification", "WC States", "NAICS", "SIC", "SOLE PROPRIETOR", "PARTNERSHIP".
-   - Filename hints: "acord", "wc app", "workers comp", "work comp".
-   - If the filename contains "Acord" AND text is sparse or unclear, classify as WORK_COMPENSATION.
+STEP 1 — ENTITY IDENTIFICATION:
+- Scan the FILENAME and TEXT for an Insurance Carrier or TPA company name.
+- Carrier/TPA Entities: Accident Fund, CCMSI, BerkleyNet, KeyRisk, Travelers, Zurich, CNA, AmTrust, Employers, FCBI, State Fund, Clear Springs, Stonetrust, Markel, Applied Underwriters, Liberty Mutual.
+- If a Carrier/TPA entity is the primary subject (e.g., Accident Fund Loss Analysis) → INSURANCE_CLAIMS.
 
-2. **IDENTIFICATION**: Personal IDs like Passport, Driver's License, SSN Card.
-   - Key indicators: "Date of Birth", "License No", "Passport No", "Social Security".
+STEP 2 — DOCUMENT TYPE KEYWORDS (CRITICAL):
+- **INSURANCE_CLAIMS**: "Loss Run", "Loss Analysis", "Claim Summary", "Incurred", "Reserve", "Paid Losses", "Outstanding". 
+- **IMPORTANT**: If the document is a "Workers Compensation LOSS RUN", it MUST be classified as INSURANCE_CLAIMS.
+- **WORK_COMPENSATION**: Only for application forms (ACORD 130, ACORD 133). Key indicators: "WORKERS COMPENSATION APPLICATION", "Rating by State", "Payroll", "Class Code". 
+- **Note**: "Loss Run" keywords ALWAYS override "Workers' Comp" keywords. If both appear, classify as INSURANCE_CLAIMS.
 
-3. **INSURANCE_CLAIMS**: Loss run reports, claim summaries, liability reports.
-   - Key indicators: "Loss Run", "Loss Analysis", "Claim Number", "Incurred", "Reserve", "Paid Losses", "Policy Year", "Outstanding Reserve".
-   - Filename hints: "loss", "claim", "CCMSI", "State Fund", "KeyRisk", "AmTrust".
-
-4. **INVOICE**: Health insurance invoice, billing statement, premium notice.
-   - Key indicators: "Invoice Date", "Amount Due", "Billing Period", "Member ID", "Monthly Premium".
-   - Filename hints: "inv", "invoice", "bill".
-   - Excel/CSV with Member/Premium data is almost always INVOICE, not a loss run.
-
-PROVIDER (Line 2) RULES:
-   - Identify the INSURANCE CARRIER — the company that underwrites the policy (e.g., Aetna, BerkleyNet, Travelers, AmTrust, BCBS, UHC, Zurich).
-   - DO NOT return the agency name, broker, or producer (e.g., "JD Thomas & Associates", "Capstone Insurance Services", "Hub International").
-   - If no distinct carrier name is found, return UNKNOWN.
+STEP 3 — OTHER TYPES:
+- **IDENTIFICATION**: "Passport", "Driver's License", "SSN".
+- **INVOICE**: "Amount Due", "Premium Notice", "Billing Period".
 
 OUTPUT FORMAT (return exactly two lines):
-Line 1: WORK_COMPENSATION, IDENTIFICATION, INSURANCE_CLAIMS, or INVOICE
-Line 2: Carrier name (e.g., BerkleyNet) or UNKNOWN
+Line 1: INSURANCE_CLAIMS, WORK_COMPENSATION, INVOICE, or IDENTIFICATION
+Line 2: Carrier name (e.g., Accident Fund) or UNKNOWN
 
 OUTPUT:"""
 
@@ -933,7 +994,11 @@ OUTPUT:"""
             print(f"\n[OK] AI Classification: {classification}")
             print(f"[OK] AI Provider: {provider}")
 
-            if "WORK_COMPENSATION" in classification:
+            if "INSURANCE_CLAIMS" in classification or "INSURANCE" == classification:
+                print("\n[INFO] Classification Result: INSURANCE_CLAIMS")
+                print("   → Will route to Insurance (Claims) Extractor")
+                return "INSURANCE_CLAIMS", provider
+            elif "WORK_COMPENSATION" in classification:
                 print("\n[INFO] Classification Result: WORK_COMPENSATION")
                 print("   → Will route to Work Compensation Extractor")
                 return "WORK_COMPENSATION", provider
@@ -941,10 +1006,6 @@ OUTPUT:"""
                 print("\n[INFO] Classification Result: IDENTIFICATION")
                 print("   → Will route to Identification Extractor")
                 return "IDENTIFICATION", provider
-            elif "INSURANCE_CLAIMS" in classification or "INSURANCE" == classification:
-                print("\n[INFO] Classification Result: INSURANCE_CLAIMS")
-                print("   → Will route to Insurance (Claims) Extractor")
-                return "INSURANCE_CLAIMS", provider
             elif "INVOICE" in classification:
                 print("\n[INFO] Classification Result: INVOICE")
                 print("   → Will route to Invoice Extractor")
@@ -1215,6 +1276,147 @@ OUTPUT:"""
             print("\n[ERR] Error: Work Comp Extractor not initialized.")
             return {"error": "Work Comp Extractor not available"}
 
+    def extract_snippet_for_id(self, pdf_path, max_pages=1):
+        """Optimized OCR extraction for ID documents (Passport, DL, SSN).
+        
+        ID documents have different characteristics than forms/invoices:
+        - Smaller text sizes
+        - Colored backgrounds and security features
+        - Portrait-oriented single-page layouts
+        - Need higher DPI and different preprocessing
+        """
+        import tempfile
+        CHAR_THRESHOLD = 100  # Lower threshold for ID docs
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            working_pdf = self._detect_rotation_and_fix(pdf_path, tmp_dir)
+
+            text = ""
+
+            # ── Stage 1: PyMuPDF native text ────────────────────────────────────
+            try:
+                doc = fitz.open(working_pdf)
+                raw = ""
+                for i in range(min(len(doc), max_pages)):
+                    raw += doc[i].get_text() or ""
+                doc.close()
+                raw = raw.strip()
+                print(f"[ID-OCR] Stage 1 (PyMuPDF): {len(raw)} chars")
+                if raw and len(raw) > CHAR_THRESHOLD:
+                    text = raw
+                else:
+                    print("[ID-OCR] Stage 1 output insufficient — proceeding to ID-optimized OCR")
+            except Exception as e:
+                print(f"[ID-OCR] Stage 1 failed: {e}")
+
+            # ── Stage 2: ID-Optimized OCR (900 DPI + enhanced preprocessing) ──
+            if len(text) < CHAR_THRESHOLD and OCR_AVAILABLE:
+                print(f"[ID-OCR] Stage 2 (ID-Optimized OCR 900 DPI) starting...")
+                try:
+                    from PIL import ImageOps, ImageFilter
+                    poppler = POPPLER_PATH if (POPPLER_PATH and os.path.exists(POPPLER_PATH)) else None
+                    
+                    # Higher DPI for smaller ID text
+                    images = convert_from_path(
+                        working_pdf, dpi=900, first_page=1, last_page=max_pages,
+                        poppler_path=poppler, fmt='jpeg'
+                    )
+                    ocr_text = ""
+                    
+                    # ID-specific enhancements - more aggressive for small text
+                    id_enhancements = {
+                        'grayscale': True,
+                        'contrast': 2.0,       # Higher contrast for small text
+                        'sharpness': 3.0,     # Sharper for fine details
+                        'edge_enhance': True,
+                        'binarize': True,
+                        'threshold': 180,      # Lower threshold to preserve details
+                        'deskew': True         # Correct slight rotations common in scans
+                    }
+                    
+                    # PSM 6 = Single uniform block - better for ID cards
+                    custom_config = "--oem 3 --psm 6"
+                    
+                    for img in images:
+                        # Apply grayscale
+                        if id_enhancements.get('grayscale'):
+                            img = ImageOps.grayscale(img)
+                        
+                        # Apply contrast enhancement
+                        if id_enhancements.get('contrast', 1.0) != 1.0:
+                            img = ImageEnhance.Contrast(img).enhance(id_enhancements['contrast'])
+                        
+                        # Apply sharpness
+                        if id_enhancements.get('sharpness', 1.0) != 1.0:
+                            img = ImageEnhance.Sharpness(img).enhance(id_enhancements['sharpness'])
+                        
+                        # Edge enhancement for fine text
+                        if id_enhancements.get('edge_enhance'):
+                            img = img.filter(ImageFilter.EDGE_ENHANCE_MORE)
+                            img = img.filter(ImageFilter.UnsharpMask(radius=2, percent=150, threshold=3))
+                        
+                        # Adaptive binarization - preserve more detail than standard threshold
+                        if id_enhancements.get('binarize'):
+                            # Use adaptive thresholding for better results on varied backgrounds
+                            try:
+                                import numpy as np
+                                img_array = np.array(img)
+                                # Simple adaptive threshold
+                                from PIL import ImageOps
+                                img = img.point(lambda p: p > id_enhancements.get('threshold', 180) and 255)
+                            except ImportError:
+                                # Fallback to simple threshold
+                                threshold = id_enhancements.get('threshold', 180)
+                                img = img.point(lambda p: p > threshold and 255)
+                        
+                        # OCR with single block mode
+                        ocr_text += pytesseract.image_to_string(img, config=custom_config, lang="eng")
+                    
+                    ocr_text = ocr_text.strip()
+                    print(f"[ID-OCR] Stage 2 (ID-optimized OCR): {len(ocr_text)} chars")
+                    if len(ocr_text) > len(text):
+                        text = ocr_text
+                except Exception as e:
+                    print(f"[ID-OCR] Stage 2 failed: {e}")
+
+            # ── Stage 3: Alternative PSM mode (11 - sparse text) ────────────────
+            if len(text) < CHAR_THRESHOLD and OCR_AVAILABLE:
+                print(f"[ID-OCR] Stage 3 (Sparse text OCR) starting...")
+                try:
+                    from PIL import ImageOps, ImageFilter
+                    poppler = POPPLER_PATH if (POPPLER_PATH and os.path.exists(POPPLER_PATH)) else None
+                    images = convert_from_path(
+                        working_pdf, dpi=600, first_page=1, last_page=max_pages,
+                        poppler_path=poppler, fmt='jpeg'
+                    )
+                    ocr_text = ""
+                    # PSM 11 = Sparse text - good for documents with minimal text
+                    custom_config = "--oem 3 --psm 11"
+                    
+                    for img in images:
+                        img = ImageOps.grayscale(img)
+                        img = ImageEnhance.Contrast(img).enhance(1.5)
+                        ocr_text += pytesseract.image_to_string(img, config=custom_config, lang="eng")
+                    
+                    ocr_text = ocr_text.strip()
+                    print(f"[ID-OCR] Stage 3 (sparse text): {len(ocr_text)} chars")
+                    if len(ocr_text) > len(text):
+                        text = ocr_text
+                except Exception as e:
+                    print(f"[ID-OCR] Stage 3 failed: {e}")
+
+            # ── Stage 4: Fallback to standard OCR ────────────────────────────────
+            if len(text) < CHAR_THRESHOLD and OCR_AVAILABLE:
+                print(f"[ID-OCR] Stage 4 (Standard fallback) starting...")
+                try:
+                    text = self.extract_snippet(pdf_path, max_pages=1)
+                except Exception as e:
+                    print(f"[ID-OCR] Stage 4 failed: {e}")
+
+        final = text[:3000]  # Shorter limit for ID - only need key fields
+        print(f"[ID-OCR] Final snippet ready: {len(final)} chars")
+        return final
+
     def run_identification_extractor(self, pdf_path):
         """Extract personal information from IDs (Passport, DL, SSN) using GPT-4o-mini."""
         print("\n" + "="*70)
@@ -1223,8 +1425,8 @@ OUTPUT:"""
         print(f"📂 Input: {pdf_path}")
 
         try:
-            # Extract text first
-            text = self.extract_snippet(pdf_path, max_pages=1)
+            # Use ID-optimized extraction for better small text recognition
+            text = self.extract_snippet_for_id(pdf_path, max_pages=1)
             
             prompt = f"""You are an ID document analyzer. Extract information from this Identification Document.
             

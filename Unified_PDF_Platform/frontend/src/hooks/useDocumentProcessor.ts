@@ -2,91 +2,91 @@ import { useState, useCallback, useRef } from "react";
 import type { DocumentFile, ProcessingStage, ExtractionResult } from "@/types/extractor";
 
 const STAGE_FLOW: { stage: ProcessingStage; message: string; duration: [number, number] }[] = [
-    { stage: "classification", message: "🧠 Classifying document type...", duration: [1000, 1500] },
-    { stage: "classification", message: "✅ Document classified", duration: [300, 500] },
-    { stage: "rotation_check", message: "Checking for rotation...", duration: [800, 1500] },
-    { stage: "rotation_check", message: "✅ PDF already correctly oriented", duration: [500, 800] },
-    { stage: "text_extraction", message: "Extracting text from pages...", duration: [1500, 3000] },
-    { stage: "text_extraction", message: "✓ Combined text saved", duration: [400, 700] },
-    { stage: "schema_extraction", message: "Analyzing document format...", duration: [1000, 2000] },
-    { stage: "policy_detection", message: "Detecting policy boundaries...", duration: [1200, 2500] },
-    { stage: "policy_detection", message: "Using AI to detect claim number patterns...", duration: [1500, 3000] },
-    { stage: "claim_extraction", message: "Extracting claims using adaptive prompt...", duration: [2000, 4000] },
-    { stage: "validation", message: "Validating extraction...", duration: [800, 1500] },
-    { stage: "validation", message: "✓ Extraction is COMPLETE", duration: [500, 800] },
+  { stage: "classification", message: "🧠 Classifying document type...", duration: [1000, 1500] },
+  { stage: "classification", message: "✅ Document classified", duration: [300, 500] },
+  { stage: "rotation_check", message: "Checking for rotation...", duration: [800, 1500] },
+  { stage: "rotation_check", message: "✅ PDF already correctly oriented", duration: [500, 800] },
+  { stage: "text_extraction", message: "Extracting text from pages...", duration: [1500, 3000] },
+  { stage: "text_extraction", message: "✓ Combined text saved", duration: [400, 700] },
+  { stage: "schema_extraction", message: "Analyzing document format...", duration: [1000, 2000] },
+  { stage: "policy_detection", message: "Detecting policy boundaries...", duration: [1200, 2500] },
+  { stage: "policy_detection", message: "Using AI to detect claim number patterns...", duration: [1500, 3000] },
+  { stage: "claim_extraction", message: "Extracting claims using adaptive prompt...", duration: [2000, 4000] },
+  { stage: "validation", message: "Validating extraction...", duration: [800, 1500] },
+  { stage: "validation", message: "✓ Extraction is COMPLETE", duration: [500, 800] },
 ];
 
 function randomBetween(min: number, max: number) {
-    return Math.floor(Math.random() * (max - min + 1)) + min;
+  return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
 export function useDocumentProcessor() {
-    const [documents, setDocuments] = useState<DocumentFile[]>([]);
-    const [activeDocId, setActiveDocId] = useState<string | null>(null);
-    const processingQueue = useRef<{ id: string; file: File }[]>([]);
-    const isProcessing = useRef(false);
+  const [documents, setDocuments] = useState<DocumentFile[]>([]);
+  const [activeDocId, setActiveDocId] = useState<string | null>(null);
+  const processingQueue = useRef<{ id: string; file: File }[]>([]);
+  const isProcessing = useRef(false);
 
-    const updateDoc = useCallback((id: string, updates: Partial<DocumentFile>) => {
-        setDocuments((prev) =>
-            prev.map((d) => (d.id === id ? { ...d, ...updates } : d))
-        );
-    }, []);
+  const updateDoc = useCallback((id: string, updates: Partial<DocumentFile>) => {
+    setDocuments((prev) =>
+      prev.map((d) => (d.id === id ? { ...d, ...updates } : d))
+    );
+  }, []);
 
-    const processDocument = useCallback(
-        async (id: string, file: File) => {
-            updateDoc(id, { stage: "classification", stageMessage: "Starting processing...", startedAt: Date.now() });
+  const processDocument = useCallback(
+    async (id: string, file: File) => {
+      updateDoc(id, { stage: "classification", stageMessage: "Starting processing...", startedAt: Date.now() });
 
-            let isSimulationRunning = true;
+      let isSimulationRunning = true;
 
-            // Start simulated progress
-            const runSimulation = async () => {
-                for (const step of STAGE_FLOW) {
-                    if (!isSimulationRunning) break;
+      // Start simulated progress
+      const runSimulation = async () => {
+        for (const step of STAGE_FLOW) {
+          if (!isSimulationRunning) break;
 
-                    updateDoc(id, {
-                        stage: step.stage,
-                        stageMessage: step.message
-                    });
+          updateDoc(id, {
+            stage: step.stage,
+            stageMessage: step.message
+          });
 
-                    const delay = randomBetween(step.duration[0], step.duration[1]);
-                    await new Promise(resolve => setTimeout(resolve, delay));
-                }
-            };
+          const delay = randomBetween(step.duration[0], step.duration[1]);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      };
 
-            const simulationPromise = runSimulation();
+      const simulationPromise = runSimulation();
 
-            try {
-                const formData = new FormData();
-                formData.append("file", file);
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
 
-                const response = await fetch("/api/extract", {
-                    method: "POST",
-                    body: formData,
-                });
+        const response = await fetch("/api/extract", {
+          method: "POST",
+          body: formData,
+        });
 
-                // Stop simulation regardless of success/fail
-                isSimulationRunning = false;
+        // Stop simulation regardless of success/fail
+        isSimulationRunning = false;
 
-                if (!response.ok) {
-                    throw new Error(`Server error: ${response.statusText}`);
-                }
+        if (!response.ok) {
+          throw new Error(`Server error: ${response.statusText}`);
+        }
 
-                const json = await response.json();
+        const json = await response.json();
 
-                // Handle unified router response format
-                const documentType = json.type || "UNKNOWN";
-                const jsonPath = json.json || json.output_json;
+        // Handle unified router response format
+        const documentType = json.type || "UNKNOWN";
+        const jsonPath = json.json || json.output_json;
 
-                // Fetch the JSON file from the backend
-                let schema: any = null;
-                if (jsonPath) {
-                    try {
-                        const schemaResponse = await fetch(`/api/download/${jsonPath}`);
-                        schema = await schemaResponse.json();
-                    } catch (e) {
-                        console.error("Failed to fetch schema:", e);
-                    }
-                }
+        // Fetch the JSON file from the backend
+        let schema: any = null;
+        if (jsonPath) {
+          try {
+            const schemaResponse = await fetch(`/api/download/${jsonPath}`);
+            schema = await schemaResponse.json();
+          } catch (e) {
+            console.error("Failed to fetch schema:", e);
+          }
+        }
 
                 // Calculate metadata based on document type
                 let totalValue = 0;
@@ -122,7 +122,8 @@ export function useDocumentProcessor() {
                         // Fallback: manual sum if no total row was returned
                         totalValue = records.reduce((sum: number, rec: any) => {
                             const current = parseFloat(String(rec.CURRENT_PREMIUM || 0).replace(/[^0-9.-]+/g, ""));
-                            return sum + (isNaN(current) ? 0 : current);
+                            const adjustment = parseFloat(String(rec.ADJUSTMENT_PREMIUM || 0).replace(/[^0-9.-]+/g, ""));
+                            return sum + (isNaN(current) ? 0 : current) + (isNaN(adjustment) ? 0 : adjustment);
                         }, 0);
                     }
                 } else if (documentType === "WORK_COMPENSATION") {

@@ -29,7 +29,7 @@ class OCRPDFExtractor:
         
         self.output_text = ""
     
-    def extract(self, dpi=300, language='eng', psm_mode=1, verbose=True):
+    def extract(self, dpi=300, language='eng', psm_mode=1, verbose=True, **kwargs):
         """
         Extract text using OCR (Tesseract).
         
