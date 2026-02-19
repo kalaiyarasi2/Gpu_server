@@ -7,7 +7,35 @@ Preserves layout and formatting in output TXT file
 import pdfplumber
 import json
 import os
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
+
+
+def _safe_crop(page, bbox):
+    """
+    Safely crop a page by clipping the bounding box to the page's boundaries.
+    Returns the cropped page or None if the resulting area is invalid.
+    """
+    x0, y0, x1, y1 = bbox
+    
+    # Clip coordinates to page boundaries
+    x0 = max(0, min(x0, page.width))
+    x1 = max(0, min(x1, page.width))
+    y0 = max(0, min(y0, page.height))
+    y1 = max(0, min(y1, page.height))
+    
+    # Ensure x0 < x1 and y0 < y1
+    left, right = min(x0, x1), max(x0, x1)
+    top, bottom = min(y0, y1), max(y0, y1)
+    
+    # If the width or height is negligible, return None
+    if right - left < 0.1 or bottom - top < 0.1:
+        return None
+        
+    try:
+        return page.crop((left, top, right, bottom), strict=False)
+    except Exception as e:
+        print(f"   ⚠️ _safe_crop failed even after clipping: {e}")
+        return None
 
 
 def detect_watermarks_ai(all_pages_text: List[str]) -> List[str]:
@@ -158,11 +186,12 @@ def extract_pdf_with_pdfplumber(pdf_path: str, output_txt: str = None) -> tuple[
                 if table_bboxes:
                     bbox = table_bboxes[0].bbox
                     if bbox[1] > 0:
-                        top_area = page.crop((0, 0, page.width, bbox[1]))
-                        top_text = top_area.extract_text(layout=True)
-                        if top_text:
-                            if is_reversed: top_text = _reverse_text_block(top_text)
-                            page_content += top_text + "\n\n"
+                        top_area = _safe_crop(page, (0, 0, page.width, bbox[1]))
+                        if top_area:
+                            top_text = top_area.extract_text(layout=True)
+                            if top_text:
+                                if is_reversed: top_text = _reverse_text_block(top_text)
+                                page_content += top_text + "\n\n"
                 
                 # Write each table
                 for idx, (table, table_bbox) in enumerate(zip(tables, table_bboxes), start=1):
@@ -180,21 +209,23 @@ def extract_pdf_with_pdfplumber(pdf_path: str, output_txt: str = None) -> tuple[
                         current_bbox = table_bbox.bbox
                         next_bbox = table_bboxes[idx].bbox
                         if next_bbox[1] > current_bbox[3]:
-                            between_area = page.crop((0, current_bbox[3], page.width, next_bbox[1]))
-                            between_text = between_area.extract_text(layout=True)
-                            if between_text and between_text.strip():
-                                if is_reversed: between_text = _reverse_text_block(between_text)
-                                page_content += between_text + "\n\n"
+                            between_area = _safe_crop(page, (0, current_bbox[3], page.width, next_bbox[1]))
+                            if between_area:
+                                between_text = between_area.extract_text(layout=True)
+                                if between_text and between_text.strip():
+                                    if is_reversed: between_text = _reverse_text_block(between_text)
+                                    page_content += between_text + "\n\n"
                 
                 # Extract text after last table
                 if table_bboxes:
                     last_bbox = table_bboxes[-1].bbox
                     if last_bbox[3] < page.height:
-                        bottom_area = page.crop((0, last_bbox[3], page.width, page.height))
-                        bottom_text = bottom_area.extract_text(layout=True)
-                        if bottom_text and bottom_text.strip():
-                            if is_reversed: bottom_text = _reverse_text_block(bottom_text)
-                            page_content += bottom_text + "\n"
+                        bottom_area = _safe_crop(page, (0, last_bbox[3], page.width, page.height))
+                        if bottom_area:
+                            bottom_text = bottom_area.extract_text(layout=True)
+                            if bottom_text and bottom_text.strip():
+                                if is_reversed: bottom_text = _reverse_text_block(bottom_text)
+                                page_content += bottom_text + "\n"
             else:
                 if text:
                     page_content += text + "\n"

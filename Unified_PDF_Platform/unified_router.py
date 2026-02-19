@@ -8,6 +8,22 @@ import pandas as pd
 from openai import OpenAI
 from dotenv import load_dotenv
 import fitz  # PyMuPDF
+try:
+    import pytesseract
+    from PIL import Image, ImageEnhance, ImageFilter
+    from pdf2image import convert_from_path
+    OCR_AVAILABLE = True
+except ImportError:
+    OCR_AVAILABLE = False
+
+# Reconfigure stdout for UTF-8 support on Windows
+if sys.stdout.encoding != 'utf-8':
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+    except AttributeError:
+        # Fallback for Python versions that don't support reconfigure
+        import io
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 # Load environment variables
 load_dotenv()
@@ -165,6 +181,36 @@ class ExcelExtractor:
             print(f"  [ERR] Mapping failed: {e}")
             return {}
 
+    def extract_global_metadata(self, df_snapshot):
+        """Phase 0: Use AI to extract document-level metadata (Inv #, Date, Billing Period) from top rows."""
+        print("[AI] Extracting global metadata (Inv #, Date, Billing Period)...")
+        prompt = f"""Analyze these top rows of an invoice spreadsheet.
+        Extract the values for:
+        1. INV_DATE
+        2. INV_NUMBER
+        3. BILLING_PERIOD
+        
+        ROWS:
+        {df_snapshot.to_string()}
+        
+        RULES:
+        - Return ONLY valid JSON.
+        - Values must be exactly as they appear (e.g., "12/10/2025").
+        - If not found, return null.
+        """
+        try:
+            response = self.client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{"role": "user", "content": prompt}],
+                response_format={ "type": "json_object" }
+            )
+            meta = json.loads(response.choices[0].message.content)
+            print(f"[AI] Global Metadata: {meta}")
+            return meta
+        except Exception as e:
+            print(f"  [ERR] Global metadata extraction failed: {e}")
+            return {"INV_DATE": None, "INV_NUMBER": None, "BILLING_PERIOD": None}
+
     def ai_find_header(self, df_snapshot):
         """Use AI to identify which row contains the header."""
         print("  [AI] Analyzing rows to find header...")
@@ -199,6 +245,8 @@ class ExcelExtractor:
         try:
             all_dfs = []
             from universal_pdf_extractor_v3 import REQUIRED_FIELDS
+            cols = REQUIRED_FIELDS
+            doc_metadata = {}
 
             def scan_for_tables(df_all):
                 """Scan a full DataFrame to find all potential table segments."""
@@ -262,6 +310,8 @@ class ExcelExtractor:
             if file_ext == ".csv":
                 # Read entire CSV without headers first to scan
                 df_raw = pd.read_csv(excel_path, header=None)
+                # Capture metadata from top rows using AI
+                doc_metadata.update(self.extract_global_metadata(df_raw.head(20)))
                 segments = scan_for_tables(df_raw)
                 all_dfs.extend(segments)
             else:
@@ -269,6 +319,8 @@ class ExcelExtractor:
                 for sheet_name in xl.sheet_names:
                     print(f"[INFO] Inspecting sheet: {sheet_name}")
                     df_raw = pd.read_excel(xl, sheet_name=sheet_name, header=None)
+                    # Capture metadata from top rows using AI
+                    doc_metadata.update(self.extract_global_metadata(df_raw.head(20)))
                     segments = scan_for_tables(df_raw)
                     all_dfs.extend(segments)
             
@@ -294,18 +346,21 @@ class ExcelExtractor:
             df = pd.DataFrame(all_records)
             df = df.reset_index(drop=True)
 
-
-            # Handle duplicate columns after renaming — use loc-based approach to avoid Reindexing errors
+            print(f"  [INFO] Initial DataFrame shape: {df.shape}")
+            
+            # Handle duplicate columns early — use loc-based approach to avoid Reindexing errors
             if df.columns.duplicated().any():
-                print(f"[WARN] Duplicate columns detected. Forcing uniqueness...")
-                # Keep only the first occurrence of each column name
+                print(f"[WARN] Duplicate columns detected in merged data. Forcing uniqueness...")
+                cols_to_keep = []
                 seen = set()
-                keep_cols = []
-                for col in df.columns:
+                for i, col in enumerate(df.columns):
                     if col not in seen:
-                        keep_cols.append(col)
+                        cols_to_keep.append(i)
                         seen.add(col)
-                df = df[keep_cols]
+                df = df.iloc[:, cols_to_keep]
+            
+            # Ensure we have a clean copy to avoid SettingWithCopy warnings
+            df = df.copy()
         
             # Clean currency columns early
             def clean_val(x):
@@ -377,6 +432,14 @@ class ExcelExtractor:
                 if field not in df.columns:
                     df[field] = None
             
+            # ── Inject extracted Row-0 metadata into every row ──
+            if doc_metadata:
+                print(f"  [Meta] Injecting header metadata into {len(df)} rows: {list(doc_metadata.keys())}")
+                for field, val in doc_metadata.items():
+                    if field in df.columns:
+                        # Only fill if current value is null/empty/zero
+                        df[field] = df[field].apply(lambda x: val if pd.isna(x) or str(x).strip() in ["", "0", "0.0", "None"] else x)
+            
             # Drop empty rows or total/summary rows
             # Key filter: must have a name AND (a premium OR a member ID) to be a valid row
             drop_subset = [c for c in ['LASTNAME', 'FULL_NAME'] if c in df.columns]
@@ -414,20 +477,31 @@ class ExcelExtractor:
             if 'MEMBERID' in df.columns:
                 df = df[~df['MEMBERID'].apply(is_summary)]
             
-            # Reorder
-            cols = ['SOURCE_FILE'] + REQUIRED_FIELDS if 'SOURCE_FILE' in df.columns else REQUIRED_FIELDS
-            df = df[cols]
+            # Final Reorder and Filtering
+            # Use reindex to be defensive against missing columns
+            available_cols = [c for c in cols if c in df.columns]
+            missing_cols = [c for c in cols if c not in df.columns]
+            if missing_cols:
+                print(f"  [INFO] Adding missing required columns as empty: {missing_cols}")
+                # We'll let reindex handle adding them
+            
+            df = df.reindex(columns=cols)
+            # Ensure no duplicates remain in the schema
+            if df.columns.duplicated().any():
+                df = df.loc[:, ~df.columns.duplicated()]
             
             # Add Manual Total Row at the bottom of Excel (will be filtered in JSON)
             try:
                 total_premium = df['CURRENT_PREMIUM'].fillna(0).sum()
-                total_row = {col: None for col in df.columns}
-                total_row['CURRENT_PREMIUM'] = total_premium
-                # Add a marker that it's a total row for identification
-                if 'LASTNAME' in total_row: total_row['LASTNAME'] = "TOTAL"
+                # Create as a single-row DataFrame with same columns to avoid FutureWarning
+                # and ensure dtypes match as much as possible
+                total_data = {col: [None] for col in df.columns}
+                total_df = pd.DataFrame(total_data)
+                total_df.loc[0, 'CURRENT_PREMIUM'] = total_premium
+                if 'LASTNAME' in total_df.columns: 
+                    total_df.loc[0, 'LASTNAME'] = "TOTAL"
                 
-                # Use pd.concat for appending
-                df = pd.concat([df, pd.DataFrame([total_row])], ignore_index=True)
+                df = pd.concat([df, total_df], ignore_index=True)
                 print(f"  [INFO] Added manual total row: ${total_premium:,.2f}")
             except Exception as total_err:
                 print(f"  [WARN] Failed to add total row: {total_err}")
@@ -447,7 +521,7 @@ class UnifiedRouter:
         self.client = OpenAI(api_key=OPENAI_API_KEY)
         
         # Initialize Insurance extractor
-        print("\n🔍 Initializing Extractors...")
+        print("\n[STEP] Initializing Extractors...")
         InsuranceClass = get_extractor_class(INSURANCE_BACKEND_DIR)
         if InsuranceClass:
             try:
@@ -470,25 +544,203 @@ class UnifiedRouter:
                     api_key=OPENAI_API_KEY,
                     output_dir=str(WORK_COMP_OUTPUT_DIR)
                 )
-                print("✓ Work Compensation Extractor initialized")
+                print("[OK] Work Compensation Extractor initialized")
             except Exception as e:
-                print(f"⚠️ Failed to init Work Comp Extractor: {e}")
+                print(f"[ERR] Failed to init Work Comp Extractor: {e}")
                 self.work_comp_extractor = None
         else:
             self.work_comp_extractor = None
 
-    def extract_snippet(self, pdf_path, max_pages=2):
-        """Extract first few pages of text for classification using PyMuPDF."""
+    def _detect_slash_noise(self, text: str) -> bool:
+        """Detect garbled/encoded text that is useless for classification.
+        Handles two known noise patterns:
+        - Slash-code density: '/' '\\' '@' '#' '$' etc  (BerkleyNet raw text layer)
+        - CID encoding: '(cid:0)' '(cid:1)' ...         (pdfplumber on encrypted fonts)
+        """
+        if not text or len(text) < 50:
+            return False
+
+        # Pattern 1: CID encoding — pdfplumber emits these for garbled font maps
+        cid_count = text.count('(cid:')
+        cid_ratio = cid_count / max(len(text) / 8, 1)  # ~8 chars per cid token
+        if cid_ratio > 0.25:  # >25% of tokens are CID
+            print(f"[Snippet] CID-encoding noise detected: {cid_count} cid tokens")
+            return True
+
+        # Pattern 2: Raw slash/symbol density (PyMuPDF on corrupted encoding)
+        slash_chars = sum(1 for c in text if c in '/\\|@#$%&<>={}[]^~`')
+        total = len(text)
+        slash_ratio = slash_chars / total
+        non_printable = sum(1 for c in text if ord(c) < 32 or ord(c) > 126)
+        noise_ratio = (slash_chars + non_printable) / total
+        is_noisy = noise_ratio > 0.12 or slash_ratio > 0.08
+        if is_noisy:
+            print(f"[Snippet] Slash-code noise: slash={slash_ratio:.2%}, noise={noise_ratio:.2%}")
+        return is_noisy
+
+    def _detect_rotation_and_fix(self, pdf_path: str, tmp_dir: str) -> str:
+        """Detect and auto-fix page rotation using block geometry (from pdf_rotation.py)."""
         try:
             doc = fitz.open(pdf_path)
-            text = ""
-            for i in range(min(len(doc), max_pages)):
-                text += doc[i].get_text() or ""
-            doc.close()
-            return text.strip()[:4000]
+            rotated_any = False
+            for i in range(len(doc)):
+                page = doc[i]
+                blocks = page.get_text("blocks")
+                vertical = sum(1 for b in blocks if abs(b[3]-b[1]) > abs(b[2]-b[0]))
+                horizontal = sum(1 for b in blocks if abs(b[2]-b[0]) >= abs(b[3]-b[1]))
+                if vertical > horizontal:
+                    page.set_rotation(90)
+                    rotated_any = True
+                    print(f"[Snippet] Page {i+1} rotated 90°")
+            rotated_path = os.path.join(tmp_dir, "rotated_snippet.pdf")
+            doc.save(rotated_path)
+            doc.close()  # close once after save
+            if rotated_any:
+                print(f"[Snippet] Rotation corrected → {rotated_path}")
+                return rotated_path
+            # not rotated — return original path (rotated_path is same content)
         except Exception as e:
-            print(f"[Router] Error extracting snippet: {e}")
-            return ""
+            print(f"[Snippet] Rotation check failed: {e}")
+        return pdf_path
+
+    def extract_snippet(self, pdf_path, max_pages=3):
+        """4-stage text extraction pipeline for classification.
+
+        Stage 1: PyMuPDF native text layer + slash-code noise detection.
+        Stage 2: pdfplumber fallback (better layout, reversed-text correction).
+        Stage 3: Enhanced OCR via pytesseract using work_comp enhancement pipeline
+                 (600 DPI, grayscale, contrast 1.6, sharpness 2.2, edge_enhance,
+                  binarize threshold 200) — matches work_comp/ocr_text.py exactly.
+        Stage 4: Basic OCR fallback (300 DPI, no enhancement) if Stage 3 fails.
+        """
+        import tempfile
+        CHAR_THRESHOLD = 200
+
+        # Auto-correct orientation first
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            working_pdf = self._detect_rotation_and_fix(pdf_path, tmp_dir)
+
+            text = ""
+
+            # ── Stage 1: PyMuPDF native text ────────────────────────────────────
+            try:
+                doc = fitz.open(working_pdf)
+                raw = ""
+                for i in range(min(len(doc), max_pages)):
+                    raw += doc[i].get_text() or ""
+                doc.close()
+                raw = raw.strip()
+                print(f"[Snippet] Stage 1 (PyMuPDF): {len(raw)} chars")
+                if raw and not self._detect_slash_noise(raw):
+                    text = raw
+                else:
+                    print("[Snippet] Stage 1 output is noisy — skipping to Stage 2")
+            except Exception as e:
+                print(f"[Snippet] Stage 1 failed: {e}")
+
+            # ── Stage 2: pdfplumber (reversed-text + layout-aware) ───────────────
+            if len(text) < CHAR_THRESHOLD:
+                try:
+                    import pdfplumber
+                    plumber_text = ""
+                    with pdfplumber.open(working_pdf) as pdf:
+                        for i, page in enumerate(pdf.pages[:max_pages]):
+                            page_text = page.extract_text(layout=True) or ""
+                            plumber_text += page_text + "\n"
+                    plumber_text = plumber_text.strip()
+                    print(f"[Snippet] Stage 2 (pdfplumber): {len(plumber_text)} chars")
+                    if len(plumber_text) > len(text) and not self._detect_slash_noise(plumber_text):
+                        text = plumber_text
+                    elif self._detect_slash_noise(plumber_text):
+                        print("[Snippet] Stage 2 also noisy — proceeding to OCR")
+                except Exception as e:
+                    print(f"[Snippet] Stage 2 (pdfplumber) failed: {e}")
+
+            # ── Stage 3: Enhanced OCR (work_comp pipeline: 600 DPI + full enhancement) ──
+            if len(text) < CHAR_THRESHOLD and OCR_AVAILABLE:
+                print(f"[Snippet] Stage 3 (Enhanced OCR 600 DPI) starting...")
+                try:
+                    from PIL import ImageOps, ImageFilter
+                    poppler = POPPLER_PATH if (POPPLER_PATH and os.path.exists(POPPLER_PATH)) else None
+                    images = convert_from_path(
+                        working_pdf, dpi=600, first_page=1, last_page=max_pages,
+                        poppler_path=poppler, fmt='jpeg'
+                    )
+                    ocr_text = ""
+                    enhancements = {
+                        'grayscale': True, 'contrast': 1.6, 'sharpness': 2.2,
+                        'edge_enhance': True, 'binarize': True, 'threshold': 200
+                    }
+                    custom_config = "--oem 3 --psm 3"
+                    for img in images:
+                        if enhancements.get('grayscale'):
+                            img = ImageOps.grayscale(img)
+                        if enhancements.get('contrast', 1.0) != 1.0:
+                            img = ImageEnhance.Contrast(img).enhance(enhancements['contrast'])
+                        if enhancements.get('sharpness', 1.0) != 1.0:
+                            img = ImageEnhance.Sharpness(img).enhance(enhancements['sharpness'])
+                        if enhancements.get('edge_enhance'):
+                            img = img.filter(ImageFilter.EDGE_ENHANCE_MORE)
+                        if enhancements.get('binarize'):
+                            threshold = enhancements.get('threshold', 200)
+                            img = img.point(lambda p: p > threshold and 255)
+                        ocr_text += pytesseract.image_to_string(img, config=custom_config, lang="eng")
+                    ocr_text = ocr_text.strip()
+                    print(f"[Snippet] Stage 3 (OCR enhanced): {len(ocr_text)} chars")
+                    if len(ocr_text) > len(text):
+                        text = ocr_text
+                except Exception as e:
+                    print(f"[Snippet] Stage 3 failed: {e}")
+
+            # ── Stage 4: Basic OCR (300 DPI, no enhancement) ────────────────────
+            if len(text) < CHAR_THRESHOLD and OCR_AVAILABLE:
+                print(f"[Snippet] Stage 4 (Basic OCR 300 DPI) starting...")
+                try:
+                    poppler = POPPLER_PATH if (POPPLER_PATH and os.path.exists(POPPLER_PATH)) else None
+                    images = convert_from_path(
+                        working_pdf, dpi=300, first_page=1, last_page=max_pages,
+                        poppler_path=poppler
+                    )
+                    ocr_text = ""
+                    for img in images:
+                        ocr_text += pytesseract.image_to_string(img, config="--oem 3 --psm 3", lang="eng")
+                    ocr_text = ocr_text.strip()
+                    print(f"[Snippet] Stage 4 (basic OCR): {len(ocr_text)} chars")
+                    if len(ocr_text) > len(text):
+                        text = ocr_text
+                except Exception as e:
+                    print(f"[Snippet] Stage 4 failed: {e}")
+
+        final = text[:5000]
+        print(f"[Snippet] Final snippet ready: {len(final)} chars")
+        return final
+
+
+
+    def _pre_classify(self, filename, file_ext):
+        """Python-level deterministic pre-classification. Returns (type, reason) or (None, None)."""
+        filename_lower = filename.lower()
+        
+        # RULE 1: Any file with 'acord' in the name is a Workers' Comp application form
+        acord_keywords = ["acord"]
+        if any(kw in filename_lower for kw in acord_keywords):
+            print(f"[Pre-Classify] ACORD keyword found in filename → WORK_COMPENSATION (deterministic, no LLM needed)")
+            return "WORK_COMPENSATION", "ACORD filename keyword"
+        
+        # RULE 2: Files with explicit claim/loss run keywords in name
+        loss_run_keywords = ["loss run", "lossrun", "claims report", "claim_report", "claim summary"]
+        if any(kw in filename_lower for kw in loss_run_keywords):
+            print(f"[Pre-Classify] Loss run keyword found in filename → INSURANCE_CLAIMS (deterministic)")
+            return "INSURANCE_CLAIMS", "Filename loss run keyword"
+
+        
+        # RULE 3: Files with explicit invoice/billing keywords in name (only .pdf, xlsx/csv handled below)
+        invoice_keywords = [" inv ", " inv.", "invoice", "billing", " bill "]
+        if any(kw in filename_lower for kw in invoice_keywords):
+            print(f"[Pre-Classify] Invoice keyword found in filename → INVOICE (deterministic)")
+            return "INVOICE", "Filename invoice keyword"
+
+        return None, None
 
     def classify_document(self, pdf_path):
         """Layer 1 & 2: Classify type and identify provider."""
@@ -499,6 +751,39 @@ class UnifiedRouter:
         filename = Path(pdf_path).name
         file_ext = Path(pdf_path).suffix.lower()
         print(f"[FILE] Processing: {filename} ({file_ext})")
+        
+        # ── STEP 0: Python-level deterministic pre-classification ──────────────
+        pre_type, pre_reason = self._pre_classify(filename, file_ext)
+        if pre_type:
+            print(f"[Pre-Classify] Bypassing LLM for deterministic case: {pre_type} ({pre_reason})")
+            # For pre-classified docs, still extract text to identify provider
+            snippet = ""
+            if file_ext == ".pdf":
+                snippet = self.extract_snippet(pdf_path)[:2000]
+            provider = "UNKNOWN"
+            try:
+                prov_prompt = f"""From the following document text, identify ONLY the insurance CARRIER name (e.g., Aetna, BerkleyNet, Travelers, AmTrust, Zurich).
+
+Do NOT return the agency/broker name. The carrier is the company that underwrites the policy, not the agent who sold it.
+If you cannot clearly identify the carrier, return UNKNOWN.
+
+FILENAME: {filename}
+DOCUMENT TEXT:
+{snippet if snippet else '[No text available]'}
+
+Return ONLY the carrier name or UNKNOWN:"""
+                prov_response = self.client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[{"role": "user", "content": prov_prompt}],
+                    temperature=0
+                )
+                provider = prov_response.choices[0].message.content.strip().upper()
+                print(f"[Pre-Classify] Provider identified: {provider}")
+            except Exception as e:
+                print(f"[Pre-Classify] Provider lookup failed: {e}")
+            
+            print(f"\n[INFO] Classification Result: {pre_type}")
+            return pre_type, provider
         
         text = ""
         if file_ext == ".pdf":
@@ -535,53 +820,104 @@ class UnifiedRouter:
                 print(f"  [WARN] Could not read CSV for classification: {e}")
                 text = "Error reading CSV metadata"
 
-        # Heuristic: If text is mostly dots or very short, it's likely a scan/corrupt layer
+        # Heuristic: If text is mostly dots or very short OR lacks meaningful document keywords, it's noisy
         is_noisy = False
-        if file_ext == ".pdf" and (not text or len(re.sub(r'[^a-zA-Z0-9]', '', text)) < 50):
+        clean_text_len = len(re.sub(r'[^a-zA-Z0-9]', '', text)) if text else 0
+        meaningful_keywords = [
+            "compensation", "insurance", "invoice", "premium", "claim", "policy",
+            "payroll", "employee", "acord", "member", "billing", "workers"
+        ]
+        has_meaningful_content = any(kw in text.lower() for kw in meaningful_keywords)
+
+        if file_ext == ".pdf" and (not text or clean_text_len < 50 or not has_meaningful_content):
             is_noisy = True
-            print("[WARN] Warning: Extracted text is poor/noisy. Relying on filename and visual cues.")
+            print("[WARN] Warning: Extracted text is poor/noisy or lacks document keywords. Using filename-based LLM classification.")
 
         print(f"\n[INFO] Classification Hint (first 400 chars):\n{'-'*70}\n{text[:400].strip()}\n{'-'*70}")
 
-        prompt = f"""Analyze the following document metadata and text to classify its type and identify the provider/carrier.
+        # ── STEP 1b: If text is noisy, use a focused filename-only LLM call ──────
+        # This is dynamic: the LLM already knows what CCMSI, BerkleyNet, KeyRisk, etc. are.
+        # No hardcoded lists needed — the model's training data covers insurance industry names.
+        if is_noisy:
+            try:
+                filename_prompt = f"""You are an insurance document expert. Based ONLY on the filename below, classify the document type and identify the insurance carrier or TPA.
+
+FILENAME: {filename}
+
+Use your knowledge of the insurance industry:
+- CCMSI, BerkleyNet, Key Risk, AmTrust, State Fund, FCBI = Third-party claim administrators → INSURANCE_CLAIMS
+- Files named with 'Acord', 'WC App', 'Workers Comp' = Workers comp application → WORK_COMPENSATION  
+- Files with 'Inv', 'Invoice', 'Bill' = Billing/premium document → INVOICE
+- Personal ID documents = IDENTIFICATION
+
+Return exactly TWO lines:
+Line 1: WORK_COMPENSATION, IDENTIFICATION, INSURANCE_CLAIMS, or INVOICE
+Line 2: Carrier or TPA name (e.g., CCMSI, BerkleyNet) or UNKNOWN
+
+OUTPUT:"""
+                fn_response = self.client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[{"role": "user", "content": filename_prompt}],
+                    temperature=0
+                )
+                fn_output = fn_response.choices[0].message.content.strip().split("\n")
+                fn_classification = fn_output[0].upper()
+                fn_provider = fn_output[1].upper() if len(fn_output) > 1 else "UNKNOWN"
+                print(f"[Filename-LLM] Classification: {fn_classification}, Provider: {fn_provider}")
+
+                if "WORK_COMPENSATION" in fn_classification:
+                    print("\n[INFO] Classification Result: WORK_COMPENSATION")
+                    return "WORK_COMPENSATION", fn_provider
+                elif "INSURANCE_CLAIMS" in fn_classification or "INSURANCE" == fn_classification:
+                    print("\n[INFO] Classification Result: INSURANCE_CLAIMS")
+                    return "INSURANCE_CLAIMS", fn_provider
+                elif "INVOICE" in fn_classification:
+                    print("\n[INFO] Classification Result: INVOICE")
+                    return "INVOICE", fn_provider
+                elif "IDENTIFICATION" in fn_classification:
+                    print("\n[INFO] Classification Result: IDENTIFICATION")
+                    return "IDENTIFICATION", fn_provider
+            except Exception as e:
+                print(f"[Filename-LLM] Error: {e}. Falling through to full classification.")
+
+
+        prompt = f"""Analyze the following document metadata and text to classify its type and identify the insurance CARRIER.
 
 FILENAME: {filename}
 FILE FORMAT: {file_ext}
 EXTRACTED TEXT:
 {text if not is_noisy else "[TEXT LAYER CORRUPTED OR SCANNED - USE FILENAME HINT]"}
 
-CLASSIFICATION RULES (apply in this strict priority order):
+CLASSIFICATION RULES:
 
-1. **WORK_COMPENSATION** (HIGHEST PRIORITY - check FIRST):
-   - Workers' Compensation Application forms, ACORD 130, ACORD 133, WC renewal applications.
-   - Key indicators: "WORKERS COMPENSATION APPLICATION", "ACORD 130", "ACORD 133", "Rating by State", "Payroll", "Class Code", "Experience Modification", "WC States", "NAICS", "SIC", "YRS IN BUS", "SOLE PROPRIETOR", "CORPORATION", "PARTNERSHIP".
-   - Filename keywords: "acord", "acord 130", "wc app", "workers comp", "work comp", "compensation application".
-   - If the document contains a workers' comp application form, classify as WORK_COMPENSATION even if it mentions premiums.
+1. **WORK_COMPENSATION**: Workers' Compensation Application forms.
+   - Key indicators: "WORKERS COMPENSATION APPLICATION", "ACORD 130", "ACORD 133", "Rating by State", "Payroll", "Class Code", "Experience Modification", "WC States", "NAICS", "SIC", "SOLE PROPRIETOR", "PARTNERSHIP".
+   - Filename hints: "acord", "wc app", "workers comp", "work comp".
+   - If the filename contains "Acord" AND text is sparse or unclear, classify as WORK_COMPENSATION.
 
-2. **IDENTIFICATION**: Personal IDs like Passport, Driver's License, SSN Card, State ID.
+2. **IDENTIFICATION**: Personal IDs like Passport, Driver's License, SSN Card.
    - Key indicators: "Date of Birth", "License No", "Passport No", "Social Security".
 
-3. **INSURANCE_CLAIMS**: Insurance claim reports, loss run reports, claim summaries, liability reports.
-   - Key indicators: "Loss Run", "Claim Number", "Claim Count", "Incurred", "Reserve", "Paid Losses", "Policy Year".
-   - Filename keywords: "claim", "loss", "run", "liability", "CCMSI", "BerkleyNet", "AmTrust".
+3. **INSURANCE_CLAIMS**: Loss run reports, claim summaries, liability reports.
+   - Key indicators: "Loss Run", "Loss Analysis", "Claim Number", "Incurred", "Reserve", "Paid Losses", "Policy Year", "Outstanding Reserve".
+   - Filename hints: "loss", "claim", "CCMSI", "State Fund", "KeyRisk", "AmTrust".
 
-4. **INVOICE** (LOWEST PRIORITY - only if none of the above match):
-   - Financial invoice, billing statement, premium notice, health insurance bill, payment receipt.
-   - Key indicators: "Invoice Date", "Amount Due", "Amount Billed", "Billing Period", "Member ID", "Premium Period".
-   - Filename keywords: "invoice", "bill", "payment", "statement".
-   - DO NOT classify as INVOICE if the document contains workers' comp application fields.
+4. **INVOICE**: Health insurance invoice, billing statement, premium notice.
+   - Key indicators: "Invoice Date", "Amount Due", "Billing Period", "Member ID", "Monthly Premium".
+   - Filename hints: "inv", "invoice", "bill".
+   - Excel/CSV with Member/Premium data is almost always INVOICE, not a loss run.
 
-5. **Filename Analysis**: If text is corrupted/noisy, analyze the filename for keywords above.
+PROVIDER (Line 2) RULES:
+   - Identify the INSURANCE CARRIER — the company that underwrites the policy (e.g., Aetna, BerkleyNet, Travelers, AmTrust, BCBS, UHC, Zurich).
+   - DO NOT return the agency name, broker, or producer (e.g., "JD Thomas & Associates", "Capstone Insurance Services", "Hub International").
+   - If no distinct carrier name is found, return UNKNOWN.
 
-SPECIAL INSTRUCTION FOR EXCEL FILES:
-If the file format is .xlsx or .xls and contains "Premium", "Certificate", "Deduction", "Member", or "Coverage", it is almost certainly an **INVOICE** (billing detail), NOT a loss run/insurance claim report. Loss run reports are usually PDFs.
-
-OUTPUT FORMAT:
-Return exactly TWO lines.
-Line 1: Classification (WORK_COMPENSATION, IDENTIFICATION, INSURANCE_CLAIMS, or INVOICE)
-Line 2: Provider Name (e.g., Aetna) or "UNKNOWN"
+OUTPUT FORMAT (return exactly two lines):
+Line 1: WORK_COMPENSATION, IDENTIFICATION, INSURANCE_CLAIMS, or INVOICE
+Line 2: Carrier name (e.g., BerkleyNet) or UNKNOWN
 
 OUTPUT:"""
+
 
         try:
             print("\n[AI] Sending to AI for classification...")
@@ -598,19 +934,19 @@ OUTPUT:"""
             print(f"[OK] AI Provider: {provider}")
 
             if "WORK_COMPENSATION" in classification:
-                print("\n👷 Classification Result: WORK_COMPENSATION")
+                print("\n[INFO] Classification Result: WORK_COMPENSATION")
                 print("   → Will route to Work Compensation Extractor")
                 return "WORK_COMPENSATION", provider
             elif "IDENTIFICATION" in classification:
-                print("\n🆔 Classification Result: IDENTIFICATION")
+                print("\n[INFO] Classification Result: IDENTIFICATION")
                 print("   → Will route to Identification Extractor")
                 return "IDENTIFICATION", provider
             elif "INSURANCE_CLAIMS" in classification or "INSURANCE" == classification:
-                print("\n🏥 Classification Result: INSURANCE_CLAIMS")
+                print("\n[INFO] Classification Result: INSURANCE_CLAIMS")
                 print("   → Will route to Insurance (Claims) Extractor")
                 return "INSURANCE_CLAIMS", provider
             elif "INVOICE" in classification:
-                print("\n📊 Classification Result: INVOICE")
+                print("\n[INFO] Classification Result: INVOICE")
                 print("   → Will route to Invoice Extractor")
                 return "INVOICE", provider
             else:
@@ -731,7 +1067,7 @@ OUTPUT:"""
             
             return {"type": "INVOICE", "excel": str(output_xlsx), "json": self.xlsx_to_json(output_xlsx)}
         except subprocess.TimeoutExpired:
-            print(f"\n❌ Invoice Extraction Failed: Timeout after 900 seconds.")
+            print(f"\n[ERR] Invoice Extraction Failed: Timeout after 900 seconds.")
             return {"error": "Invoice extraction timed out."}
         except Exception as e:
             print(f"\n[ERR] Invoice Extraction Error: {e}")
@@ -839,7 +1175,7 @@ OUTPUT:"""
     def run_work_compensation_extractor(self, pdf_path):
         """Run the work compensation extractor using direct module import."""
         print("\n" + "="*70)
-        print("👷 STEP 2: RUNNING WORK COMPENSATION EXTRACTOR")
+        print("[STEP] RUNNING WORK COMPENSATION EXTRACTOR")
         print("="*70)
         print(f"📂 Input: {pdf_path}")
         
@@ -855,7 +1191,7 @@ OUTPUT:"""
                         target_claim_number=None
                     )
                 
-                print("✅ Work Compensation extractor completed successfully!")
+                print("[OK] Work Compensation extractor completed successfully!")
                 
                 # Extract session information
                 session_dir = Path(result.get("session_dir"))
@@ -876,13 +1212,13 @@ OUTPUT:"""
                 print(f"\n❌ Work Comp Extraction Error: {e}")
                 return {"error": f"Work Comp extraction failed: {str(e)}"}
         else:
-            print("\n❌ Error: Work Comp Extractor not initialized.")
+            print("\n[ERR] Error: Work Comp Extractor not initialized.")
             return {"error": "Work Comp Extractor not available"}
 
     def run_identification_extractor(self, pdf_path):
         """Extract personal information from IDs (Passport, DL, SSN) using GPT-4o-mini."""
         print("\n" + "="*70)
-        print("🆔 STEP 2: RUNNING IDENTIFICATION EXTRACTOR")
+        print("[STEP] RUNNING IDENTIFICATION EXTRACTOR")
         print("="*70)
         print(f"📂 Input: {pdf_path}")
 
@@ -934,7 +1270,7 @@ OUTPUT:"""
                 "data": data
             }
         except Exception as e:
-            print(f"\n❌ ID Extraction Error: {e}")
+            print(f"\n[ERR] ID Extraction Error: {e}")
             return {"error": f"ID extraction failed: {str(e)}"}
 
     def xlsx_to_json(self, xlsx_path):
@@ -958,14 +1294,11 @@ OUTPUT:"""
                             return True
                     
                     # 2. Check for empty/None identity columns with a premium value
-                    all_none = True
-                    for col in existing_cols:
-                        val = str(row[col])
-                        if val.lower() not in ['none', '', 'nan']:
-                            all_none = False
-                            break
+                    has_first = str(row.get('FIRSTNAME', '')).lower() not in ['none', '', 'nan']
+                    has_plan = str(row.get('PLAN_NAME', '')).lower() not in ['none', '', 'nan']
                     
-                    return all_none and pd.notna(row['CURRENT_PREMIUM'])
+                    # If it has a premium but NO FIRSTNAME and NO PLAN_NAME, it's likely a summary row (entity name)
+                    return (not has_first and not has_plan) and pd.notna(row['CURRENT_PREMIUM'])
 
                 is_total_row = df.apply(is_summary_row, axis=1)
                 df = df[~is_total_row]
@@ -1087,10 +1420,10 @@ OUTPUT:"""
                         first_page_text = (pdf.pages[0].extract_text() or "").lower()
                         if "guardian" in first_page_text:
                             is_guardian = True
-                            print("🛡️  Guardian invoice detected proactively.")
+                            print("[INFO] Guardian invoice detected proactively.")
                         if "gis 23" in first_page_text or "restaurant services" in first_page_text:
                             is_gis23 = True
-                            print("🍽️  GIS 23 Restaurant Services invoice detected proactively.")
+                            print("[INFO] GIS 23 Restaurant Services invoice detected proactively.")
                 except Exception as e:
                     print(f"  [Router] Detection failed: {e}")
 
@@ -1106,17 +1439,17 @@ OUTPUT:"""
                         if is_guardian or is_gis23:
                              should_fallback = True
                              reason = "Guardian" if is_guardian else "GIS 23"
-                             print(f"⚠️  {reason} invoice: Forcing Structural layer for maximum accuracy...")
+                             print(f"[WARN] {reason} invoice: Forcing Structural layer for maximum accuracy...")
                     except:
                         should_fallback = True
                 
                 if should_fallback:
-                    print("\n⚠️  Standard extraction yielded insufficient results. Falling back to Structural Layer...")
+                    print("\n[WARN] Standard extraction yielded insufficient results. Falling back to Structural Layer...")
                     structural_result = self.run_invoice_extractor(file_path, use_structural=True)
                     if "error" not in structural_result:
                         result = structural_result
                     else:
-                        print(f"❌ Structural fallback also failed: {structural_result.get('error')}")
+                        print(f"[ERR] Structural fallback also failed: {structural_result.get('error')}")
 
         elif doc_type == "INSURANCE_CLAIMS":
             if file_ext != ".pdf":

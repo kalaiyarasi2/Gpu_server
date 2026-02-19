@@ -531,22 +531,18 @@ Output: `{{"LASTNAME": "ANAND", "FIRSTNAME": "ARJUN", "MEMBERID": "2543915", "SS
 
 ### CRITICAL EXTRACTION RULES (STRICT ADHERENCE REQUIRED):
 
-1. **GRAND TOTAL**:
-   - Locate the grand total premium amount (usually found in a summary or total section).
-   - IMPORTANT: DO NOT add a `TOTAL_AMOUNT` field to the HEADER.
-   - INSTEAD: Add a FINAL object to the `LINE_ITEMS` array with:
-     - `PLAN_NAME`: "TOTAL"
-     - `FIRSTNAME`: "INVOICE TOTAL"
-     - `CURRENT_PREMIUM`: The grand total value.
-     - All other fields: null.
-
-2. **IGNORE SUMMARY TABLES (Except for Grand Total)**: 
-   - DO NOT extract individual line items from summary sections.
-   - ONLY use them to find the Grand Total for the special "TOTAL" line item.
-   - THESE ARE NOT INDIVIDUAL LINE ITEMS. 
-   - ERROR CASE: Never link planholder names found in headers (e.g., "Alicia Keel") to document-level totals found in summary tables.
-   - **IGNORE NAME HEADERS**: Often invoices repeat a name at the top of a section or page (e.g., "Bill for: Sharad Saxton"). DO NOT extract these as line items if they are solo headers. ONLY extract names when they are part of the actual premium/billing table rows.
-   - **CRITICAL: NEVER MISATTRIBUTE TOTALS**: A member's premium must be their own individual cost. NEVER attribute a sub-total or grand total (e.g., $3301.90) to an individual member row (e.g., SAXTON SHARAD). Sub-totals are for visual grouping only and MUST be ignored for individual line item extraction.
+    - **GRAND TOTAL & SUMMARY ROWS**: 
+      - Locate the grand total premium amount (usually found in a summary or total section).
+      - IMPORTANT: DO NOT add a `TOTAL_AMOUNT` field to the HEADER.
+      - INSTEAD: Add a FINAL object to the `LINE_ITEMS` array with:
+        - `PLAN_NAME`: "TOTAL"
+        - `FIRSTNAME`: "INVOICE TOTAL"
+        - `CURRENT_PREMIUM`: The grand total value.
+        - All other fields: null.
+      - **IGNORE ENTITY SUMMARY ROWS**: If you see a row containing the company/group name (e.g., "RAPID TRADING LLC") with a total amount, DO NOT extract it as an individual member line item. This is a summary of the whole document, not a person. ONLY extract names of individuals (people).
+      - ERROR CASE: Never link planholder names found in headers (e.g., "Alicia Keel") to document-level totals found in summary tables.
+      - **IGNORE NAME HEADERS**: Often invoices repeat a name at the top of a section or page (e.g., "Bill for: Sharad Saxton"). DO NOT extract these as line items if they are solo headers. ONLY extract names when they are part of the actual premium/billing table rows.
+      - **CRITICAL: NEVER MISATTRIBUTE TOTALS**: A member's premium must be their own individual cost. NEVER attribute a sub-total or grand total (e.g., $3301.90) to an individual member row (e.g., SAXTON SHARAD). Sub-totals are for visual grouping only and MUST be ignored for individual line item extraction.
 
 2. **WIDE FORMAT / MULTI-COLUMN TABLES**:
    - If coverages (Dental, Vision, LIFE, Std) are listed as COLUMNS:
@@ -1158,7 +1154,17 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                 idx_p = str(row.get("PLAN_NAME", "") or "").upper()
                 idx_f = str(row.get("FIRSTNAME", "") or "").upper()
                 idx_l = str(row.get("LASTNAME", "") or "").upper()
+                
+                # Enhanced detection for summary rows misclassified as members
                 is_total = any(kw in idx_p or kw in idx_f or kw in idx_l for kw in ["TOTAL", "GRAND TOTAL"])
+                
+                # If FIRSTNAME and PLAN_NAME are empty, but LASTNAME and PREMIUM match a summary pattern
+                if not is_total:
+                    has_first = idx_f and idx_f not in ["NONE", "NAN", "N/A", "UNKNOWN"]
+                    has_plan = idx_p and idx_p not in ["NONE", "NAN", "N/A", "UNKNOWN"]
+                    if not has_first and not has_plan and idx_l:
+                        # This looks like an entity name (e.g. RAPID TRADING LLC) rather than a person
+                        is_total = True
                 
                 if is_total:
                     # Clear text labels for the final Excel output (leave only the amount)

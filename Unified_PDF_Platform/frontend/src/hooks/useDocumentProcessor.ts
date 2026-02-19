@@ -93,7 +93,7 @@ export function useDocumentProcessor() {
                 let claimsCount = 0;
                 let processedResult = schema;
 
-                if (documentType === "INSURANCE") {
+                if (documentType === "INSURANCE" || documentType === "INSURANCE_CLAIMS") {
                     // Insurance format: { claims: [...] }
                     const claims = schema?.claims || [];
                     claimsCount = claims.length;
@@ -125,15 +125,29 @@ export function useDocumentProcessor() {
                             return sum + (isNaN(current) ? 0 : current);
                         }, 0);
                     }
+                } else if (documentType === "WORK_COMPENSATION") {
+                    // Work comp: use metadata from API response
+                    totalValue = json.work_comp_metadata?.total_premium || 0;
+                }
+
+                // Build display label for insurer/applicant field
+                let insurerLabel = "Unknown Document";
+                if (documentType === "INSURANCE" || documentType === "INSURANCE_CLAIMS") {
+                    insurerLabel = "Insurance Document";
+                } else if (documentType === "INVOICE") {
+                    insurerLabel = "Invoice Document";
+                } else if (documentType === "WORK_COMPENSATION") {
+                    insurerLabel = json.work_comp_metadata?.form_type || "Workers Comp Application";
                 }
 
                 const metadata = {
-                    insurer: documentType === "INSURANCE" ? "Insurance Document" : "Invoice Document",
+                    insurer: insurerLabel,
                     format: documentType.toLowerCase(),
                     confidence: 95,
                     claims_count: claimsCount,
                     total_value: totalValue,
-                    documentType: documentType as any
+                    documentType: documentType as any,
+                    work_comp_metadata: json.work_comp_metadata || null,
                 };
 
                 updateDoc(id, {
@@ -233,7 +247,6 @@ export function useDocumentProcessor() {
 
     const selectedDoc = documents.find((d) => d.id === activeDocId) || null;
 
-<<<<<<< HEAD
     return {
         documents,
         activeDocId,
@@ -242,175 +255,4 @@ export function useDocumentProcessor() {
         setActiveDocId,
         reprocessDocument,
     };
-=======
-        if (!response.ok) {
-          throw new Error(`Server error: ${response.statusText}`);
-        }
-
-        const json = await response.json();
-
-        // Handle unified router response format
-        const documentType = json.type || "UNKNOWN";
-        const jsonPath = json.json || json.output_json;
-
-        // Fetch the JSON file from the backend
-        let schema: any = null;
-        if (jsonPath) {
-          try {
-            const schemaResponse = await fetch(`/api/download/${jsonPath}`);
-            schema = await schemaResponse.json();
-          } catch (e) {
-            console.error("Failed to fetch schema:", e);
-          }
-        }
-
-        // Calculate metadata based on document type
-        let totalValue = 0;
-        let claimsCount = 0;
-
-        if (documentType === "INSURANCE" || documentType === "INSURANCE_CLAIMS") {
-          // Insurance format: { claims: [...] }
-          const claims = schema?.claims || [];
-          claimsCount = claims.length;
-        } else if (documentType === "INVOICE") {
-          // Invoice format: [...] (flat array of records)
-          const records = Array.isArray(schema) ? schema : [];
-
-          // Calculate sum of ONLY CURRENT_PREMIUM across all records for the summary box
-          totalValue = records.reduce((sum: number, rec: any) => {
-            const current = parseFloat(String(rec.CURRENT_PREMIUM || 0).replace(/[^0-9.-]+/g, ""));
-            const currVal = isNaN(current) ? 0 : current;
-            return sum + currVal;
-          }, 0);
-        } else if (documentType === "WORK_COMPENSATION") {
-          // Work comp: use metadata from API response
-          totalValue = json.work_comp_metadata?.total_premium || 0;
-        }
-
-        // Build display label for insurer/applicant field
-        let insurerLabel = "Unknown Document";
-        if (documentType === "INSURANCE" || documentType === "INSURANCE_CLAIMS") {
-          insurerLabel = "Insurance Document";
-        } else if (documentType === "INVOICE") {
-          insurerLabel = "Invoice Document";
-        } else if (documentType === "WORK_COMPENSATION") {
-          insurerLabel = json.work_comp_metadata?.form_type || "Workers Comp Application";
-        }
-
-        const metadata = {
-          insurer: insurerLabel,
-          format: documentType.toLowerCase(),
-          confidence: 95,
-          claims_count: claimsCount,
-          total_value: totalValue,
-          documentType: documentType as any,
-          work_comp_metadata: json.work_comp_metadata || null,
-        };
-
-        updateDoc(id, {
-          stage: "complete",
-          stageMessage: "✓ Extraction complete",
-          result: schema,
-          metadata,
-          excelPath: json.output_file,
-          jsonPath: json.output_json,
-          completedAt: Date.now(),
-        });
-      } catch (error) {
-        isSimulationRunning = false;
-        console.error("Processing error:", error);
-        updateDoc(id, {
-          stage: "error",
-          error: error instanceof Error ? error.message : "Processing failed",
-          stageMessage: "Error",
-        });
-      }
-    },
-    [updateDoc]
-  );
-
-  const processQueue = useCallback(async () => {
-    if (isProcessing.current) return;
-    isProcessing.current = true;
-
-    while (processingQueue.current.length > 0) {
-      const item = processingQueue.current.shift()!;
-      setActiveDocId(item.id);
-      try {
-        await processDocument(item.id, item.file);
-      } catch {
-        updateDoc(item.id, { stage: "error", error: "Processing failed", stageMessage: "Error" });
-      }
-    }
-
-    isProcessing.current = false;
-  }, [processDocument, updateDoc]);
-
-  const addFiles = useCallback(
-    (files: File[]) => {
-      const newDocs: DocumentFile[] = files.map((file) => ({
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        file,
-        name: file.name,
-        size: file.size,
-        stage: "queued" as ProcessingStage,
-        stageMessage: "Waiting in queue...",
-        progress: 0,
-        result: null,
-        error: null,
-        startedAt: null,
-        completedAt: null,
-      }));
-
-      setDocuments((prev) => [...prev, ...newDocs]);
-
-      if (!activeDocId && newDocs.length > 0) {
-        setActiveDocId(newDocs[0].id);
-      }
-
-      newDocs.forEach((d) => processingQueue.current.push({ id: d.id, file: d.file }));
-      processQueue();
-    },
-    [activeDocId, processQueue]
-  );
-
-  const reprocessDocument = useCallback((id: string) => {
-    setDocuments((prev) => {
-      const doc = prev.find((d) => d.id === id);
-      if (!doc) return prev;
-
-      // Add to queue logic after state update
-      setTimeout(() => {
-        processingQueue.current.push({ id: doc.id, file: doc.file });
-        processQueue();
-      }, 0);
-
-      return prev.map((d) =>
-        d.id === id
-          ? {
-            ...d,
-            stage: "queued" as ProcessingStage,
-            stageMessage: "Reprocessing...",
-            result: null,
-            error: null,
-            progress: 0,
-            startedAt: null,
-            completedAt: null
-          }
-          : d
-      );
-    });
-  }, [processQueue]);
-
-  const selectedDoc = documents.find((d) => d.id === activeDocId) || null;
-
-  return {
-    documents,
-    activeDocId,
-    selectedDoc,
-    addFiles,
-    setActiveDocId,
-    reprocessDocument,
-  };
->>>>>>> b602da3 (worker compensation)
 }
