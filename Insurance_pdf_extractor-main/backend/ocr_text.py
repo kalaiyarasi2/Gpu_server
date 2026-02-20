@@ -6,8 +6,15 @@ Converts PDF pages to images and performs optical character recognition
 """
 
 from pathlib import Path
+import os
+import base64
+from io import BytesIO
 import pytesseract
 from pdf2image import convert_from_path
+from openai import OpenAI
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 class OCRPDFExtractor:
@@ -16,41 +23,50 @@ class OCRPDFExtractor:
     Converts pages to images and uses Tesseract for text recognition.
     """
     
-    def __init__(self, pdf_path):
+    def __init__(self, pdf_path, api_key=None):
         """
         Initialize the extractor with a PDF file path.
         
         Args:
             pdf_path: Path to the PDF file
+            api_key: OpenAI API key for Vision OCR (optional)
         """
         self.pdf_path = Path(pdf_path)
         if not self.pdf_path.exists():
             raise FileNotFoundError(f"PDF file not found: {pdf_path}")
         
+        self.api_key = api_key or os.getenv("OPENAI_API_KEY")
+        self.client = OpenAI(api_key=self.api_key) if self.api_key else None
         self.output_text = ""
     
-    def extract(self, dpi=300, language='eng', psm_mode=1, verbose=True, **kwargs):
+    def extract(self, dpi=600, language='eng', psm_mode=1, verbose=True, engine='tesseract', **kwargs):
         """
-        Extract text using OCR (Tesseract).
+        Extract text using OCR (Tesseract or GPT-4 Vision).
         
         Args:
             dpi: Image resolution for conversion (higher = better quality, slower)
             language: OCR language (eng, fra, deu, etc.)
             psm_mode: Page segmentation mode (1=auto with OSD, 3=auto, 6=single block)
             verbose: Print progress information
+            engine: OCR engine to use ('tesseract' or 'vision')
             
         Returns:
             str: OCR-extracted text
         """
         if verbose:
             print(f"\n{'='*80}")
-            print(f"OCR PDF EXTRACTION")
+            print(f"OCR PDF EXTRACTION ({engine.upper()})")
             print(f"{'='*80}")
             print(f"Input file: {self.pdf_path}")
             print(f"File size: {self.pdf_path.stat().st_size / 1024:.2f} KB")
             print(f"DPI: {dpi}")
-            print(f"Language: {language}")
-            print(f"PSM Mode: {psm_mode}\n")
+            if engine == 'tesseract':
+                print(f"Language: {language}")
+                print(f"PSM Mode: {psm_mode}")
+            print()
+        
+        if engine == 'vision':
+            return self._extract_with_vision(dpi=dpi, verbose=verbose)
         
         extracted_text = []
         
@@ -191,3 +207,61 @@ class OCRPDFExtractor:
             results.append(page_results)
         
         return results
+
+    def _extract_with_vision(self, dpi=300, verbose=True):
+        """
+        Extract text using GPT-4 Vision for near-perfect layout and word accuracy.
+        """
+        if not self.client:
+            raise ValueError("OpenAI API key is required for Vision OCR. Set OPENAI_API_KEY environment variable.")
+            
+        print("Converting PDF to images for Vision OCR...")
+        images = convert_from_path(str(self.pdf_path), dpi=dpi)
+        
+        full_text = []
+        metadata = []
+        
+        for i, image in enumerate(images, 1):
+            if verbose:
+                print(f"Vision processing page {i}/{len(images)}...")
+            
+            # Convert to base64
+            buffered = BytesIO()
+            image.save(buffered, format="PNG")
+            img_base64 = base64.b64encode(buffered.getvalue()).decode()
+            
+            prompt = """Extract ALL text from this document. 
+            PRESERVE the EXACT layout including columns, tables, and spacing.
+            Return ONLY the extracted text followed by [PAGE_END]."""
+            
+            try:
+                response = self.client.chat.completions.create(
+                    model="gpt-4.1",
+                    messages=[{
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{img_base64}"}}
+                        ]
+                    }],
+                    max_tokens=4000
+                )
+                
+                page_text = response.choices[0].message.content
+                
+                header = f"\n{'='*80}\nPAGE {i}\n{'='*80}\n\n"
+                full_text.append(header + page_text + "\n\n")
+                
+                metadata.append({
+                    "page_number": i,
+                    "text": header + page_text,
+                    "is_scanned": True,
+                    "extraction_method": "gpt-4.1-vision",
+                    "confidence": 0.99
+                })
+            except Exception as e:
+                print(f"Error on page {i}: {e}")
+                full_text.append(f"\n[ERROR ON PAGE {i}: {e}]\n")
+        
+        self.output_text = "".join(full_text)
+        return self.output_text, metadata

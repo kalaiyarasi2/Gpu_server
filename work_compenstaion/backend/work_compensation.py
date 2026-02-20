@@ -422,7 +422,7 @@ Return ONLY the JSON. No explanations. Ensure you catch EVERY claim number, espe
 
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-4.1",
                 messages=[{
                     "role": "user",
                     "content": prompt
@@ -508,7 +508,7 @@ IMPORTANT:
 
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-4.1",
                 messages=[{
                     "role": "user",
                     "content": [
@@ -635,7 +635,7 @@ DOCUMENT SAMPLE:
         
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-4.1",
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
                 max_tokens=1500,
@@ -767,7 +767,7 @@ Return ONLY the JSON."""
 
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-4.1",
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
                 max_tokens=1500,
@@ -854,7 +854,7 @@ Return ONLY the JSON object following the strict schema provided.
 
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-4.1",
                 messages=[{
                     "role": "user",
                     "content": prompt
@@ -1047,7 +1047,7 @@ Return ONLY the JSON."""
 
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-4.1",
                 messages=[{"role": "user", "content": retry_prompt}],
                 response_format={"type": "json_object"},
                 max_tokens=8000,
@@ -1108,7 +1108,7 @@ Return ONLY the JSON object for claim {target_claim_number}."""
 
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-4.1",
                 messages=[{
                     "role": "user",
                     "content": prompt

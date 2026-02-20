@@ -19,8 +19,8 @@ class Config:
     UPLOAD_FOLDER = '/tmp/insurance_uploads'
     
     # OCR Settings
-    OCR_DPI = 300  # Resolution for PDF to image conversion
-    OCR_ENGINE = 'deepseek'  # Options: 'deepseek', 'tesseract', 'auto'
+    OCR_DPI = 600  # Resolution for PDF to image conversion
+    OCR_ENGINE = 'vision'  # Options: 'vision', 'deepseek', 'tesseract', 'auto'
     FALLBACK_OCR = True  # Use fallback OCR if primary fails
     
     # AI Model Settings

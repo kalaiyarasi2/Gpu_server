@@ -133,7 +133,7 @@ class ExcelExtractor:
         """
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-4.1",
                 messages=[{"role": "user", "content": prompt}]
             )
             summary = response.choices[0].message.content
@@ -170,7 +170,7 @@ class ExcelExtractor:
         
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-4.1",
                 messages=[{"role": "user", "content": prompt}],
                 response_format={ "type": "json_object" }
             )
@@ -200,7 +200,7 @@ class ExcelExtractor:
         """
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o-mini",
+                model="gpt-4.1-mini",
                 messages=[{"role": "user", "content": prompt}],
                 response_format={ "type": "json_object" }
             )
@@ -223,7 +223,7 @@ class ExcelExtractor:
         """
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-4.1",
                 messages=[{"role": "user", "content": prompt}],
             )
             idx_str = response.choices[0].message.content.strip()
@@ -830,7 +830,7 @@ DOCUMENT TEXT:
 
 Return ONLY the carrier name or UNKNOWN:"""
                 prov_response = self.client.chat.completions.create(
-                    model="gpt-4o-mini",
+                    model="gpt-4.1-mini",
                     messages=[{"role": "user", "content": prov_prompt}],
                     temperature=0
                 )
@@ -924,7 +924,7 @@ Line 2: Carrier or TPA name if identified, otherwise UNKNOWN
 OUTPUT:"""
 
                 fn_response = self.client.chat.completions.create(
-                    model="gpt-4o-mini",
+                    model="gpt-4.1-mini",
                     messages=[{"role": "user", "content": filename_prompt}],
                     temperature=0
                 )
@@ -983,7 +983,7 @@ OUTPUT:"""
         try:
             print("\n[AI] Sending to AI for classification...")
             response = self.client.chat.completions.create(
-                model="gpt-4o-mini",
+                model="gpt-4.1-mini",
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0
             )
@@ -1418,7 +1418,7 @@ OUTPUT:"""
         return final
 
     def run_identification_extractor(self, pdf_path):
-        """Extract personal information from IDs (Passport, DL, SSN) using GPT-4o-mini."""
+        """Extract personal information from IDs (Passport, DL, SSN) using gpt-4.1-mini."""
         print("\n" + "="*70)
         print("[STEP] RUNNING IDENTIFICATION EXTRACTOR")
         print("="*70)
@@ -1449,7 +1449,7 @@ OUTPUT:"""
             """
 
             response = self.client.chat.completions.create(
-                model="gpt-4o-mini",
+                model="gpt-4.1-mini",
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
                 temperature=0

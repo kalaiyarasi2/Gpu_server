@@ -184,7 +184,7 @@ class OCRPDFExtractor:
         
         return output_path
     
-    def extract_with_confidence(self, dpi=300, language='eng'):
+    def extract_with_confidence(self, dpi=600, language='eng'):
         """
         Extract text with confidence scores for each word.
         

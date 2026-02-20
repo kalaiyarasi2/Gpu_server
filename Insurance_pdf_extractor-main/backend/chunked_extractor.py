@@ -50,7 +50,7 @@ DOCUMENT TEXT:
 
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-4.1",
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
                 max_tokens=4000,
@@ -273,12 +273,12 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
 
         return verification_data
 
-    def extract_schema_from_text(self, all_text: str, target_claim_number: Optional[str] = None, num_pages: Optional[int] = None) -> Dict:
+    def extract_schema_from_text(self, all_text: str, target_claim_number: Optional[str] = None, num_pages: Optional[int] = None, vision_pattern: Optional[Dict] = None) -> Dict:
         """
         OVERRIDE: Implements chunking before calling extraction.
         """
         if target_claim_number:
-            return super().extract_schema_from_text(all_text, target_claim_number)
+            return super().extract_schema_from_text(all_text, target_claim_number, vision_pattern=vision_pattern)
             
         print(f"\n⭐ NEW STEP: POLICY DETECTION & CHUNKING ⭐")
         
@@ -304,7 +304,7 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
                 strategy = "dynamic-fallback"
             else:
                 print("   ℹ️ Single policy or no boundaries detected. Proceeding with single-shot extraction.")
-                return super()._extract_all_claims(all_text)
+                return super()._extract_all_claims(all_text, vision_pattern=vision_pattern)
         else:
             chunks = chunker.split_into_chunks(all_text, boundaries)
             
@@ -342,7 +342,7 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
             print(f"📦 CHUNK {i+1}/{len(chunks)}: Policy {chunk['policy_number']}")
             print(f"{'='*40}")
             
-            chunk_result = super()._extract_all_claims(chunk["text"])
+            chunk_result = super()._extract_all_claims(chunk["text"], vision_pattern=vision_pattern)
             
             if "claims" in chunk_result:
                 all_results.append(chunk_result)

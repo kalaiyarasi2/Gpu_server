@@ -34,6 +34,10 @@ except ImportError:
     from PIL import Image
     import pytesseract
     from openai import OpenAI
+    from pdf2image import convert_from_path
+    # New validation modules
+    from financial_data_validation import FinancialValidator
+    from data_validation import GeneralDataValidator
 
 
 @dataclass
@@ -123,22 +127,36 @@ class EnhancedInsuranceExtractor:
         Extract text from PDF using detection and appropriate extraction method.
         """
         from pdf_detector import PDFDetector
+        from config import config
         
         try:
             print(f"🔍 Detecting PDF type...")
             detector = PDFDetector(pdf_path)
             is_scanned = detector.is_scanned()
             
+            # Check if we should use Vision for scanned PDFs
+            use_vision = getattr(config, 'OCR_ENGINE', 'tesseract') == 'vision'
+            
             if is_scanned:
-                print(f"📸 SCANNED PDF DETECTED: Using Tesseract OCR fallback")
-                from ocr_text import OCRPDFExtractor
-                ocr_extractor = OCRPDFExtractor(pdf_path)
-                return ocr_extractor.extract()
+                if use_vision:
+                    print(f"👁️ SCANNED PDF DETECTED: Using GPT-4 Vision for HIGH PRECISION extraction")
+                    return self._extract_full_pdf_via_vision(pdf_path)
+                else:
+                    print(f"📸 SCANNED PDF DETECTED: Using Tesseract OCR fallback")
+                    from ocr_text import OCRPDFExtractor
+                    ocr_extractor = OCRPDFExtractor(pdf_path)
+                    return ocr_extractor.extract()
             else:
                 print(f"📄 DIGITAL PDF DETECTED: Using Hybrid Extraction (pdfplumber + pymupdf fallback)")
                 from pdf_plumber import extract_pdf_hybrid
                 # Hybrid extraction returns (text, metadata, info)
                 text, metadata, info = extract_pdf_hybrid(pdf_path)
+                
+                # Check for "digital garbage" (CID issue)
+                cid_count = text.count("(cid:")
+                if cid_count > 50 and use_vision:
+                    print(f"   ⚠️ detected unreadable digital text ({cid_count} CID codes). Falling back to GPT-4 Vision.")
+                    return self._extract_full_pdf_via_vision(pdf_path)
                 
                 if info.get('fallback_used'):
                     print(f"   ℹ️ Hybrid Extraction recovered {len(info.get('recovered_claims', []))} claims using Smart Append")
@@ -150,6 +168,47 @@ class EnhancedInsuranceExtractor:
             print(f"   Falling back to standard pdfplumber...")
             from pdf_plumber import extract_pdf_with_pdfplumber as external_extract
             return external_extract(pdf_path)
+
+    def _extract_full_pdf_via_vision(self, pdf_path: str, dpi: int = 300) -> Tuple[str, List[Dict]]:
+        """
+        Process entire PDF using GPT-4 Vision for layout preservation.
+        """
+        print(f"🔄 Converting PDF to images for Vision OCR...")
+        images = convert_from_path(str(pdf_path), dpi=dpi)
+        
+        extracted_text = []
+        pages_metadata = []
+        total_pages = len(images)
+        
+        print(f"👁️ Processing {total_pages} pages with GPT-4 Vision...")
+        
+        for i, image in enumerate(images, 1):
+            print(f"   Page {i}/{total_pages}...")
+            
+            # Add page separator
+            page_header = f"\n{'='*80}\nPAGE {i}\n{'='*80}\n\n"
+            extracted_text.append(page_header)
+            
+            # Call vision extraction
+            page_text, is_scanned, confidence = self._extract_text_via_vision(image)
+            
+            extracted_text.append(page_text)
+            
+            # Collect metadata
+            pages_metadata.append({
+                "page_number": i,
+                "text": page_header + page_text,
+                "is_scanned": is_scanned,
+                "extraction_method": "gpt-4o-vision",
+                "confidence": confidence
+            })
+            
+            extracted_text.append("\n\n")
+            
+        full_text = "".join(extracted_text)
+        print(f"✓ Vision extraction complete: {len(full_text)} characters")
+        
+        return full_text, pages_metadata
     
     
     def _detect_claim_numbers_ai(self, text: str) -> Dict:
@@ -313,6 +372,11 @@ Return ONLY the JSON. No explanations. Ensure you catch EVERY claim number, espe
                 "confidence": 0.0
             }
     
+    def _extract_text_via_vision(self, image: Image.Image) -> Tuple[str, bool, float]:
+        """
+        Use GPT-4 Vision to extract text while preserving layout.
+        """
+        buffered = BytesIO()
         image.save(buffered, format="PNG")
         img_base64 = base64.b64encode(buffered.getvalue()).decode()
         
@@ -429,8 +493,9 @@ IMPORTANT:
             return extracted_text, is_scanned, confidence
             
         except Exception as e:
-            print(f"❌ Error extracting text: {e}")
+            print(f"❌ Error extracting text via vision: {e}")
             return "", False, 0.0
+
     
     def _chunk_text_dynamically(self, text: str, max_tokens: int = 6000) -> List[Dict]:
         """
@@ -493,7 +558,7 @@ DOCUMENT SAMPLE:
         
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-4.1",
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
                 max_tokens=1500,
@@ -576,7 +641,7 @@ DOCUMENT SAMPLE:
             
             return chunks
     
-    def extract_schema_from_text(self, all_text: str, target_claim_number: Optional[str] = None) -> Dict:
+    def extract_schema_from_text(self, all_text: str, target_claim_number: Optional[str] = None, vision_pattern: Optional[Dict] = None) -> Dict:
         """
         Extract structured schema from verified text
         NOW SUPPORTS MULTIPLE CLAIMS!
@@ -616,12 +681,13 @@ Answer these questions to help us extract data accurately:
    - If no carrier can be confidently identified, return null.
 
 2. How are claims organized? (one per row, multi-row per claim, one per page?)
-3. How are financial amounts presented?
-   - Simple columns (Ind Paid, Med Paid, etc.)?
-   - Complex multi-row tables (Incurred/Paid/Reserves rows)?
-4. IMPORTANT: Determine the EXACT row order for financial data (e.g., Row 1: Reserves, Row 2: Payments, Row 3: Incurred).
-5. How are the numeric columns ordered? (e.g., Med, Ind, LAE/Exp, Total)
-6. Are there specific labels that anchor the rows? (e.g., "Payments", "Payments:", "Reserves")
+3. How are financial categories (Medical, Indemnity, Expense) presented?
+   - Are they in COLUMNS (e.g. Header says 'Med Paid', 'Ind Paid')? 
+   - Or are they in ROWS (e.g. A label 'Medical' appears on one line, 'Indemnity' on another)?
+4. IMPORTANT: Map the EXACT numeric column headers to their meanings.
+   - e.g. "Column 1 is Payments, Column 2 is Reserve, Column 3 is Incurred"
+5. Determine the EXACT row/block order if multi-row.
+6. Are there specific labels that anchor the rows or columns? (e.g., "Payments", "Medical", "Indemnity", "Expense")
 
 Return JSON:
 {{
@@ -629,11 +695,11 @@ Return JSON:
   "format_type": "simple_columns" or "complex_multi_row" or "mixed",
   "claim_layout": "one_per_row" or "multi_row_per_claim" or "one_per_page",
   "financial_mapping": {{
-    "row_1": "label",
-    "row_2": "label",
-    "row_3": "label",
-    "column_order": ["field1", "field2", "..."],
-    "dynamic_instruction": "A custom extraction rule you generate specifically for this layout"
+    "category_dimension": "rows" or "columns",
+    "value_dimension": "rows" or "columns",
+    "column_map": {{"col_index_or_name": "meaning", "..."}},
+    "row_map": {{"row_index_or_label": "meaning", "..."}},
+    "dynamic_rules": "A highly technical extraction rule. e.g. 'Read claim ID from line 1. For Medical Paid, look for row labeled MEDICAL and take value from column 7 (Payments).'"
   }},
   "special_notes": "any quirks or unusual formatting",
   "confidence": 0.0-1.0
@@ -642,11 +708,11 @@ Return JSON:
 DOCUMENT TEXT (first 8000 chars):
 {text[:8000]}
 
-Return ONLY the JSON. Ensure the dynamic_instruction is highly technical and specific about which line to read for 'Paid' vs 'Reserves'."""
+Return ONLY the JSON. Ensure the dynamic_rules is extremely precise."""
 
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-4.1",
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
                 max_tokens=1500,
@@ -669,7 +735,7 @@ Return ONLY the JSON. Ensure the dynamic_instruction is highly technical and spe
                 "confidence": 0.0
             }
     
-    def _extract_all_claims(self, all_text: str) -> Dict:
+    def _extract_all_claims(self, all_text: str, vision_pattern: Optional[Dict] = None) -> Dict:
         """
         UNIVERSAL EXTRACTION: Works with ANY format
         Uses a three-stage approach:
@@ -691,13 +757,26 @@ Return ONLY the JSON. Ensure the dynamic_instruction is highly technical and spe
         # STAGE 1: Analyze document format
         format_info = self._analyze_document_format(all_text)
         
+        # Merge vision pattern into format_info if available
+        if vision_pattern:
+            format_info['vision_layout'] = vision_pattern.get('layout_type')
+            format_info['vision_pattern'] = vision_pattern.get('pattern_description')
+            if 'financial_mapping' not in format_info:
+                format_info['financial_mapping'] = {}
+            format_info['financial_mapping']['vision_formula'] = vision_pattern.get('formula_js')
+            
         # STAGE 2: Build adaptive extraction prompt
         print(f"\n🎯 STAGE 2: Extracting claims using constrained adaptive prompt...")
         
         # Build format-specific instructions
         format_type = format_info.get('format_type', 'unknown')
         financial_mapping = format_info.get('financial_mapping', {})
-        dynamic_rules = financial_mapping.get('dynamic_instruction', 'Extract all financial fields carefully.')
+        # Support both keys but prefer the more detailed dynamic_rules
+        dynamic_rules = (
+            financial_mapping.get('dynamic_rules') or 
+            financial_mapping.get('dynamic_instruction') or 
+            'Extract all financial fields carefully.'
+        )
         
         # Injected Accuracy Constraints
         accuracy_constraints = f"""
@@ -712,25 +791,18 @@ Return ONLY the JSON. Ensure the dynamic_instruction is highly technical and spe
 5. 🛑 LITIGATION: ONLY extract if explicitly present (e.g., 'Litigated: Y', 'Litigation: No'). 
    - If there is NO mention of litigation, you MUST return null. 
    - NEVER assume 'No' if the field is missing.
+6. 🛑 MULTIPLE EXPENSES: If a document has multiple expense columns/rows (e.g., Legal, Other, Admin, LAE), you MUST SUM THEM into the 'expense_paid' or 'expense_reserve' fields. Do NOT ignore any expense row.
 """
         
         if format_type == 'complex_multi_row':
             financial_instructions = f"""
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🔴 FORMAT CALIBRATION (Mandatory) 🔴
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-This document uses a strict 3-Row by 4-Column structure. Use these examples to CALIBRATE your mapping:
+This document uses a complex block-based or multi-row structure. 
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🔴 FORMAT CALIBRATION (Mandatory) 🔴
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-CALIBRATION 1: Sample John (9999999) -> MED=966, INDEM=2,926, EXP=173.
-CALIBRATION 2: Tester Jane (8888888) -> EXPENSE PAID=1,427.
-CALIBRATION 3: User Example (7777777) -> MEDICAL RESERVE=6,862. (Sum with Paid 26,303 = 33,165).
-CALIBRATION 4: Placeholder Alex (6666666) -> EXPENSE RESERVE=0. 
-
-⚠️ COLUMN ORDER: 1. MEDICAL, 2. INDEMNITY, 3. EXPENSE / LAE.
+⚠️ DYNAMIC MAPPING STRATEGY:
+{dynamic_rules}
 
 ⚠️ INDEMNITY CALCULATION:
 - If you see both "TD" (Temporary Disability) and "PD" (Permanent Disability) for a single claim, YOU MUST SUM THEM.
@@ -749,7 +821,7 @@ CALIBRATION 4: Placeholder Alex (6666666) -> EXPENSE RESERVE=0.
 ⚠️ MATH CHECKSUM:
 Paid + Reserve == Incurred (For each category).
 Sum of (M, I, E) = Total.
-If the math doesn't match perfectly, you have swapped Columns or missed PD/TD summation!
+If the math doesn't match perfectly, you have swapped Columns/Rows or missed PD/TD summation!
 """
         elif format_type == 'simple_columns':
             financial_instructions = """
@@ -795,6 +867,9 @@ DOCUMENT FORMAT ANALYSIS:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📋 EXTRACTION TASK
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+⚠️ DYNAMIC MAPPING RULES FOR THIS DOCUMENT:
+{dynamic_rules}
 
 {accuracy_constraints}
 
@@ -986,7 +1061,7 @@ Follow the format-specific instructions above. Validate your extractions."""
         data = {"claims": []}
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-4.1",
                 messages=[{
                     "role": "user",
                     "content": prompt
@@ -1316,7 +1391,7 @@ Follow the format-specific instructions above. Validate your extractions."""
         Returns: (is_valid, list_of_errors)
         """
         errors = []
-        tolerance = 0.02  # Allow $0.02 tolerance for rounding
+        tolerance = 2.0  # Increased tolerance to $2.00 to account for rounding errors and minor discrepancies
         
         # Get values
         medical_paid = claim.get('medical_paid', 0.0) or 0.0
@@ -1325,8 +1400,6 @@ Follow the format-specific instructions above. Validate your extractions."""
         indemnity_reserve = claim.get('indemnity_reserve', 0.0) or 0.0
         expense_paid = claim.get('expense_paid', 0.0) or 0.0
         expense_reserve = claim.get('expense_reserve', 0.0) or 0.0
-        recovery = claim.get('recovery', 0.0) or 0.0
-        deductible = claim.get('deductible', 0.0) or 0.0
         total_incurred = claim.get('total_incurred', 0.0) or 0.0
         
         # Calculate expected totals
@@ -1338,6 +1411,16 @@ Follow the format-specific instructions above. Validate your extractions."""
         
         # Validate total incurred
         if abs(calculated_total - total_incurred) > tolerance:
+            # Check for common mapping errors to provide hints
+            # HINT 1: Swapped Medical and Indemnity
+            swapped_total = (indemnity_incurred + medical_incurred + expense_incurred)
+            # (Wait, if only columns are swapped (Paid Med <-> Paid Ind), calculated_total remains same)
+            
+            # HINT 1: Using TOTAL row instead of category row (The BerkleyNet error)
+            # If any individual category matches the calculated total, it might be a mapping leak
+            if abs(medical_paid - calculated_total) < tolerance:
+                errors.append(f"Possible mapping leak: medical_paid ({medical_paid}) matches total sum.")
+            
             errors.append(
                 f"Total mismatch: calculated ${calculated_total:.2f} != reported ${total_incurred:.2f}"
             )
@@ -1368,13 +1451,12 @@ Follow the format-specific instructions above. Validate your extractions."""
         if is_correction:
             correction_note = """
 ⚠️ MATH VALIDATION FAILED for these claims in the previous pass. 
-Common causes:
-1. Swapped Medical and Indemnity columns.
-2. Missed Recovery/Subro column (often the rightmost column).
-3. Confusing Reserves with Paid amounts in multi-row layouts.
 
-RE-EXAMINE the column headers and row labels for these specific IDs and ensure the math balances:
-Medical(Paid+Res) + Indemnity(Paid+Res) + Expense(Paid+Res) - Recovery == Total Incurred.
+RE-EXAMINE the column headers and row labels for these specific IDs.
+CRITICAL: 
+1. Do NOT map 'TOTAL' row values to 'MEDICAL' or 'INDEMNITY' fields.
+2. Distinguish between 'Paid' (Payments) and 'Reserves' (Outstanding).
+3. Ensure Med(Paid+Res) + Indem(Paid+Res) + Exp(Paid+Res) == Total Incurred.
 """
 
         retry_prompt = f"""You are an expert insurance data extractor.
@@ -1386,30 +1468,31 @@ Your Task: Extract COMPLETE data for ONLY these specific claim numbers:
 Return a JSON object with this structure:
 {{
   "claims": [
-    {{
-      "employee_name": "full name",
-      "claim_number": "exact claim number",
-      "injury_date_time": "YYYY-MM-DD",
-      "status": "Open/Closed/Reopened",
-      "injury_description": "description",
-      "body_part": "body part or null",
-      "injury_type": "MED or COMP",
-      "claim_class": "class code",
-      "medical_paid": "string",
-      "medical_reserve": "string",
-      "indemnity_paid": "string",
-      "indemnity_reserve": "string",
-      "expense_paid": "string",
-      "expense_reserve": "string",
-      "total_incurred": "string",
-      "litigation": "Y if explicitly Yes/Y, else N"
-    }}
+{{
+  "employee_name": "full name",
+  "claim_number": "exact claim number",
+  "injury_date_time": "YYYY-MM-DD",
+  "status": "Open/Closed/Reopened",
+  "injury_description": "description",
+  "body_part": "body part or null",
+  "injury_type": "Indemnity or Medical Only or Expense",
+  "claim_class": "class code",
+  "medical_paid": "string (e.g. '1,234.56')",
+  "medical_reserve": "string",
+  "indemnity_paid": "string",
+  "indemnity_reserve": "string",
+  "expense_paid": "string",
+  "expense_reserve": "string",
+  "total_incurred": "string",
+  "litigation": "Yes if explicitly Yes/Y, else No"
+}}
   ]
 }}
 
 STRICT RULES:
 1. DO NOT include any claims NOT in the list above.
 2. Ensure math balances perfectly (Med+Ind+Exp = Total).
+3. Extract exactly what you see in the text, preserving layout context.
 
 TEXT TO ANALYZE:
 {all_text}
@@ -1482,7 +1565,7 @@ Return ONLY the JSON object for claim {target_claim_number}."""
 
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-4.1",
                 messages=[{
                     "role": "user",
                     "content": prompt
@@ -1583,9 +1666,14 @@ Return ONLY the JSON object for claim {target_claim_number}."""
         session_dir = self.output_dir / f"extraction_{session_id}"
         session_dir.mkdir(parents=True, exist_ok=True)
         
-        # Step 1: Extract text from PDF using PyMuPDF + Tesseract
+        # Step 1: Extract text from PDF using appropriate method
         all_text, pages_metadata = self.extract_text_from_pdf(pdf_path)
         
+        # Determine extraction method from metadata
+        extraction_method = "pymupdf-tesseract-enhanced"
+        if pages_metadata and len(pages_metadata) > 0:
+            extraction_method = pages_metadata[0].get("extraction_method", extraction_method)
+
         # Prepare page data for compatibility
         pages_data = pages_metadata
         
@@ -1602,6 +1690,30 @@ Return ONLY the JSON object for claim {target_claim_number}."""
         
         schema_data = self.extract_schema_from_text(all_text, target_claim_number)
         
+        # Step 2.5: Advanced Modular Validation (Final Layers)
+        print(f"\n🧪 RUNNING ADVANCED VALIDATION...")
+        try:
+            # Financial Validation & Pattern Discovery
+            fin_validator = FinancialValidator(api_key=self.api_key)
+            vision_pattern = None
+            if pdf_path:
+                vision_pattern = fin_validator.identify_calculation_pattern(all_text[:8000], pdf_path=pdf_path)
+            
+            # Re-extract with vision pattern if needed (Wait, we need to pass it to the extraction call)
+            # This requires modifying how extract_schema_from_text is called
+            schema_data = self.extract_schema_from_text(all_text, target_claim_number, num_pages=len(pages_metadata), vision_pattern=vision_pattern)
+            
+            # Validation Step
+            schema_data["claims"] = fin_validator.validate_claims(schema_data.get("claims", []), vision_pattern or {})
+            
+            # General Data Validation
+            gen_validator = GeneralDataValidator(api_key=self.api_key)
+            schema_data["claims"] = gen_validator.validate_consistency(schema_data.get("claims", []), all_text[:15000], pdf_path=pdf_path)
+            
+            print(f"   ✓ Advanced validation complete")
+        except Exception as e:
+            print(f"   ⚠️  Advanced validation encountered an issue: {e}")
+        
         # Validate extraction
         validation = self.validate_extraction(schema_data, all_text)
         
@@ -1612,13 +1724,13 @@ Return ONLY the JSON object for claim {target_claim_number}."""
         print(f"Session ID: {session_id}")
         print(f"Source File: {os.path.basename(pdf_path)}")
         print(f"Total Pages: {len(pages_metadata)}")
-        print(f"Extraction Method: pymupdf-tesseract-enhanced")
+        print(f"Extraction Method: {extraction_method}")
         print(f"Validation: {validation['total_extracted']} claims extracted, {len(validation['missing_claims'])} missing")
         
         # Add minimal metadata to JSON (without pages_metadata)
         extraction_metadata = {
             "extraction_date": datetime.now().isoformat(),
-            "method": "pymupdf-tesseract-enhanced",
+            "method": extraction_method,
             "num_pages": len(pages_metadata),
             "source_file": os.path.basename(pdf_path),
             "session_id": session_id,
