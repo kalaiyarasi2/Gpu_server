@@ -31,13 +31,25 @@ const AppHeader = () => {
           </div>
           <div className="hidden sm:block">
             <h1 className="text-2xl font-bold tracking-tight text-[hsl(var(--header-fg))] whitespace-nowrap">
-              <span className="text-black">D</span>ata <span className="text-black">R</span>etrieval <span className="text-black">I</span>ngestion <span className="text-black">V</span>erification <span className="text-black">E</span>ngine
+              Insurance Form Extractor
             </h1>
             <p className="text-sm text-[hsl(var(--header-fg))]/70">AI-Powered PDF Processing & Data Extraction</p>
           </div>
         </div>
 
         <div className="flex items-center gap-2 flex-shrink-0">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => window.open("/docs", "_blank")}
+            className="text-[hsl(var(--header-fg))]/70 hover:text-[hsl(var(--header-fg))] hover:bg-black/5 dark:hover:bg-white/10 transition-colors gap-2"
+          >
+            <FileText className="w-4 h-4" />
+            <span>Docs</span>
+          </Button>
+
+          <div className="h-6 w-[1px] bg-[hsl(var(--header-fg))]/10 mx-1" />
+
           <Button
             variant="ghost"
             size="icon"

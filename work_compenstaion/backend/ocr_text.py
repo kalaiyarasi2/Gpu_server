@@ -103,6 +103,17 @@ class OCRPDFExtractor:
                 if enhancements.get('edge_enhance', False):
                     image = image.filter(ImageFilter.EDGE_ENHANCE_MORE)
                 
+                # Morphological Cleaning (Removes small dots/noise)
+                if enhancements.get('morphology', False):
+                    import numpy as np
+                    import cv2
+                    img_np = np.array(image)
+                    kernel = np.ones((1, 1), np.uint8)
+                    img_np = cv2.dilate(img_np, kernel, iterations=1)
+                    img_np = cv2.erode(img_np, kernel, iterations=1)
+                    from PIL import Image
+                    image = Image.fromarray(img_np)
+
                 # Binarization with adaptive-like fixed threshold for forms
                 if enhancements.get('binarize', False):
                     threshold = enhancements.get('threshold', 200) # Lighter threshold to catch faint marks

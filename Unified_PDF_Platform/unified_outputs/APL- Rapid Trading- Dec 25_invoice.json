@@ -142,23 +142,5 @@
         "CURRENT_PREMIUM":61.34,
         "ADJUSTMENT_PREMIUM":null,
         "PRICING_ADJUSTMENT":null
-    },
-    {
-        "SOURCE_FILE":null,
-        "INV_DATE":null,
-        "INV_NUMBER":null,
-        "BILLING_PERIOD":null,
-        "LASTNAME":" ",
-        "FIRSTNAME":"INVOICE TOTAL",
-        "MIDDLENAME":null,
-        "SSN":null,
-        "POLICYID":null,
-        "MEMBERID":null,
-        "PLAN_NAME":"TOTAL",
-        "PLAN_TYPE":null,
-        "COVERAGE":null,
-        "CURRENT_PREMIUM":666.41,
-        "ADJUSTMENT_PREMIUM":null,
-        "PRICING_ADJUSTMENT":null
     }
 ]

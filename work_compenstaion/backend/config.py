@@ -28,8 +28,11 @@ class Config:
     OCR_PSM_MODE = 3  # Auto-layout without OSD - Better for forms
     OCR_ENGINE = 'deepseek'  # Options: 'deepseek', 'tesseract', 'auto'
     FALLBACK_OCR = True  # Use fallback OCR if primary fails
+    ENABLE_MORPHOLOGY_CLEANING = True  # Clean images to remove dots/noise before OCR
     
     # AI Model Settings
+    USE_VISION_EXTRACTION = False  # Set to True for direct image-based extraction (Higher Cost)
+    VISION_MODEL = "gpt-4o"  # Model for vision tasks
     USE_LOCAL_MODELS = False  # Set to True to run models locally
     HF_API_TOKEN = os.getenv('HF_API_TOKEN', '')
     

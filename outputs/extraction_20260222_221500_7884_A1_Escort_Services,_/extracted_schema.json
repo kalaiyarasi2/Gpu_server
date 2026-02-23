@@ -1,0 +1,109 @@
+{
+  "data": {
+    "demographics": {
+      "applicantName": "A ESCORT SERVICE LLC",
+      "businessDescription": "AUTO TRANSPORT",
+      "email": "CALEXANDER@A1ESCORTLLC.COM",
+      "fein": "29-7016548",
+      "mailingStreet": "120-4 bhopeton oc",
+      "mailingCity": "WILMINGTON",
+      "mailingState": "DE",
+      "mailingZip": "19801",
+      "officePhone": "410-633-1771",
+      "mobilePhone": "",
+      "website": "",
+      "yearsInBusiness": "",
+      "sicCode": "",
+      "naicsCode": "",
+      "proposedEffectiveDate": "06/29/2025",
+      "proposedExpirationDate": "06/29/2026",
+      "wcStates": "Maryland",
+      "agencyCustomerId": ""
+    },
+    "generalQuestions": {
+      "q1": "N",
+      "q2": "N",
+      "q3": "N",
+      "q4": "N",
+      "q5": "N",
+      "q6": "N",
+      "q7": "N",
+      "q8": "N",
+      "q9": "N",
+      "q10": "N",
+      "q11": "N",
+      "q12": "N",
+      "q13": "N",
+      "q14": "N",
+      "q15": "N",
+      "q16": "N",
+      "q17": "N",
+      "q18": "N",
+      "q19": "N",
+      "q20": "N",
+      "q21": "N",
+      "q22": "N",
+      "q23": "N",
+      "q24": "N"
+    },
+    "priorCarriers": [
+      {
+        "year": 2022,
+        "carrierName": "Trove",
+        "policyNumber": "600400000",
+        "experienceMod": 0.0,
+        "annualPremium": 27591.0,
+        "numberOfClaims": 0.0,
+        "amountPaid": 0.0,
+        "reserveAmount": 0.0
+      },
+      {
+        "year": 2023,
+        "carrierName": "Fo",
+        "policyNumber": "800400007",
+        "experienceMod": 0.0,
+        "annualPremium": 13903.0,
+        "numberOfClaims": 0.0,
+        "amountPaid": 138307.0,
+        "reserveAmount": 0.0
+      }
+    ],
+    "ratingByState": [
+      {
+        "state": "Maryland",
+        "classCode": 8801,
+        "fullTimeEmployees": 0.0,
+        "partTimeEmployees": 0.0,
+        "estAnnualPayroll": 546079.0,
+        "ratePer100Payroll": 0.0,
+        "estAnnualPremium": 125558.0
+      }
+    ],
+    "individuals": [
+      {
+        "name": "CHERISE",
+        "title": "OWNER",
+        "ownershipPercentage": 0.0,
+        "included": "Y"
+      },
+      {
+        "name": "DONOVAN TAYLOR",
+        "title": "Officer",
+        "ownershipPercentage": 0.0,
+        "included": "Y"
+      },
+      {
+        "name": "GARRET TAYLOR",
+        "title": "Officer",
+        "ownershipPercentage": 0.0,
+        "included": "Y"
+      }
+    ],
+    "premiumCalculation": {
+      "totalEstimatedAnnualPremium": 125558.0,
+      "experienceModification": 0.0,
+      "minimumPremium": 744.0,
+      "depositPremium": 0.0
+    }
+  }
+}
