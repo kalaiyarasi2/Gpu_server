@@ -265,7 +265,11 @@ def process_with_structural_layer(pdf_path, output_excel=None):
         
         # FIXED: Keep all rows - each benefit type should be a separate row
         # unless it is the specialized "TOTAL" row
-        df['is_total'] = df['PLAN_NAME'].str.upper().fillna('') == 'TOTAL'
+        df['is_total'] = df['PLAN_NAME'].str.upper().fillna('').str.contains('TOTAL') | \
+                         ((df['FIRSTNAME'].isna() | (df['FIRSTNAME'] == '')) & \
+                          (df['LASTNAME'].isna() | (df['LASTNAME'] == '')) & \
+                          df['CURRENT_PREMIUM'].notna())
+        
         df = df[(df[['LASTNAME', 'FIRSTNAME']].notna().any(axis=1)) | (df['is_total'])]
         df = df.drop(columns=['is_total'])
         

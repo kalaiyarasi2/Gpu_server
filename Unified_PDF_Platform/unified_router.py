@@ -1483,7 +1483,7 @@ OUTPUT:"""
             # Filter out the consolidated 'TOTAL' row so the UI doesn't double-sum.
             # Since we now clear identity labels in the total row, we filter by rows 
             # that have a premium but NO identifying info (Name, Plan, or ID).
-            identity_cols = ['PLAN_NAME', 'FIRSTNAME', 'LASTNAME', 'MEMBERID']
+            identity_cols = ['PLAN_NAME', 'FIRSTNAME', 'LASTNAME', 'MEMBERID', 'SSN', 'POLICYID']
             existing_cols = [c for c in identity_cols if c in df.columns]
             
             if existing_cols:
@@ -1491,16 +1491,19 @@ OUTPUT:"""
                 def is_summary_row(row):
                     # 1. Check for 'TOTAL' keyword in any identity column
                     for col in existing_cols:
-                        val = str(row[col]).upper()
-                        if "TOTAL" in val or "GRAND TOTAL" in val or "SUMMARY" in val:
+                        val = str(row.get(col, '')).upper()
+                        if any(kw in val for kw in ["TOTAL", "SUMMARY", "SUBTOTAL", "BALANCE DUE"]):
                             return True
                     
                     # 2. Check for empty/None identity columns with a premium value
+                    # A true member row MUST have at least a First Name or a Plan Name
+                    # (In some cases only last name exists, so we check that too)
                     has_first = str(row.get('FIRSTNAME', '')).lower() not in ['none', '', 'nan']
+                    has_last = str(row.get('LASTNAME', '')).lower() not in ['none', '', 'nan']
                     has_plan = str(row.get('PLAN_NAME', '')).lower() not in ['none', '', 'nan']
                     
-                    # If it has a premium but NO FIRSTNAME and NO PLAN_NAME, it's likely a summary row (entity name)
-                    return (not has_first and not has_plan) and pd.notna(row['CURRENT_PREMIUM'])
+                    # If it has a premium but NO FIRSTNAME/LASTNAME and NO PLAN_NAME, it's a summary row
+                    return (not has_first and not has_last and not has_plan) and pd.notna(row.get('CURRENT_PREMIUM'))
 
                 is_total_row = df.apply(is_summary_row, axis=1)
                 df = df[~is_total_row]

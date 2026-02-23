@@ -1075,12 +1075,25 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                 # 3. Try Name-Only Match (ULTRA-LOOSE) if one side is a "shell" record (missing identifiers)
                 if match_index is None and not is_weak_name:
                     # Check if we have an existing record with the SAME name
-                    name_key = f"{fname}|{lname}"
                     matched_by_name_idx = None
                     for idx, ex in enumerate(merged_items):
                         ex_fname = str(ex.get("FIRSTNAME") or "").strip().lower()
                         ex_lname = str(ex.get("LASTNAME") or "").strip().lower()
-                        if ex_fname == fname and ex_lname == lname:
+                        
+                        # [ENHANCEMENT] Handle middle initials in first name (e.g. "John" vs "John A")
+                        f1, f2 = fname, ex_fname
+                        l1, l2 = lname, ex_lname
+                        
+                        name_match = False
+                        if l1 == l2:
+                            # Direct first name match
+                            if f1 == f2:
+                                name_match = True
+                            # One First Name starts with the other First Name (handles initials)
+                            elif (len(f1) > 1 and len(f2) > 1) and (f1.startswith(f2) or f2.startswith(f1)):
+                                name_match = True
+                        
+                        if name_match:
                             ex_id = str(ex.get("MEMBERID") or "").strip().lower()
                             ex_ssn = str(ex.get("SSN") or "").strip().lower()
                             
@@ -1185,7 +1198,7 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                 if is_total:
                     # Clear text labels for the final Excel output (leave only the amount)
                     fields_to_clear = [
-                        "PLAN_NAME", "FIRSTNAME", "LASTNAME", "MEMBERID", "SSN", 
+                        "FIRSTNAME", "LASTNAME", "MEMBERID", "SSN", 
                         "PLAN_TYPE", "COVERAGE", "MIDDLENAME", "POLICYID",
                         "SOURCE_FILE", "INV_DATE", "INV_NUMBER", "BILLING_PERIOD"
                     ]
@@ -1196,21 +1209,44 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                 else:
                     member_rows.append(row)
             
-            # PHASE 2: Reassemble with total rows at the bottom
-            # [V3][REFINEMENT] If no total row exists OR none have a premium, add a calculated one
-            has_valid_total = any(to_float(tr.get("CURRENT_PREMIUM")) > 0 for tr in total_rows)
-            if not total_rows or not has_valid_total:
-                print(f"    [V3][INFO] No valid total row found in extraction. Calculating manual total...")
-                calc_total = sum(to_float(mr.get("CURRENT_PREMIUM")) for mr in member_rows)
-                if calc_total > 0:
-                    manual_total = {field: None for field in REQUIRED_FIELDS}
-                    manual_total["CURRENT_PREMIUM"] = calc_total
-                    # Use a marker that our router respects to hide it from UI but keep in Excel
-                    # Actually, we'll just keep it clean.
-                    total_rows.append(manual_total)
-                    print(f"    [V3][INFO] Added calculated total: ${calc_total:,.2f}")
+            # PHASE 2: Produce exactly ONE authoritative GRAND TOTAL row.
+            # Strategy:
+            #   1. Look for the *single* extracted TOTAL/GRAND TOTAL row that matches the
+            #      calculated member-row sum.  If found, use its value (it came from the PDF).
+            #   2. If no match, pick the LAST extracted total row as the best candidate.
+            #   3. Otherwise fall back to the calculated sum.
+            # In all cases, ALL intermediate total rows are discarded and replaced by a single
+            # clean row labelled "GRAND TOTAL".
 
-            rows = member_rows + total_rows
+            calc_total = sum(to_float(mr.get("CURRENT_PREMIUM")) for mr in member_rows)
+
+            authoritative_total: float = 0.0
+
+            # 1. Find an extracted row whose value matches the calculated sum exactly
+            matched_row = None
+            for tr in total_rows:
+                if abs(to_float(tr.get("CURRENT_PREMIUM")) - calc_total) < 0.1:
+                    matched_row = tr
+                    break
+
+            if matched_row is not None:
+                authoritative_total = to_float(matched_row.get("CURRENT_PREMIUM"))
+                print(f"    [V3][INFO] Using extracted total that matches calc sum: ${authoritative_total:,.2f}")
+            elif total_rows:
+                # 2. Use last extracted total row (closest to the end of the document)
+                authoritative_total = to_float(total_rows[-1].get("CURRENT_PREMIUM"))
+                print(f"    [V3][INFO] No exact match — using last extracted total: ${authoritative_total:,.2f}")
+            else:
+                # 3. Pure calculation fallback
+                authoritative_total = calc_total
+                print(f"    [V3][INFO] No extracted total — using calculated total: ${authoritative_total:,.2f}")
+
+            # Build a single clean GRAND TOTAL row (discard ALL intermediate total_rows)
+            grand_total_row = {field: None for field in REQUIRED_FIELDS}
+            grand_total_row["CURRENT_PREMIUM"] = authoritative_total
+            grand_total_row["PLAN_NAME"] = "GRAND TOTAL"
+
+            rows = member_rows + [grand_total_row]
                 
     else:
         # Fallback for legacy/error case
