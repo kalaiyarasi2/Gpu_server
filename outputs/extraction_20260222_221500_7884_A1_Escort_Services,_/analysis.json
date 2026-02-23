@@ -1,0 +1,13 @@
+{
+  "extraction_metadata": {
+    "extraction_date": "2026-02-22T22:15:38.427395",
+    "method": "pymupdf-tesseract-enhanced",
+    "num_pages": 4,
+    "source_file": "A1 Escort Services, LLC - Acord.pdf",
+    "session_id": "20260222_221500_7884_A1_Escort_Services,_",
+    "target_claim": null
+  },
+  "applicant_name": "A ESCORT SERVICE LLC",
+  "has_rating": true,
+  "has_prior_carriers": true
+}

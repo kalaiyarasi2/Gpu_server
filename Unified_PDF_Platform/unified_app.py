@@ -1,10 +1,13 @@
 import os
 import shutil
 import logging
+import zipfile
+import tempfile
 from typing import List, Dict
 from pathlib import Path
 from fastapi import FastAPI, File, UploadFile, HTTPException, Request
-from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, RedirectResponse
+from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
@@ -27,7 +30,13 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 # Load environment variables from parent directory
 load_dotenv(BASE_DIR.parent / ".env")
 
-app = FastAPI(title="Data Retrieval Ingestion Verification Engine")
+app = FastAPI(
+    title="Cognethro",
+    description="Unified API for Insurance Document Extraction",
+    version="1.0.0",
+    docs_url=None,  # Override for custom download buttons logic
+    redoc_url="/redoc"
+)
 router_engine = UnifiedRouter()
 
 # File path cache: maps filename -> full absolute path
@@ -53,8 +62,7 @@ else:
     print(f"⚠️ Warning: Frontend dist folder not found at {frontend_dist_path}. Run build first.")
 
 
-@app.post("/api/extract")
-async def extract_document(file: UploadFile = File(...)):
+async def _perform_extraction(file: UploadFile, request: Request):
     print(f"\n[Unified][API] Received request for: {file.filename}")
     
     file_ext = Path(file.filename).suffix.lower()
@@ -92,13 +100,16 @@ async def extract_document(file: UploadFile = File(...)):
         # Transform response to match frontend expectations
         doc_type = result.get("type", "UNKNOWN")
         
-        # Build base response
+        # Build base URL for downloads
+        base_url = str(request.base_url).rstrip("/")
+        
+        # Build base response with clickable URLs
         response = {
             "type": doc_type,
             "output_file": excel_filename,
             "output_json": json_filename,
-            "excel": excel_path,
-            "json": json_path
+            "excel": f"{base_url}/api/download/{excel_filename}" if excel_filename else None,
+            "json": f"{base_url}/api/download/{json_filename}" if json_filename else None
         }
         
         # Add Work Compensation specific metadata
@@ -150,7 +161,114 @@ async def extract_document(file: UploadFile = File(...)):
         print(f"[Unified][ERROR] {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/api/download/{filepath:path}")
+@app.post("/api/extract", include_in_schema=False)
+async def extract_document(request: Request, file: UploadFile = File(...)):
+    return await _perform_extraction(file, request)
+
+@app.get("/docs", include_in_schema=False)
+async def custom_swagger_ui_html():
+    response = get_swagger_ui_html(
+        openapi_url="/openapi.json",
+        title="Cognethro - Standard Swagger",
+        swagger_js_url="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js",
+        swagger_css_url="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css"
+    )
+    
+    # Manually inject our custom JS for download buttons
+    custom_js = """
+    <script>
+    window.addEventListener('load', function() {
+        const observer = new MutationObserver(() => {
+            const results = document.querySelectorAll('.response .microlight');
+            results.forEach((node) => {
+                const text = node.textContent;
+                if (text.includes('"excel": "http') && !node.parentElement.querySelector('.cognethro-dl-btns')) {
+                    try {
+                        const data = JSON.parse(text);
+                        const btnContainer = document.createElement('div');
+                        btnContainer.className = 'cognethro-dl-btns';
+                        btnContainer.style = 'margin-top: 15px; display: flex; gap: 10px; padding: 10px; background: #222; border-radius: 4px; border: 1px solid #444;';
+                        
+                        if (data.excel) {
+                            const exBtn = document.createElement('a');
+                            exBtn.href = data.excel;
+                            exBtn.textContent = '📊 Download Excel';
+                            exBtn.style = 'background: #052e16; color: #4ade80; border: 1px solid #166534; padding: 10px 16px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 13px;';
+                            exBtn.download = data.output_file || 'result.xlsx';
+                            btnContainer.appendChild(exBtn);
+                        }
+                        
+                        if (data.json) {
+                            const jsBtn = document.createElement('a');
+                            jsBtn.href = data.json;
+                            jsBtn.textContent = '{ } Download JSON';
+                            jsBtn.style = 'background: #0c1a33; color: #93c5fd; border: 1px solid #1e40af; padding: 10px 16px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 13px;';
+                            jsBtn.download = data.output_json || 'result.json';
+                            btnContainer.appendChild(jsBtn);
+                        }
+                        
+                        node.parentElement.appendChild(btnContainer);
+                    } catch (e) {}
+                }
+            });
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+    });
+    </script>
+    """
+    
+    html_content = response.body.decode("utf-8")
+    new_html = html_content.replace("</body>", f"{custom_js}</body>")
+    return HTMLResponse(content=new_html, status_code=response.status_code)
+
+# Injecting the custom Script via a separate HTML header middleware if needed, 
+# or just keeping it simple for now to get it working.
+
+@app.get("/cognethro", include_in_schema=False)
+async def cognethro_trigger_docs():
+    """Redirect human visitors from the trigger point to the 'Real' standard Swagger documentation."""
+    return RedirectResponse(url="/docs")
+
+@app.post("/cognethro",
+    summary="Cognethro Trigger Point — Extract Document",
+    description="""
+The **Cognethro Trigger Point**.
+
+- **Browser**: Visit `GET /cognethro` to open the interactive Swagger UI.
+- **API/curl**: `POST /cognethro` with a `file` field to extract and get download URLs.
+- **Direct Download**: Add `download=true` to your POST request to get a ZIP file containing both Excel and JSON directly as a single download.
+""")
+async def cognethro_trigger(request: Request, file: UploadFile = File(...), download: bool = False):
+    result = await _perform_extraction(file, request)
+    if isinstance(result, dict):
+        result["trigger_point"] = "cognethro"
+        
+        # If direct download is requested, create a ZIP and return it
+        if download and "error" not in result:
+            excel_filename = result.get("output_file")
+            json_filename = result.get("output_json")
+            
+            excel_path = file_path_cache.get(excel_filename)
+            json_path = file_path_cache.get(json_filename)
+            
+            if excel_path and json_path:
+                zip_filename = f"{Path(file.filename).stem}_extracted.zip"
+                zip_path = Path(tempfile.gettempdir()) / zip_filename
+                
+                with zipfile.ZipFile(zip_path, 'w') as zipf:
+                    zipf.write(excel_path, excel_filename)
+                    zipf.write(json_path, json_filename)
+                
+                print(f"[Unified][API] Returning ZIP download for {file.filename}")
+                return FileResponse(
+                    path=zip_path,
+                    filename=zip_filename,
+                    media_type="application/zip"
+                )
+    
+    return result
+
+@app.get("/api/download/{filepath:path}", include_in_schema=False)
 async def download_file(filepath: str):
     """Download endpoint that handles both absolute and relative paths."""
     print(f"[Download] Requested file: {filepath}")
@@ -276,6 +394,11 @@ async def serve_frontend(request: Request, path: str = ""):
 
 if __name__ == "__main__":
     import uvicorn
+    # Diagnostic: Print all registered routes
+    print("\n[Diagnostic] Registered Routes:")
+    for route in app.routes:
+        methods = getattr(route, "methods", "N/A")
+        print(f" - {route.path} [{methods}]")
     print("\n" + "="*50)
     print("UNIFIED INTELLIGENT ROUTER STARTING")
     print("Access the UI at: http://localhost:8007")

@@ -1481,8 +1481,8 @@ OUTPUT:"""
             df = pd.read_excel(xlsx_path)
             
             # Filter out the consolidated 'TOTAL' row so the UI doesn't double-sum.
-            # Since we now clear identity labels in the total row, we filter by rows 
-            # that have a premium but NO identifying info (Name, Plan, or ID).
+            # Only apply this filter when standard member identity columns exist.
+            # Invoices like Anthem use different columns and should NOT be filtered.
             identity_cols = ['PLAN_NAME', 'FIRSTNAME', 'LASTNAME', 'MEMBERID', 'SSN', 'POLICYID']
             existing_cols = [c for c in identity_cols if c in df.columns]
             
@@ -1507,9 +1507,17 @@ OUTPUT:"""
 
                 is_total_row = df.apply(is_summary_row, axis=1)
                 df = df[~is_total_row]
+                filtered = is_total_row.sum()
+                if filtered > 0:
+                    print(f"[Router] Filtered {filtered} summary/total row(s) from JSON output.")
+            else:
+                # No standard identity columns — this is a non-member invoice (e.g. Anthem group invoice)
+                # Export all rows as-is without filtering
+                print(f"[Router] No identity columns found — exporting all {len(df)} rows to JSON without filtering.")
                 
             json_path = xlsx_path.with_suffix(".json")
             df.to_json(json_path, orient="records", indent=4)
+            print(f"[Router] JSON written: {json_path.name} ({len(df)} rows)")
             return str(json_path)
         except Exception as e:
             print(f"[Router] Excel to JSON conversion failed: {e}")
