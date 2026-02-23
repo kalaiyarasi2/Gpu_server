@@ -1,17 +1,36 @@
-import { Download, FileJson, BarChart3, Building2, RotateCcw, HardHat, FileText, Table as TableIcon } from "lucide-react";
+import { useState } from "react";
+import { Download, FileJson, BarChart3, Building2, RotateCcw, HardHat, FileText, Table as TableIcon, Loader2, Brain, Copy, Merge } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { DocumentFile } from "@/types/extractor";
 import JsonViewer from "./JsonViewer";
 import TableView from "./TableView";
+import { toast } from "sonner";
 
 interface ResultsPanelProps {
   document: DocumentFile | null;
   onReprocess?: (id: string) => void;
+  mergedSummary?: string | null;
+  isMerging?: boolean;
+  onTriggerMergeAnalysis?: () => void;
+  onDownloadMergedJson?: () => void;
+  onDownloadMergedCsv?: () => void;
+  hasMultipleDocs?: boolean;
 }
 
-const ResultsPanel = ({ document, onReprocess }: ResultsPanelProps) => {
-  // ... (previous guard clauses remain same)
+const ResultsPanel = ({
+  document,
+  onReprocess,
+  mergedSummary,
+  isMerging,
+  onTriggerMergeAnalysis,
+  onDownloadMergedJson,
+  onDownloadMergedCsv,
+  hasMultipleDocs
+}: ResultsPanelProps) => {
+  const [summaryText, setSummaryText] = useState<string | null>(null);
+  const [isSummarizing, setIsSummarizing] = useState(false);
+
   if (!document) {
     return (
       <div className="flex flex-col items-center justify-center h-64 text-muted-foreground gap-3">
@@ -22,7 +41,6 @@ const ResultsPanel = ({ document, onReprocess }: ResultsPanelProps) => {
   }
 
   if (document.stage === "error") {
-    // ... (retry button logic)
     return (
       <div className="p-6 bg-destructive/5 rounded-lg border border-destructive/20 flex flex-col gap-4">
         <div>
@@ -60,12 +78,26 @@ const ResultsPanel = ({ document, onReprocess }: ResultsPanelProps) => {
   const docType = metadata?.documentType;
   const isWorkComp = docType === "WORK_COMPENSATION";
   const isInvoice = docType === "INVOICE";
+  const isLossRun = docType === "INSURANCE_CLAIMS";
   const wcMeta = metadata?.work_comp_metadata;
 
   // Normalized data for table view
-  const tableData = metadata?.documentType === "INSURANCE"
-    ? (Array.isArray(result?.claims) ? result.claims : [])
-    : (Array.isArray(result) ? result : []);
+  const getTableData = () => {
+    if (isLossRun || docType === "INSURANCE") {
+      return Array.isArray(result?.claims) ? result.claims : (Array.isArray(result) ? result : []);
+    }
+    if (isWorkComp) {
+      // For Worker Comp, we usually want to show the Rating table as the primary grid
+      const wcData = result?.data || {};
+      return Array.isArray(wcData.ratingByState) ? wcData.ratingByState : [];
+    }
+    if (isInvoice) {
+      return Array.isArray(result) ? result : [];
+    }
+    return Array.isArray(result) ? result : [];
+  };
+
+  const tableData = getTableData();
 
   const handleDownloadJson = () => {
     const blob = new Blob([JSON.stringify(result, null, 2)], { type: "application/json" });
@@ -97,6 +129,74 @@ const ResultsPanel = ({ document, onReprocess }: ResultsPanelProps) => {
     } catch (error) {
       console.error("Excel download error:", error);
     }
+  };
+
+  const handleAnalyze = async () => {
+    const claims = Array.isArray(result?.claims) ? result.claims : Array.isArray(result) ? result : [];
+    if (claims.length === 0) {
+      toast.error("No claims data found to analyze");
+      return;
+    }
+
+    setIsSummarizing(true);
+    setSummaryText(null);
+    try {
+      const response = await fetch("/api/claim-summary", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ claims }),
+      });
+
+      const data = await response.json();
+      if (data.success && data.summary) {
+        setSummaryText(data.summary);
+        toast.success("AI Summary generated!");
+      } else {
+        toast.error("Failed to generate summary: " + (data.error || "Unknown error"));
+      }
+    } catch (error) {
+      console.error("Error generating summary:", error);
+      toast.error("Error connecting to summary service");
+    } finally {
+      setIsSummarizing(false);
+    }
+  };
+
+  const handleCopySummary = () => {
+    if (summaryText) {
+      navigator.clipboard.writeText(summaryText);
+      toast.success("Summary copied to clipboard");
+    }
+  };
+
+  const parseBold = (text: string) => {
+    const parts = text.split(/(\*\*.*?\*\*)/g);
+    return parts.map((part, i) => {
+      if (part.startsWith("**") && part.endsWith("**")) {
+        return <strong key={i} className="font-bold text-foreground">{part.slice(2, -2)}</strong>;
+      }
+      return part;
+    });
+  };
+
+  const renderMarkdown = (text: string) => {
+    const lines = text.split("\n");
+    return lines.map((line, index) => {
+      const trimmedLine = line.trim();
+      if (!trimmedLine) return <div key={index} className="h-2" />;
+      if (trimmedLine.startsWith("### ")) return <h3 key={index} className="text-sm font-bold mt-4 mb-2 text-primary">{trimmedLine.slice(4)}</h3>;
+      if (trimmedLine.startsWith("## ")) return <h2 key={index} className="text-base font-bold mt-5 mb-3 text-primary border-b border-border pb-1">{trimmedLine.slice(3)}</h2>;
+      if (trimmedLine.startsWith("# ")) return <h1 key={index} className="text-lg font-bold mt-6 mb-4 text-primary">{trimmedLine.slice(2)}</h1>;
+      if (trimmedLine.startsWith("- ") || trimmedLine.startsWith("* ")) {
+        return (
+          <div key={index} className="flex gap-2 ml-2 my-1">
+            <span className="text-primary mt-1.5">•</span>
+            <span>{parseBold(trimmedLine.slice(2))}</span>
+          </div>
+        );
+      }
+      return <p key={index} className="my-1">{parseBold(line)}</p>;
+    });
   };
 
   return (
@@ -160,7 +260,6 @@ const ResultsPanel = ({ document, onReprocess }: ResultsPanelProps) => {
         </div>
       )}
 
-
       {/* WC States badge row for Work Comp */}
       {isWorkComp && wcMeta?.wc_states && wcMeta.wc_states.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
@@ -196,7 +295,9 @@ const ResultsPanel = ({ document, onReprocess }: ResultsPanelProps) => {
 
       {/* View Switcher */}
       <Tabs defaultValue="table" className="w-full">
-        <TabsList className="grid w-[400px] grid-cols-2 mb-2">
+        <TabsList className={`grid mb-2 ${(isLossRun && hasMultipleDocs) ? "w-[750px] grid-cols-4" :
+          isLossRun ? "w-[600px] grid-cols-3" : "w-[400px] grid-cols-2"
+          }`}>
           <TabsTrigger value="table" className="text-xs flex items-center gap-2 font-semibold tracking-wide">
             <TableIcon className="w-3.5 h-3.5" />
             TABLE VIEW
@@ -205,13 +306,171 @@ const ResultsPanel = ({ document, onReprocess }: ResultsPanelProps) => {
             <FileJson className="w-3.5 h-3.5" />
             JSON VIEW
           </TabsTrigger>
+          {isLossRun && (
+            <TabsTrigger value="summary" className="text-xs flex items-center gap-2 font-semibold tracking-wide">
+              <Brain className="w-3.5 h-3.5" />
+              AI SUMMARY
+            </TabsTrigger>
+          )}
+          {hasMultipleDocs && (
+            <TabsTrigger value="merge" className="text-xs flex items-center gap-2 font-semibold tracking-wide">
+              <Merge className="w-3.5 h-3.5" />
+              MERGE SUMMARY
+            </TabsTrigger>
+          )}
         </TabsList>
+
         <TabsContent value="table" className="mt-0">
           <TableView data={tableData} title="Extracted Data Grid" maxHeight="450px" />
         </TabsContent>
+
         <TabsContent value="json" className="mt-0">
           <JsonViewer data={result} title="Raw Extraction Data" maxHeight="450px" />
         </TabsContent>
+
+        {isLossRun && (
+          <TabsContent value="summary" className="mt-0">
+            <div className="rounded-lg border border-border bg-muted/20 min-h-[200px] p-5">
+              {!summaryText && !isSummarizing && (
+                <div className="flex flex-col items-center justify-center gap-4 py-10">
+                  <div className="p-3 rounded-full bg-primary/10">
+                    <Brain className="w-8 h-8 text-primary" />
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm font-semibold text-foreground mb-1">AI Claims Analysis</p>
+                    <p className="text-xs text-muted-foreground">Click Analyze to generate an AI-powered summary of the claims data</p>
+                  </div>
+                  <Button
+                    onClick={handleAnalyze}
+                    className="bg-primary hover:bg-primary/90 text-primary-foreground"
+                  >
+                    <Brain className="w-4 h-4 mr-2" />
+                    Analyze
+                  </Button>
+                </div>
+              )}
+
+              {isSummarizing && (
+                <div className="flex flex-col items-center justify-center gap-4 py-10">
+                  <Loader2 className="w-8 h-8 text-primary animate-spin" />
+                  <p className="text-sm text-muted-foreground">Generating AI summary...</p>
+                </div>
+              )}
+
+              {summaryText && !isSummarizing && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold text-primary uppercase tracking-wide flex items-center gap-1.5">
+                      <Brain className="w-3.5 h-3.5" />
+                      AI Claims Analysis Summary
+                    </p>
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" className="text-xs h-7" onClick={handleCopySummary}>
+                        <Copy className="w-3 h-3 mr-1.5" />
+                        Copy
+                      </Button>
+                      <Button variant="ghost" size="sm" className="text-xs h-7 text-muted-foreground" onClick={handleAnalyze}>
+                        <RotateCcw className="w-3 h-3 mr-1.5" />
+                        Re-analyze
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="font-sans text-sm text-foreground/90 leading-relaxed bg-card p-4 rounded-lg border border-border/50 max-h-[400px] overflow-y-auto">
+                    {renderMarkdown(summaryText)}
+                  </div>
+                  <p className="text-[10px] text-muted-foreground italic">
+                    * Generated by AI based on extracted claims data. Please verify financial totals.
+                  </p>
+                </div>
+              )}
+            </div>
+          </TabsContent>
+        )}
+
+        {hasMultipleDocs && (
+          <TabsContent value="merge" className="mt-0">
+            <div className="rounded-lg border border-border bg-muted/20 min-h-[200px] p-5">
+              <div className="flex flex-col gap-6">
+                {/* Global Merge Actions */}
+                <div className="flex flex-col gap-3">
+                  <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Multi-Document Actions</p>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      onClick={onDownloadMergedJson}
+                      className="bg-stage-done hover:bg-stage-done/90 text-primary-foreground flex-1"
+                    >
+                      <Merge className="w-4 h-4 mr-2" />
+                      Merge JSON
+                      <Download className="w-4 h-4 ml-2" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={onDownloadMergedCsv}
+                      className="border-stage-done text-stage-done hover:bg-stage-done/5 flex-1"
+                    >
+                      <Download className="w-4 h-4 mr-2" />
+                      Merge CSV
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="h-px bg-border" />
+
+                {/* Merged Analysis Section */}
+                {!mergedSummary && !isMerging && (
+                  <div className="flex flex-col items-center justify-center gap-4 py-6">
+                    <div className="p-3 rounded-full bg-primary/10">
+                      <Brain className="w-8 h-8 text-primary" />
+                    </div>
+                    <div className="text-center">
+                      <p className="text-sm font-semibold text-foreground mb-1">Merged AI Analysis</p>
+                      <p className="text-xs text-muted-foreground">Analyze all successfully processed documents together</p>
+                    </div>
+                    <Button
+                      onClick={onTriggerMergeAnalysis}
+                      className="bg-primary hover:bg-primary/90 text-primary-foreground"
+                    >
+                      <Brain className="w-4 h-4 mr-2" />
+                      Run Merged Analysis
+                    </Button>
+                  </div>
+                )}
+
+                {isMerging && (
+                  <div className="flex flex-col items-center justify-center gap-4 py-10">
+                    <Loader2 className="w-8 h-8 text-primary animate-spin" />
+                    <p className="text-sm text-muted-foreground">Generating merged AI summary...</p>
+                  </div>
+                )}
+
+                {mergedSummary && !isMerging && (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-semibold text-primary uppercase tracking-wide flex items-center gap-1.5">
+                        <Brain className="w-3.5 h-3.5" />
+                        Comprehensive Merged Analysis
+                      </p>
+                      <div className="flex gap-2">
+                        <Button variant="ghost" size="sm" className="text-xs h-7 text-muted-foreground" onClick={onTriggerMergeAnalysis}>
+                          <RotateCcw className="w-3 h-3 mr-1.5" />
+                          Re-analyze
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="font-sans text-sm text-foreground/90 leading-relaxed bg-card p-4 rounded-lg border border-border/50 max-h-[400px] overflow-y-auto">
+                      {renderMarkdown(mergedSummary)}
+                    </div>
+                    <p className="text-[10px] text-muted-foreground italic">
+                      * Consolidated analysis of all uploaded documents.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );

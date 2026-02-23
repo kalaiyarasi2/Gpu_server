@@ -1,23 +1,124 @@
+import { useState, useCallback } from "react";
 import AppHeader from "@/components/AppHeader";
 import UploadArea from "@/components/UploadArea";
 import DocumentQueue from "@/components/DocumentQueue";
 import ResultsPanel from "@/components/ResultsPanel";
 import MergeJsonButton from "@/components/MergeJsonButton";
-import ProcessingStages from "@/components/ProcessingStages";
 import ClaimSummary from "@/components/ClaimSummary";
+import ProcessingStages from "@/components/ProcessingStages";
 import { useDocumentProcessor } from "@/hooks/useDocumentProcessor";
 import { FileText } from "lucide-react";
-import { useState } from "react";
+import { toast } from "sonner";
 
 const Index = () => {
   const { documents, activeDocId, selectedDoc, addFiles, setActiveDocId, reprocessDocument } =
     useDocumentProcessor();
-  const [activeSummary, setActiveSummary] = useState<string | null>(null);
+  const [mergedSummary, setMergedSummary] = useState<string | null>(null);
+  const [isMerging, setIsMerging] = useState(false);
+
+  const getMergeCategory = (type?: string) => {
+    if (!type) return "UNKNOWN";
+    if (type === "INSURANCE" || type === "INSURANCE_CLAIMS") return "INSURANCE";
+    if (type === "WORK_COMPENSATION") return "WORK_COMPENSATION";
+    if (type === "INVOICE") return "INVOICE";
+    return type;
+  };
+
+  const completedDocs = documents.filter((d) => d.stage === "complete" && d.result);
+
+  // Smarter merge logic: check if there are multiple docs of the SAME category as the selected one
+  const selectedCategory = getMergeCategory(selectedDoc?.metadata?.documentType);
+  const docsInSameCategory = completedDocs.filter(d => getMergeCategory(d.metadata?.documentType) === selectedCategory);
+
+  const isMergeable = docsInSameCategory.length >= 2;
+  const hasMultipleDocs = completedDocs.length >= 2;
+  const sharedType = isMergeable ? selectedCategory : null;
+
+  const getAllClaims = useCallback(() => {
+    return docsInSameCategory.flatMap((d) => {
+      const result = d.result;
+      const metadata = d.metadata;
+      const category = getMergeCategory(metadata?.documentType);
+
+      if (category === "WORK_COMPENSATION") {
+        const wcData = (result as any)?.data || {};
+        return wcData.ratingByState || [];
+      }
+
+      if (category === "INSURANCE") {
+        return (result as any)?.claims || [];
+      }
+      return Array.isArray(result) ? result : [];
+    });
+  }, [docsInSameCategory]);
+
+  const handleDownloadMergedJson = useCallback(() => {
+    const claims = getAllClaims();
+    const blob = new Blob([JSON.stringify(claims, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `merged_claims_${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [getAllClaims]);
+
+  const handleDownloadMergedCsv = useCallback(() => {
+    const claims = getAllClaims();
+    if (claims.length === 0) return;
+
+    const headers = Array.from(new Set(claims.flatMap(c => Object.keys(c))));
+    const csvRows = [
+      headers.join(','),
+      ...claims.map(row =>
+        headers.map(header => {
+          const val = row[header];
+          const escaped = ('' + (val ?? '')).replace(/"/g, '""');
+          return `"${escaped}"`;
+        }).join(',')
+      )
+    ];
+
+    const blob = new Blob([csvRows.join('\n')], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `merged_claims_${Date.now()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [getAllClaims]);
+
+  const handleTriggerMergeAnalysis = useCallback(async () => {
+    const claims = getAllClaims();
+    if (claims.length === 0) {
+      toast.error("No claims data found to analyze");
+      return;
+    }
+
+    setIsMerging(true);
+    try {
+      const response = await fetch("/api/claim-summary", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ claims }),
+      });
+
+      const data = await response.json();
+      if (data.success && data.summary) {
+        setMergedSummary(data.summary);
+        toast.success("Merged AI Summary generated!");
+      } else {
+        toast.error("Failed to generate summary: " + (data.error || "Unknown error"));
+      }
+    } catch (error) {
+      console.error("Error generating merged summary:", error);
+      toast.error("Error connecting to summary service");
+    } finally {
+      setIsMerging(false);
+    }
+  }, [getAllClaims]);
 
   const hasDocuments = documents.length > 0;
-  const isAnyProcessing = documents.some(
-    (d) => d.stage !== "queued" && d.stage !== "complete" && d.stage !== "error"
-  );
 
   return (
     <div className="min-h-screen bg-background">
@@ -66,22 +167,18 @@ const Index = () => {
 
               {/* Merge button */}
               <MergeJsonButton
-                documents={documents}
-                onSummaryGenerated={(summary) => setActiveSummary(summary)}
+                completedDocsCount={docsInSameCategory.length}
+                isMergeable={isMergeable}
+                sharedType={sharedType || undefined}
+                onDownloadJson={handleDownloadMergedJson}
+                onDownloadCsv={handleDownloadMergedCsv}
+                onTriggerMergeAnalysis={handleTriggerMergeAnalysis}
+                isAnalyzing={isMerging}
               />
             </aside>
 
             {/* Right panel: Results */}
             <section className="lg:col-span-8">
-              {activeSummary && (
-                <div className="mb-6">
-                  <ClaimSummary
-                    summary={activeSummary}
-                    onClose={() => setActiveSummary(null)}
-                  />
-                </div>
-              )}
-
               <div className="p-6 rounded-xl border border-border bg-card min-h-[400px]">
                 <h2 className="text-base font-bold text-foreground mb-4 flex items-center gap-2">
                   <FileText className="w-4 h-4 text-primary" />
@@ -89,7 +186,21 @@ const Index = () => {
                     ? `Results — ${selectedDoc.name}`
                     : "Extraction Results"}
                 </h2>
-                <ResultsPanel document={selectedDoc} onReprocess={reprocessDocument} />
+                {!isMergeable && hasMultipleDocs && (
+                  <div className="mb-4 p-2 rounded bg-amber-500/10 border border-amber-500/20 text-[10px] text-amber-600 flex items-center gap-2 italic">
+                    <span className="font-bold">Note:</span> Mixed document types (e.g., Invoice + Loss Run) cannot be merged or cross-analyzed.
+                  </div>
+                )}
+                <ResultsPanel
+                  document={selectedDoc}
+                  onReprocess={reprocessDocument}
+                  mergedSummary={mergedSummary}
+                  isMerging={isMerging}
+                  onTriggerMergeAnalysis={handleTriggerMergeAnalysis}
+                  onDownloadMergedJson={handleDownloadMergedJson}
+                  onDownloadMergedCsv={handleDownloadMergedCsv}
+                  hasMultipleDocs={hasMultipleDocs && isMergeable}
+                />
               </div>
             </section>
           </div>

@@ -1172,7 +1172,7 @@ OUTPUT:"""
                     print("[OK] INSURANCE EXTRACTION COMPLETE")
                     print("="*70)
                     return {
-                        "type": "INSURANCE",
+                        "type": "INSURANCE_CLAIMS",
                         "json": str(schema_file),
                         "excel": excel_path,
                         "session_id": session_id,
@@ -1224,7 +1224,7 @@ OUTPUT:"""
                             print("\n" + "="*70)
                             print("[OK] INSURANCE EXTRACTION COMPLETE")
                             print("="*70)
-                            return {"type": "INSURANCE", "json": str(schema_json), "excel": excel_path}
+                            return {"type": "INSURANCE_CLAIMS", "json": str(schema_json), "excel": excel_path}
                 
                 print("\n[ERR] Error: Could not find output JSON.")
                 return {"error": "Output JSON not found", "stdout": result.stdout}
