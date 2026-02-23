@@ -51,7 +51,7 @@ const Index = () => {
                 selectedDoc.stage !== "queued" &&
                 selectedDoc.stage !== "complete" && (
                   <div className="p-4 rounded-xl border border-border bg-card">
-                    <h3 className="text-sm font-semibold text-foreground mb-3">
+                    <h3 className="text-sm font-bold text-foreground mb-3">
                       Processing: {selectedDoc.name}
                     </h3>
                     <ProcessingStages
@@ -68,7 +68,7 @@ const Index = () => {
             {/* Right panel: Results */}
             <section className="lg:col-span-8">
               <div className="p-6 rounded-xl border border-border bg-card min-h-[400px]">
-                <h2 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
+                <h2 className="text-base font-bold text-foreground mb-4 flex items-center gap-2">
                   <FileText className="w-4 h-4 text-primary" />
                   {selectedDoc
                     ? `Results — ${selectedDoc.name}`
@@ -83,7 +83,7 @@ const Index = () => {
 
       {/* Footer */}
       <footer className="text-center py-6 text-xs text-muted-foreground">
-        Insurance Form Extractor • AI-Powered PDF Processing
+        Data Retrieval Ingestion Verification Engine • AI-Powered PDF Processing
       </footer>
     </div>
   );

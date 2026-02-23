@@ -392,16 +392,32 @@ Extract data from the document text provided below.
    - **DO NOT infer or derive missing fields.**
    - When a field is not explicitly available in the source, return **NULL** rather than guessing.
 
-2. **PLAN_TYPE (ENROLLMENT TIER - CRITICAL)**:
-   - **Definition**: Who is included under the plan for pricing purposes (EE, EE+SP, EE+CH, FAM).
-   - **STRICT RULE**: Populate only if the document explicitly shows standalone enrollment tiers.
-   - **STRICT FORBIDDEN RULE**: Terms like "IND AGE RATED" or "FAM AGE RATED" describe pricing methodology, not enrollment tier, and **MUST NEVER** be mapped to `PLAN_TYPE`.
-   - If no explicit tier is found, return **NULL**.
-
-3. **COVERAGE (BENEFIT TYPE)**:
-   - **Allowed Values**: MEDICAL, DENTAL, VISION, RX
+2. **PLAN_TYPE (BENEFIT TYPE - CRITICAL)**:
+   - **Allowed Values**: MEDICAL, DENTAL, VISION, LIFE, STD, LTD, VOLUNTARY
    - **Definition**: The type of insurance benefit provided.
+   - **STRICT MAPPING**:
+     - **DHM, DPO, GD** -> `PLAN_TYPE`: **DENTAL**
+     - **VIS, SV** -> `PLAN_TYPE`: **VISION**
+     - **MED, MEDICAL, HMO, PPO** -> `PLAN_TYPE`: **MEDICAL**
    - **STRICT RULE**: This is an independent field and must not be inferred from other fields.
+
+3. **COVERAGE (ENROLLMENT TIER - STRICT)**:
+   - **Allowed Values**: **EE** (Employee Only), **ES** (Employee + Spouse), **EC** (Employee + Child), **FAM** (Family)
+   - **Definition**: Who is included under the plan for pricing purposes.
+   - **STRICT EXTRACTION RULE**: Coverage MUST be extracted directly from a "Coverage" or "Tier" field.
+   - **MAPPING (NORMALIZATION)**:
+     - "EE+SP", "EE/SP", "EMP+SPOUSE" -> **ES**
+     - "EE+CH", "EE/CH", "EMP+CHILD" -> **EC**
+     - "EE", "EMP ONLY" -> **EE**
+     - "FAM", "FAMILY" -> **FAM**
+   - **DO NOT GUESS**: Never infer coverage based on premium amounts.
+   - **STRICT FORBIDDEN RULE**: Terms like "IND AGE RATED" or "FAM AGE RATED" are NOT tiers.
+   - If no explicit tier is found OR if the tier cannot be mapped to the allowed set: return **NULL**.
+
+4. **ULTRA-STRICT VALIDATION & ANTI-HALLUCINATION**:
+   - **EXPLICIT DATA ONLY**: Do NOT create, infer, or generate values. If it's not on the page, it's NULL.
+   - **WHOLE ROW VERIFICATION**: Do not validate based only on numeric values. Verify member details, coverage/tier, policy info, and premiums as a consistent unit.
+   - **CONSISTENCY CHECK**: Ensure all extracted fields for a row align logicially with the document's structured data.
 
 4. **RELATIONSHIP (INTERNAL ANALYSIS)**:
    - **Definition**: Who the person is (Self, Spouse, Child).

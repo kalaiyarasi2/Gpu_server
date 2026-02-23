@@ -34,7 +34,7 @@ const DocumentQueue = ({ documents, activeDocId, onSelectDoc }: DocumentQueuePro
 
   return (
     <div className="space-y-2">
-      <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+      <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
         <FileText className="w-4 h-4" />
         Document Queue ({documents.length})
       </h3>
@@ -45,9 +45,8 @@ const DocumentQueue = ({ documents, activeDocId, onSelectDoc }: DocumentQueuePro
           return (
             <div
               key={doc.id}
-              className={`rounded-lg border transition-all duration-200 animate-slide-up ${
-                isActive ? "border-primary/30 bg-primary/3" : "border-border bg-card"
-              }`}
+              className={`rounded-lg border transition-all duration-200 animate-slide-up ${isActive ? "border-primary/30 bg-primary/3" : "border-border bg-card"
+                }`}
             >
               <div
                 className="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-muted/50 rounded-lg"

@@ -68,7 +68,7 @@ const ClaimSummary: React.FC<ClaimSummaryProps> = ({ summary, onClose }) => {
                         <div className="p-2 rounded-lg bg-primary/10">
                             <FileText className="w-5 h-5 text-primary" />
                         </div>
-                        <h2 className="text-lg font-semibold text-foreground">
+                        <h2 className="text-lg font-bold text-foreground">
                             AI Claims Analysis Summary
                         </h2>
                     </div>

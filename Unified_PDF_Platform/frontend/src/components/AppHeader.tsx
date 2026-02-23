@@ -30,7 +30,9 @@ const AppHeader = () => {
             <FileText className="w-6 h-6 text-primary" />
           </div>
           <div className="hidden sm:block">
-            <h1 className="text-2xl font-bold tracking-tight text-[hsl(var(--header-fg))] whitespace-nowrap">Insurance Form Extractor</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-[hsl(var(--header-fg))] whitespace-nowrap">
+              <span className="text-black">D</span>ata <span className="text-black">R</span>etrieval <span className="text-black">I</span>ngestion <span className="text-black">V</span>erification <span className="text-black">E</span>ngine
+            </h1>
             <p className="text-sm text-[hsl(var(--header-fg))]/70">AI-Powered PDF Processing & Data Extraction</p>
           </div>
         </div>

@@ -62,7 +62,7 @@ const UploadArea = ({ onFilesSelected, disabled }: UploadAreaProps) => {
           )}
         </div>
         <div>
-          <p className="text-lg font-semibold text-foreground">
+          <p className="text-lg font-bold text-foreground">
             {isDragOver ? "Drop PDF files here" : "Drag & Drop PDF Files"}
           </p>
           <p className="text-sm text-muted-foreground mt-1">

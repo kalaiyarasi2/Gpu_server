@@ -27,7 +27,7 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 # Load environment variables from parent directory
 load_dotenv(BASE_DIR.parent / ".env")
 
-app = FastAPI(title="Insurance Form Extractor")
+app = FastAPI(title="Data Retrieval Ingestion Verification Engine")
 router_engine = UnifiedRouter()
 
 # File path cache: maps filename -> full absolute path
@@ -146,8 +146,6 @@ async def extract_document(file: UploadFile = File(...)):
                 print(f"[Unified][WARN] Could not extract work comp metadata: {meta_err}")
         
         return response
-
-        
     except Exception as e:
         print(f"[Unified][ERROR] {e}")
         raise HTTPException(status_code=500, detail=str(e))

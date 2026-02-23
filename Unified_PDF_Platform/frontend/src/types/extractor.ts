@@ -17,7 +17,7 @@ export const STAGE_LABELS: Record<ProcessingStage, string> = {
   text_extraction: "Extracting Text",
   schema_extraction: "Schema Extraction",
   policy_detection: "Policy Detection & Chunking",
-  claim_extraction: "Extracting Claims",
+  claim_extraction: "Extracting Data",
   validation: "Validating",
   complete: "Complete",
   error: "Error",
