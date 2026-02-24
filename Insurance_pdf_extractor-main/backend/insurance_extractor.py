@@ -292,6 +292,11 @@ After detecting claim numbers, perform these checks:
    - Each unique employee should have a unique claim number
    - If same number appears for multiple employees → POLICY number
 
+5. **Header-Based Policy Identification**:
+   - Look for alphanumeric identifiers (e.g., W610628) in the top header lines of each page.
+   - These are often following the company name or "Location" label.
+   - Even if they don't have a "Policy:" label, identify them as policy numbers.
+
 For each claim number found, note:
    - The exact format/pattern it follows
    - Where it appears in the document
@@ -558,7 +563,7 @@ DOCUMENT SAMPLE:
         
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4.1",
+                model="gpt-4o",
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
                 max_tokens=1500,
@@ -712,7 +717,7 @@ Return ONLY the JSON. Ensure the dynamic_rules is extremely precise."""
 
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4.1",
+                model="gpt-4o",
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
                 max_tokens=1500,
@@ -796,6 +801,13 @@ Return ONLY the JSON. Ensure the dynamic_rules is extremely precise."""
         
         if format_type == 'complex_multi_row':
             financial_instructions = f"""
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔴 POLICY IDENTIFICATION (Critical) 🔴
+Look for the policy number (e.g., W610628) in the top header section of the page.
+It might be part of a string like: "Location - SKMGT LE BLEU CHATEAU, INC. - W610628"
+Select this as the policy_number even if it lacks a "Policy Number:" label.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🔴 FORMAT CALIBRATION (Mandatory) 🔴
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1061,7 +1073,7 @@ Follow the format-specific instructions above. Validate your extractions."""
         data = {"claims": []}
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4.1",
+                model="gpt-4o",
                 messages=[{
                     "role": "user",
                     "content": prompt

@@ -28,18 +28,22 @@ class PolicyChunker:
 Look for "Policy Number", "Policy #", "Pol #", "NUMBER: [ID]" or similar headers that start a new section for a specific policy.
 Note: Policy numbers may be on the line BELOW the label "Policy Number".
 
-Return a JSON object with a list of detected policies and the EXACT snippet of text that identifies the policy header (and the policy number itself).
+NEW REQUIREMENT: This document repeats policy numbers for different years. 
+Identify a new boundary if you see a header line with a Policy Number (e.g., W610628) AND/OR a new year section description like:
+"Claims where Date Of Loss between 1/1/2024 and 12/31/2024"
+
+Return a JSON object with a list of detected boundaries and the EXACT snippet of text that identifies the header.
 
 Example Response:
 {{
-  "policies": [
+  "boundaries": [
     {{
-      "policy_number": "N9WC603272",
-      "header_snippet": "Policy Number: N9WC603272"
+      "identifier": "W610628 - 2025",
+      "header_snippet": "Location is one of SKMGT LE BLEU CHATEAU, INC. - W610628"
     }},
     {{
-      "policy_number": "SWC1364773",
-      "header_snippet": "Policy Number\\nSWC1364773"
+      "identifier": "W610614 - 2025",
+      "header_snippet": "Location is SKMGT SAVANT SENIOR LIVING MANAGEMENT LLC - W610614"
     }}
   ]
 }}
@@ -50,7 +54,7 @@ DOCUMENT TEXT:
 
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4.1",
+                model="gpt-4o",
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
                 max_tokens=4000,
@@ -58,18 +62,18 @@ DOCUMENT TEXT:
             )
             
             result = json.loads(response.choices[0].message.content)
-            policies = result.get("policies", [])
+            items = result.get("boundaries", []) or result.get("policies", [])
             
             # Find indices for each header snippet
             boundaries = []
-            for p in policies:
+            for p in items:
                 snippet = p.get("header_snippet")
                 if snippet:
                     # Find first occurrence of snippet
                     idx = text.find(snippet)
                     if idx != -1:
                         boundaries.append({
-                            "policy_number": p.get("policy_number"),
+                            "policy_number": p.get("identifier") or p.get("policy_number"),
                             "start_index": idx,
                             "header_snippet": snippet
                         })
@@ -308,7 +312,43 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
         else:
             chunks = chunker.split_into_chunks(all_text, boundaries)
             
-        print(f"   ✂️ Split into {len(chunks)} chunks using {strategy} strategy.")
+        # --- SECONDARY FALLBACK: PAGE-LEVEL SPLITTING FOR LARGE CHUNKS ---
+        final_chunks = []
+        for chunk in chunks:
+            if len(chunk["text"]) > 20000:
+                print(f"   ⚠️ Chunk '{chunk['policy_number']}' is too large ({len(chunk['text'])} chars). Splitting by pages...")
+                # Split by PAGE X markers
+                page_markers = list(re.finditer(r'(=+\nPAGE \d+\n=+|Page \d+ of \d+)', chunk["text"]))
+                
+                if page_markers:
+                    last_pos = 0
+                    for i, m in enumerate(page_markers):
+                        if m.start() > last_pos + 100: # Found a meaningful segment
+                            final_chunks.append({
+                                "policy_number": f"{chunk['policy_number']} (Part {len(final_chunks)+1})",
+                                "text": chunk["text"][last_pos:m.start()].strip()
+                            })
+                            last_pos = m.start()
+                    
+                    # Add remaining
+                    final_chunks.append({
+                        "policy_number": f"{chunk['policy_number']} (Part {len(final_chunks)+1})",
+                        "text": chunk["text"][last_pos:].strip()
+                    })
+                else:
+                    # Fallback to simple char split if no markers found
+                    chunk_size = 15000
+                    text = chunk["text"]
+                    for i in range(0, len(text), chunk_size):
+                        final_chunks.append({
+                            "policy_number": f"{chunk['policy_number']} (Split {i//chunk_size + 1})",
+                            "text": text[i:i+chunk_size]
+                        })
+            else:
+                final_chunks.append(chunk)
+                
+        chunks = final_chunks
+        print(f"   ✂️ Final processing: {len(chunks)} chunks using {strategy} strategy.")
         
         # Generate Chunking Report
         report = {
@@ -345,6 +385,12 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
             chunk_result = super()._extract_all_claims(chunk["text"], vision_pattern=vision_pattern)
             
             if "claims" in chunk_result:
+                # Inject chunk-specific policy number into each claim
+                for c in chunk_result["claims"]:
+                    if not c.get("policy_number") or c.get("policy_number") == "Multiple":
+                        # Strip (Part X) suffix if present to keep the clean policy number
+                        clean_policy = re.sub(r' \(Part \d+\)$', '', str(chunk.get("policy_number", "")))
+                        c["policy_number"] = clean_policy
                 all_results.append(chunk_result)
             else:
                 print(f"   ⚠️ No claims found in chunk {i+1}")

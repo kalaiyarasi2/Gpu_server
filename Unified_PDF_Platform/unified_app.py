@@ -20,13 +20,19 @@ from shared_configs import router_engine, file_path_cache, _perform_extraction, 
 # Import summary functions
 from summary_api import get_claim_summary, cognethro_trigger, cognethro_trigger_docs
 
+# Import documentation constants
+from swagger_docs import (
+    API_TITLE, API_DESCRIPTION, API_VERSION, 
+    CUSTOM_SWAGGER_JS, COGNETHRO_SUMMARY
+)
+
 # Load environment variables from parent directory
 load_dotenv(BASE_DIR.parent / ".env")
 
 app = FastAPI(
-    title="Data Retrieval Ingestion Verification Engine",
-    description="Unified API for Insurance Document Extraction",
-    version="1.0.0",
+    title=API_TITLE,
+    description=API_DESCRIPTION,
+    version=API_VERSION,
     docs_url=None,  # Override for custom download buttons logic
     redoc_url="/redoc"
 )
@@ -46,7 +52,7 @@ app.add_middleware(
 # Explicitly map summary_api routes to avoid 405 mapping issues
 app.get("/cognethro", include_in_schema=False)(cognethro_trigger_docs)
 app.post("/cognethro", 
-    summary="Cognethro Trigger Point — Extract Document",
+    summary=COGNETHRO_SUMMARY,
     include_in_schema=True)(cognethro_trigger)
 app.post("/api/claim-summary", 
     summary="Generate AI Summary")(get_claim_summary)
@@ -77,47 +83,7 @@ async def custom_swagger_ui_html():
     )
     
     # Manually inject our custom JS for download buttons
-    custom_js = """
-    <script>
-    window.addEventListener('load', function() {
-        const observer = new MutationObserver(() => {
-            const results = document.querySelectorAll('.response .microlight');
-            results.forEach((node) => {
-                const text = node.textContent;
-                if (text.includes('"excel": "http') && !node.parentElement.querySelector('.cognethro-dl-btns')) {
-                    try {
-                        const data = JSON.parse(text);
-                        const btnContainer = document.createElement('div');
-                        btnContainer.className = 'cognethro-dl-btns';
-                        btnContainer.style = 'margin-top: 15px; display: flex; gap: 10px; padding: 10px; background: #222; border-radius: 4px; border: 1px solid #444;';
-                        
-                        if (data.excel) {
-                            const exBtn = document.createElement('a');
-                            exBtn.href = data.excel;
-                            exBtn.textContent = '📊 Download Excel';
-                            exBtn.style = 'background: #052e16; color: #4ade80; border: 1px solid #166534; padding: 10px 16px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 13px;';
-                            exBtn.download = data.output_file || 'result.xlsx';
-                            btnContainer.appendChild(exBtn);
-                        }
-                        
-                        if (data.json) {
-                            const jsBtn = document.createElement('a');
-                            jsBtn.href = data.json;
-                            jsBtn.textContent = '{ } Download JSON';
-                            jsBtn.style = 'background: #0c1a33; color: #93c5fd; border: 1px solid #1e40af; padding: 10px 16px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 13px;';
-                            jsBtn.download = data.output_json || 'result.json';
-                            btnContainer.appendChild(jsBtn);
-                        }
-                        
-                        node.parentElement.appendChild(btnContainer);
-                    } catch (e) {}
-                }
-            });
-        });
-        observer.observe(document.body, { childList: true, subtree: true });
-    });
-    </script>
-    """
+    custom_js = CUSTOM_SWAGGER_JS
     
     html_content = response.body.decode("utf-8")
     new_html = html_content.replace("</body>", f"{custom_js}</body>")

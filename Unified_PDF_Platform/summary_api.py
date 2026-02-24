@@ -8,10 +8,10 @@ from fastapi.responses import JSONResponse, FileResponse, RedirectResponse
 # Import shared resources
 from shared_configs import _perform_extraction, file_path_cache
 
-# Import ClaimsAnalyzer for summary feature
-import sys
-sys.path.append(str(Path(__file__).parent.parent / "Insurance_pdf_extractor-main" / "backend"))
 from summary_for_json import ClaimsAnalyzer
+
+# Import documentation constants
+from swagger_docs import COGNETHRO_SUMMARY, COGNETHRO_DESCRIPTION
 
 router = APIRouter()
 
@@ -21,14 +21,8 @@ async def cognethro_trigger_docs():
     return RedirectResponse(url="/docs")
 
 @router.post("/cognethro",
-    summary="Cognethro Trigger Point — Extract Document",
-    description="""
-The **Cognethro Trigger Point**.
-
-- **Browser**: Visit `GET /cognethro` to open the interactive Swagger UI.
-- **API/curl**: `POST /cognethro` with a `file` field to extract and get download URLs.
-- **Direct Download**: Add `download=true` to your POST request to get a ZIP file containing both Excel and JSON directly as a single download.
-""")
+    summary=COGNETHRO_SUMMARY,
+    description=COGNETHRO_DESCRIPTION)
 async def cognethro_trigger(request: Request, file: UploadFile = File(...), download: bool = False):
     result = await _perform_extraction(file, request)
     if isinstance(result, dict):

@@ -1,0 +1,893 @@
+{
+  "extraction_metadata": {
+    "extraction_date": "2026-02-23T22:07:54.516802",
+    "method": "pymupdf-tesseract-enhanced-chunked",
+    "num_pages": 9,
+    "source_file": "Loss run 5.pdf",
+    "session_id": "20260223_215919_0767_Loss_run_5_pdf",
+    "target_claim": null
+  },
+  "report_date": null,
+  "policy_number": "Multiple",
+  "insured_name": null,
+  "policy_period": "Multiple",
+  "total_claims": 146,
+  "claims_validation_summary": [
+    {
+      "claim_number": "25W61M622186",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M565328",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M565999",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M616506",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M722651",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M723959",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M723978",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M566105",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M619268",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M795925",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M643902",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M844549",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M767514",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M795058",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M719680",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M532979",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M559409",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M616 396",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M991 656",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M800 585",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M694 876",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M694 906",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M636 878",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M715 911",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M605 338",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M702 235",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M775 407",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M776 187",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M686 551",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M582 330",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M717 040",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M849 049",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M670 426",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61N002 486",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M606 415",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M780 965",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M674 555",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M802 107",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M991 629",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M716 498",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M723 906",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M843 088",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M626 833",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M674 941",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M576 818",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M576 836",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M592 007",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M742 121",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M771 474",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M675 385",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M774 434",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M633 762",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M770 537",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M794 731",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M655 588",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M707 499",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M708 394",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M683 528",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M840 824",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M794 512",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M778 672",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M774 644",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M749 800",
+      "math_valid": false,
+      "math_diff": 7387.25,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "25W61M804 341",
+      "math_valid": false,
+      "math_diff": 3505.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "24W61M222372",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "24W61M098335",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "24W61M092882",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "24W61M584235",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "24W61M456352",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "24W61M191758",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "24W61M201159",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "24W61M368183",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "24W61M498186",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "24W61M191300",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "24W61M505915",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "24W61M057004",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "24W61M352375",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "24W61M352742",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "24W61M364587",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "24W61M162775",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "24W61K989268",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "24W61M223074",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "24W61M161438",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "24W61M226 290",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "24W61M336 439",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "24W61M600 624",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "24W61M401 165",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "24W61M599 298",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "24W61M457 158",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "24W61M182 833",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "24W61M514 071",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "24W61M420 525",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "24W61M477 141",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "24W61M046 581",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "24W61M042 714",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "24W61M150 727",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "24W61M096 862",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "24W61M067 349",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "24W61M098 596",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "24W61M484 137",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "24W61M508 265",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "24W61M162 621",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "24W61M552 472",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "24W61M154 184",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "24W61M764 154",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "24W61M248 444",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "24W61M627 486",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "24W61M415 318",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "24W61M390 295",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "24W61M467 905",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "24W61M352 409",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "24W61M058 933",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "24W61M513 984",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "24W61M214 745",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "24W61M338 989",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "24W61M606 306",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "24W61M194 636",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "23W61K777 351",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "23W61K971 420",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "23W61K660 921",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "23W61K985 018",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "23W61K929 174",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "23W61K828 435",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "23W61K665 697",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "23W61K905 514",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "23W61K792 790",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "23W61K798 178",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "23W61K935 186",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "23W61K870 322",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "23W61K689 376",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "23W61K931625",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "23W61K816208",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "23W61K692375",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "23W61K967033",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "23W61K972333",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "23W61K798689",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "23W61K985541",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "23W61K988350",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "23W61K938899",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "23W61K872363",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "23W61K798281",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "23W61K893827",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "23W61K892686",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "23W61K842736",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "23W61K847599",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    },
+    {
+      "claim_number": "23W61K932667",
+      "math_valid": true,
+      "math_diff": 0.0,
+      "confidence_score": null
+    }
+  ]
+}

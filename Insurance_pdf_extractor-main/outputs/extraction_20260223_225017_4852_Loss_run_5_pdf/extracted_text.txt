@@ -1,0 +1,515 @@
+================================================================================
+PDF DOCUMENT EXTRACTION (pdfplumber)
+================================================================================
+
+
+================================================================================
+PAGE 1
+================================================================================
+
+                                                                                                             
+                                        AMWINS  HEALTHCARE  PROGRAM                                          
+                                                                                                             
+                                                  Claim Grid                                                 
+               Claims where Date Of Loss between 1/1/2025 and 12/31/2025 11:59 PM and Claim Status is Closed or Open As
+                          Of 10/22/2025 and Location is one of SKMGT LE BLEU CHATEAU, INC. - W610628         
+                                                                                       Created: 10/22/2025 4:24:19 PM
+
+[TABLE 1]
+--------------------------------------------------------------------------------
+# Claims       	Total Paid     	Outstanding Reserve	Third Party Recovery	Total Incurred 	Reimbursements 	Net Incurred   
+---------------	---------------	-------------------	--------------------	---------------	---------------	---------------
+17             	$163,706.78    	$58,036.03         	$0.00               	$221,742.81    	$0.00          	$221,742.81    
+               	               	                   	                    	               	               	               
+--------------------------------------------------------------------------------
+
+[TABLE 2]
+--------------------------------------------------------------------------------
+Covg           	Name                       	Claimant Id    	Date of Loss   	Claim #        	Claim Entry Date	Date Closed    	Status         	Type           	Total Paid     	Outstanding Reserve	Total Incurred 	Location Name              
+---------------	---------------------------	---------------	---------------	---------------	----------------	---------------	---------------	---------------	---------------	-------------------	---------------	---------------------------
+WC             	Araia, Luchia              	XXX-XX-XXXX    	3/31/2025      	25W61M622186   	4/3/2025        	5/14/2025      	Closed         	Ind            	$3,923.96      	$0.00              	$3,923.96      	SKMGT LE BLEU CHATEAU, INC.
+WC             	Corado Beckett, Monique    	XXX-XX-XXXX    	2/1/2025       	25W61M565328   	2/12/2025       	4/21/2025      	Closed         	Med            	$268.67        	$0.00              	$268.67        	SKMGT LE BLEU CHATEAU, INC.
+WC             	Dawkins, Valencia          	XXX-XX-XXXX    	2/1/2025       	25W61M565999   	2/12/2025       	9/29/2025      	Closed         	Ind            	$55,332.66     	$0.00              	$55,332.66     	SKMGT LE BLEU CHATEAU, INC.
+WC             	Diaz, Maresa               	XXX-XX-XXXX    	3/16/2025      	25W61M616506   	3/28/2025       	5/7/2025       	Closed         	Med            	$1,895.86      	$0.00              	$1,895.86      	SKMGT LE BLEU CHATEAU, INC.
+WC             	Diaz, Maresa               	XXX-XX-XXXX    	6/24/2025      	25W61M722651   	7/2/2025        	               	Open           	Med            	$917.63        	$3,022.37          	$3,940.00      	SKMGT LE BLEU CHATEAU, INC.
+WC             	Estrada, Bianca            	XXX-XX-XXXX    	6/27/2025      	25W61M723959   	7/3/2025        	9/4/2025       	Closed         	Ind            	$11,196.46     	$0.00              	$11,196.46     	SKMGT LE BLEU CHATEAU, INC.
+WC             	Fisher, Anastacia          	XXX-XX-XXXX    	6/29/2025      	25W61M723978   	7/3/2025        	8/6/2025       	Closed         	Med            	$70.00         	$0.00              	$70.00         	SKMGT LE BLEU CHATEAU, INC.
+WC             	Herbert, Sara              	XXX-XX-XXXX    	1/26/2025      	25W61M566105   	2/12/2025       	               	Open           	Ind            	$64,297.00     	$17,473.06         	$81,770.06     	SKMGT LE BLEU CHATEAU, INC.
+WC             	Jackson, Trevia            	XXX-XX-XXXX    	2/25/2025      	25W61M619268   	4/1/2025        	               	Open           	Ind            	$10,060.25     	$4,639.75          	$14,700.00     	SKMGT LE BLEU CHATEAU, INC.
+WC             	Meza, Gina                 	XXX-XX-XXXX    	8/28/2025      	25W61M795925   	9/10/2025       	               	Open           	Ind            	$3,659.65      	$9,740.31          	$13,399.96     	SKMGT LE BLEU CHATEAU, INC.
+WC             	Millen, Miriam             	XXX-XX-XXXX    	4/18/2025      	25W61M643902   	4/24/2025       	6/19/2025      	Closed         	Med            	$3,515.15      	$0.00              	$3,515.15      	SKMGT LE BLEU CHATEAU, INC.
+WC             	Obanda Bonilla, Luis Adolfo	XXX-XX-XXXX    	8/20/2025      	25W61M844549   	10/8/2025       	               	Open           	Ind            	$0.00          	$15,000.00         	$15,000.00     	SKMGT LE BLEU CHATEAU, INC.
+WC             	Ocana, Melissa             	XXX-XX-XXXX    	7/23/2025      	25W61M767514   	8/14/2025       	               	Open           	Med            	$3,632.46      	$8,160.54          	$11,793.00     	SKMGT LE BLEU CHATEAU, INC.
+WC             	Ornelas, Celia L           	XXX-XX-XXXX    	9/2/2025       	25W61M795058   	9/9/2025        	10/17/2025     	Closed         	Med            	$1,099.86      	$0.00              	$1,099.86      	SKMGT LE BLEU CHATEAU, INC.
+WC             	Ramirez, Amparo            	XXX-XX-XXXX    	6/15/2025      	25W61M719680   	6/30/2025       	8/1/2025       	Closed         	Med            	$645.98        	$0.00              	$645.98        	SKMGT LE BLEU CHATEAU, INC.
+WC             	Soza, Aneilka              	XXX-XX-XXXX    	1/7/2025       	25W61M532979   	1/20/2025       	3/21/2025      	Closed         	Med            	$2,651.45      	$0.00              	$2,651.45      	SKMGT LE BLEU CHATEAU, INC.
+WC             	Zelaya, Aura               	XXX-XX-XXXX    	1/10/2025      	25W61M559409   	2/6/2025        	3/20/2025      	Closed         	Med            	$539.74        	$0.00              	$539.74        	SKMGT LE BLEU CHATEAU, INC.
+               	                           	               	               	               	                	               	               	               	               	                   	               	                           
+--------------------------------------------------------------------------------
+
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                             
+                                                                                                             
+                                                
+                                                                                               
+                                                                                                  Page 1 of 1
+
+
+================================================================================
+PAGE 2
+================================================================================
+
+                                                                                                             
+                                        AMWINS  HEALTHCARE  PROGRAM                                          
+                                                                                                             
+                                                  Claim Grid                                                 
+               Claims where Date Of Loss between 1/1/2025 and 12/31/2025 11:59 PM and Claim Status is Closed or Open As
+                      Of 11/10/2025 and Location is SKMGT SAVANT SENIOR LIVING MANAGEMENT LLC - W610614      
+                                                                                       Created: 11/10/2025 3:18:13 PM
+
+[TABLE 1]
+--------------------------------------------------------------------------------
+# Claims       	Total Paid     	Outstanding Reserve	Third Party Recovery	Total Incurred 	Reimbursements 	Net Incurred   
+---------------	---------------	-------------------	--------------------	---------------	---------------	---------------
+47             	$110,000.92    	$233,461.03        	$0.00               	$343,461.95    	$0.00          	$343,461.95    
+               	               	                   	                    	               	               	               
+--------------------------------------------------------------------------------
+
+[TABLE 2]
+--------------------------------------------------------------------------------
+Name               	Date of Loss   	Claimant Report Date	Claim #        	Adjuster       	Date Closed    	Status         	Location Address                   	Type           	Total Paid     	Outstandi ng Reserve	Recovere d     	Total Incurred 	Accident Description                              	Insured Type   	Location2 Address                               
+-------------------	---------------	--------------------	---------------	---------------	---------------	---------------	-----------------------------------	---------------	---------------	--------------------	---------------	---------------	--------------------------------------------------	---------------	------------------------------------------------
+Alaniz, Vanessa    	3/12/202 5     	3/12/202 5          	25W61M616 396  	JMCINTY RE     	9/22/202 5     	Closed         	8202 FLORENCE AVE, DOWNEY, CA 90240	Ind            	$4,114.93      	$0.00               	$0.00          	$4,114.93      	Left Thumb Laceration; Kitchen Knife              	2              	11515 FIRESTONE BLVD. NORWALK, NORWALK, CA 90650
+Alaniz, Vanessa    	10/14/20 25    	10/14/20 25         	25W61M991 656  	SRORAB ACK     	               	Open           	8202 FLORENCE AVE, DOWNEY, CA 90240	Med            	$1,190.49      	$2,829.51           	$0.00          	$4,020.00      	Left Hand/Wrist gave out carrying food trays      	2              	11515 FIRESTONE BLVD. NORWALK, NORWALK, CA 90650
+Alcala, Gerardo    	9/12/202 5     	9/12/202 5          	25W61M800 585  	MRAMIR EZ      	               	Open           	8202 FLORENCE AVE, DOWNEY, CA 90240	Med            	$2,170.30      	$284.70             	$0.00          	$2,455.00      	strain lower back lifting resident                	2              	11515 FIRESTONE BLVD. NORWALK, NORWALK, CA 90650
+Altamirano, Deysi V	3/23/202 5     	3/23/202 5          	25W61M694 876  	SRORAB ACK     	               	Open           	8202 FLORENCE AVE, DOWNEY, CA 90240	Ind            	$3,720.93      	$12,799.0 7         	$0.00          	$16,520.0 0    	Legs, lower extremities                           	6              	4609 ARLINGTON AVE, RIVERSIDE, CA 92504         
+Altamirano, Deysi V	3/22/202 5     	3/22/202 5          	25W61M694 906  	SRORAB ACK     	               	Open           	8202 FLORENCE AVE, DOWNEY, CA 90240	Ind            	$305.00        	$4,215.00           	$0.00          	$4,520.00      	Psyche, Stress, anxiety, nervous system           	6              	4609 ARLINGTON AVE, RIVERSIDE, CA 92504         
+Bedolla, Eva       	3/31/202 5     	3/31/202 5          	25W61M636 878  	MRAMIR EZ      	8/1/2025       	Closed         	8202 FLORENCE AVE, DOWNEY, CA 90240	Med            	$4,466.98      	$0.00               	$0.00          	$4,466.98      	Helping resident and Right Hand squeezed by reside	1              	1025 NORTH FAIRFAX, LOS ANGELES, CA 90046       
+Beltran, Juana C   	6/2/2025       	6/2/2025            	25W61M715 911  	KDUSKE Y       	10/6/202 5     	Closed         	8202 FLORENCE AVE, DOWNEY, CA 90240	Ind            	$3,925.67      	$0.00               	$0.00          	$3,925.67      	Slipped hurt knee                                 	9              	8202 FLORENCE AVE, DOWNEY, CA 90240             
+Campos, Heidy      	2/8/2025       	3/12/202 5          	25W61M605 338  	KDUSKE Y       	               	Open           	8202 FLORENCE AVE, DOWNEY, CA 90240	Ind            	$17,716.2 5    	$14,299.7 0         	$0.00          	$32,015.9 5    	Left hand/wrist sprain                            	1              	1025 NORTH FAIRFAX, LOS ANGELES, CA 90046       
+Carbajal, Jeniffer 	6/9/2025       	6/9/2025            	25W61M702 235  	KDUSKE Y       	               	Open           	8202 FLORENCE AVE, DOWNEY, CA 90240	Med            	$6,179.59      	$4,626.41           	$0.00          	$10,806.0 0    	slipped; L shoulder and sprain of groin           	4              	5711 RESEDA BLVDF., TARZANA, CA 91356           
+Cardenas, Alicia   	8/12/202 5     	8/21/202 5          	25W61M775 407  	SRORAB ACK     	               	Open           	8202 FLORENCE AVE, DOWNEY, CA 90240	Ind            	$1,463.35      	$12,036.6 5         	$0.00          	$13,500.0 0    	Foot; Back; Shoulder; Neck; Stress; Psych         	5              	1 E COMMONWEALTH AVE., ALHAMBRA, CA 91801       
+Cardenas, Alicia   	5/5/2025       	8/21/202 5          	25W61M776 187  	SRORAB ACK     	               	Open           	8202 FLORENCE AVE, DOWNEY, CA 90240	Ind            	$40.00         	$1,960.00           	$0.00          	$2,000.00      	Left Foot; Ran over by wheelchair                 	5              	1 E COMMONWEALTH AVE., ALHAMBRA, CA 91801       
+Ceballos, Victor   	5/29/202 5     	5/29/202 5          	25W61M686 551  	MRAMIR EZ      	10/9/202 5     	Closed         	8202 FLORENCE AVE, DOWNEY, CA 90240	Med            	$687.17        	$0.00               	$0.00          	$687.17        	Poked by open insulin pen R hand finger.          	5              	1 E COMMONWEALTH AVE., ALHAMBRA, CA 91801       
+Cervantes, Asia    	2/23/202 5     	2/23/202 5          	25W61M582 330  	ACRISO STOM    	4/19/202 5     	Closed         	8202 FLORENCE AVE, DOWNEY, CA 90240	Med            	$1,162.65      	$0.00               	$0.00          	$1,162.65      	R shoulder pain transferring a resident           	5              	1 E COMMONWEALTH AVE., ALHAMBRA, CA 91801       
+Cruse, Annie       	6/18/202 5     	6/23/202 5          	25W61M717 040  	MRAMIR EZ      	10/8/202 5     	Closed         	8202 FLORENCE AVE, DOWNEY, CA 90240	Med            	$70.00         	$0.00               	$0.00          	$70.00         	Strain abdomen transferring resident              	9              	8202 FLORENCE AVE, DOWNEY, CA 90240             
+De La Fuente, Sofia	10/1/202 5     	10/1/202 5          	25W61M849 049  	LRICHIN S      	               	Open           	8202 FLORENCE AVE, DOWNEY, CA 90240	Med            	$1,052.67      	$1,797.33           	$0.00          	$2,850.00      	resident squeezed R fingers, sprain               	9              	8202 FLORENCE AVE, DOWNEY, CA 90240             
+Dekhili, Kristene  	3/28/202 5     	3/28/202 5          	25W61M670 426  	SRORAB ACK     	               	Open           	8202 FLORENCE AVE, DOWNEY, CA 90240	Ind            	$4,900.85      	$18,204.1 5         	$0.00          	$23,105.0 0    	multiple body parts                               	10             	2619 ORANGE AVE., COSTA MESA, CA 92627          
+Garcia, John       	10/29/20 25    	10/29/20 25         	25W61N002 486  	JAMWILL IAM    	               	Open           	8202 FLORENCE AVE, DOWNEY, CA 90240	Ind            	$0.00          	$16,745.0 0         	$0.00          	$16,745.0 0    	Moving hospital bed; pain in lower back           	9              	8202 FLORENCE AVE, DOWNEY, CA 90240             
+Gomez, Angel       	3/8/2025       	3/8/2025            	25W61M606 415  	JMCINTY RE     	5/9/2025       	Closed         	8202 FLORENCE AVE, DOWNEY, CA 90240	Med            	$469.65        	$0.00               	$0.00          	$469.65        	Refilling the line flipped landed on R knee.      	11             	21711 VENTURE BLVD, WOODLAND HILLS, CA 91364    
+Griego, Claudia    	8/22/202 5     	8/22/202 5          	25W61M780 965  	LRICHIN S      	               	Open           	8202 FLORENCE AVE, DOWNEY, CA 90240	Med            	$4,063.57      	$562.43             	$0.00          	$4,626.00      	Strain R wrist helping resident                   	6              	4609 ARLINGTON AVE, RIVERSIDE, CA 92504         
+Harris, Zymira     	5/15/202 5     	5/15/202 5          	25W61M674 555  	JMCINTY RE     	7/16/202 5     	Closed         	8202 FLORENCE AVE, DOWNEY, CA 90240	Med            	$304.92        	$0.00               	$0.00          	$304.92        	Left shoulder injured during transfer             	8              	12045 S. LAKEWOOD BLVD, DOWNEY, CA 90242        
+                   	               	                    	               	               	               	               	                                   	               	               	                    	               	               	                                                  	               	                                                
+--------------------------------------------------------------------------------
+
+                                                                                                             
+                                                                             
+                                                                                                             
+                                                
+                                                                                               
+                                                                                                  Page 1 of 3
+
+
+================================================================================
+PAGE 3
+================================================================================
+
+                                                                                                             
+                                        AMWINS  HEALTHCARE  PROGRAM                                          
+                                                                                                             
+                                                  Claim Grid                                                 
+               Claims where Date Of Loss between 1/1/2025 and 12/31/2025 11:59 PM and Claim Status is Closed or Open As
+                      Of 11/10/2025 and Location is SKMGT SAVANT SENIOR LIVING MANAGEMENT LLC - W610614      
+                                                                                       Created: 11/10/2025 3:18:13 PM
+
+[TABLE 1]
+--------------------------------------------------------------------------------
+Name                       	Date of Loss   	Claimant Report Date	Claim #        	Adjuster       	Date Closed    	Status         	Location Address                   	Type           	Total Paid     	Outstandi ng Reserve	Recovere d     	Total Incurred 	Accident Description                              	Insured Type   	Location2 Address                               
+---------------------------	---------------	--------------------	---------------	---------------	---------------	---------------	-----------------------------------	---------------	---------------	--------------------	---------------	---------------	--------------------------------------------------	---------------	------------------------------------------------
+Hernandez, Itza            	9/12/202 5     	9/12/202 5          	25W61M802 107  	LRICHIN S      	10/23/20 25    	Closed         	8202 FLORENCE AVE, DOWNEY, CA 90240	Med            	$269.96        	$0.00               	$0.00          	$269.96        	Transferring patient pain in back                 	6              	4609 ARLINGTON AVE, RIVERSIDE, CA 92504         
+Hernandez, Itza            	10/17/20 25    	10/17/20 25         	25W61M991 629  	JMCINTY RE     	11/7/202 5     	Closed         	8202 FLORENCE AVE, DOWNEY, CA 90240	Med            	$60.00         	$0.00               	$0.00          	$60.00         	Stood up after assisting patient; Low Back pain   	6              	4609 ARLINGTON AVE, RIVERSIDE, CA 92504         
+Huerta, Adriana            	6/11/202 5     	6/25/202 5          	25W61M716 498  	AKATZ          	8/8/2025       	Closed         	8202 FLORENCE AVE, DOWNEY, CA 90240	Inc            	$10.00         	$0.00               	$0.00          	$10.00         	Changing resident left wrist injury.              	9              	8202 FLORENCE AVE, DOWNEY, CA 90240             
+Huerta, Adriana            	6/11/202 5     	6/25/202 5          	25W61M723 906  	SHMILES        	9/29/202 5     	Closed         	8202 FLORENCE AVE, DOWNEY, CA 90240	Med            	$2,124.37      	$0.00               	$0.00          	$2,124.37      	Turning resident left wrist strain.               	11             	21711 VENTURE BLVD, WOODLAND HILLS, CA 91364    
+Jacobs, Daniel             	10/6/202 5     	10/6/202 5          	25W61M843 088  	MRAMIR EZ      	               	Open           	8202 FLORENCE AVE, DOWNEY, CA 90240	Med            	$490.79        	$1,279.21           	$0.00          	$1,770.00      	Laceration to the RT Finger                       	11             	21711 VENTURE BLVD, WOODLAND HILLS, CA 91364    
+Letona, Critzabel          	3/31/202 5     	3/31/202 5          	25W61M626 833  	SRORAB ACK     	               	Open           	8202 FLORENCE AVE, DOWNEY, CA 90240	Ind            	$5,477.09      	$11,316.8 0         	$0.00          	$16,793.8 9    	resident fell on top of EE                        	5              	1 E COMMONWEALTH AVE., ALHAMBRA, CA 91801       
+Lopez, Araceli             	5/15/202 5     	5/15/202 5          	25W61M674 941  	KDUSKE Y       	               	Open           	8202 FLORENCE AVE, DOWNEY, CA 90240	Med            	$7,029.25      	$1,710.75           	$0.00          	$8,740.00      	shoulder, wrist, back                             	1              	1025 NORTH FAIRFAX, LOS ANGELES, CA 90046       
+Maleksarkissian, Jina      	2/13/202 5     	2/13/202 5          	25W61M576 818  	JMCINTY RE     	               	Open           	8202 FLORENCE AVE, DOWNEY, CA 90240	Med            	$75.00         	$11,568.0 0         	$0.00          	$11,643.0 0    	Stressful working environment.                    	4              	5711 RESEDA BLVDF., TARZANA, CA 91356           
+Maleksarkissians, Jina     	2/12/202 5     	2/12/202 5          	25W61M576 836  	JMCINTY RE     	               	Open           	8202 FLORENCE AVE, DOWNEY, CA 90240	Ind            	$7,444.62      	$17,048.3 8         	$0.00          	$24,493.0 0    	Wrist, fingers, hands, back. Repetitive motion.   	4              	5711 RESEDA BLVDF., TARZANA, CA 91356           
+Mendoza, Steven            	2/28/202 5     	2/28/202 5          	25W61M592 007  	MRAMIR EZ      	4/29/202 5     	Closed         	8202 FLORENCE AVE, DOWNEY, CA 90240	Med            	$1,357.18      	$0.00               	$0.00          	$1,357.18      	Moving tile boxes and smashed Left Middle Finger  	6              	4609 ARLINGTON AVE, RIVERSIDE, CA 92504         
+Muneton, Monica            	7/9/2025       	7/9/2025            	25W61M742 121  	KDUSKE Y       	               	Open           	8202 FLORENCE AVE, DOWNEY, CA 90240	Med            	$3,972.51      	$6,767.49           	$0.00          	$10,740.0 0    	Numbness in left leg and soreness of both arms.   	10             	2619 ORANGE AVE., COSTA MESA, CA 92627          
+Nieves Magallanes, Darlenne	8/8/2025       	8/8/2025            	25W61M771 474  	SRORAB ACK     	               	Open           	8202 FLORENCE AVE, DOWNEY, CA 90240	Med            	$4,346.83      	$4,173.17           	$0.00          	$8,520.00      	Hurt Back bending over changing a resident        	6              	4609 ARLINGTON AVE, RIVERSIDE, CA 92504         
+Ochoa, Regina              	5/19/202 5     	5/19/202 5          	25W61M675 385  	MRAMIR EZ      	7/21/202 5     	Closed         	8202 FLORENCE AVE, DOWNEY, CA 90240	Med            	$416.50        	$0.00               	$0.00          	$416.50        	Needle pricked R hand top of middle finger        	2              	11515 FIRESTONE BLVD. NORWALK, NORWALK, CA 90650
+Olivera, Diana             	8/4/2025       	8/20/202 5          	25W61M774 434  	SRORAB ACK     	               	Open           	8202 FLORENCE AVE, DOWNEY, CA 90240	Ind            	$1,027.63      	$13,992.3 7         	$0.00          	$15,020.0 0    	Stress; Psych; Multiple Parts                     	5              	1 E COMMONWEALTH AVE., ALHAMBRA, CA 91801       
+Peoples, Nianna            	4/2/2025       	4/2/2025            	25W61M633 762  	SRORAB ACK     	5/20/202 5     	Closed         	8202 FLORENCE AVE, DOWNEY, CA 90240	Med            	$531.68        	$0.00               	$0.00          	$531.68        	Fixing bed strained back                          	6              	4609 ARLINGTON AVE, RIVERSIDE, CA 92504         
+Piedra, Joceline           	8/10/202 5     	8/10/202 5          	25W61M770 537  	SRORAB ACK     	11/7/202 5     	Closed         	8202 FLORENCE AVE, DOWNEY, CA 90240	Med            	$88.80         	$0.00               	$0.00          	$88.80         	Changing resident neck, L hand and fingers injury.	9              	8202 FLORENCE AVE, DOWNEY, CA 90240             
+Polanco, Maria             	1/15/202 5     	9/8/2025            	25W61M794 731  	JMCINTY RE     	               	Open           	8202 FLORENCE AVE, DOWNEY, CA 90240	Ind            	$75.00         	$18,868.0 0         	$0.00          	$18,943.0 0    	Neck; Hands; Fingers; Back                        	5              	1 E COMMONWEALTH AVE., ALHAMBRA, CA 91801       
+Pueyo del Pilar, Maria     	4/25/202 5     	4/25/202 5          	25W61M655 588  	SBLAYL OCK     	5/30/202 5     	Closed         	8202 FLORENCE AVE, DOWNEY, CA 90240	Med            	$1,315.58      	$0.00               	$0.00          	$1,315.58      	Slip/Fall; Right Arm; Right Hip                   	7              	8221 3RD STREET, SUITE 208, DOWNEY, CA 90241    
+Reyes, Allam               	5/30/202 5     	6/17/202 5          	25W61M707 499  	SRORAB ACK     	               	Open           	8202 FLORENCE AVE, DOWNEY, CA 90240	Ind            	$55.00         	$3,730.00           	$0.00          	$3,785.00      	Head; Circulatory Sys; Nervous Sys; Stress; Psych 	4              	5711 RESEDA BLVDF., TARZANA, CA 91356           
+Reyes, Allam               	3/20/202 5     	6/17/202 5          	25W61M708 394  	SRORAB ACK     	               	Open           	8202 FLORENCE AVE, DOWNEY, CA 90240	Ind            	$3,642.80      	$24,762.2 0         	$0.00          	$28,405.0 0    	Back; Transferring patient                        	4              	5711 RESEDA BLVDF., TARZANA, CA 91356           
+Robles, Valerie            	5/20/202 5     	5/20/202 5          	25W61M683 528  	SHMILES        	8/27/202 5     	Closed         	8202 FLORENCE AVE, DOWNEY, CA 90240	Med            	$2,217.18      	$0.00               	$0.00          	$2,217.18      	Transferring resident; Right Wrist                	3              	12045 S. LAKEWOOD BLVD, DOWNEY, CA 90242        
+Santos, Llisiener          	9/30/202 5     	9/30/202 5          	25W61M840 824  	MRAMIR EZ      	               	Open           	8202 FLORENCE AVE, DOWNEY, CA 90240	Med            	$769.86        	$1,630.14           	$0.00          	$2,400.00      	Resident grabbed hand; fractured R little finger  	9              	8202 FLORENCE AVE, DOWNEY, CA 90240             
+Sidon, Manuel              	9/4/2025       	9/4/2025            	25W61M794 512  	MRAMIR EZ      	10/13/20 25    	Closed         	8202 FLORENCE AVE, DOWNEY, CA 90240	Med            	$304.20        	$0.00               	$0.00          	$304.20        	Cleaning with metal scraper and cut Finger        	2              	11515 FIRESTONE BLVD. NORWALK, NORWALK, CA 90650
+Toledo, Leticia            	8/18/202 5     	8/18/202 5          	25W61M778 672  	SRORAB ACK     	               	Open           	8202 FLORENCE AVE, DOWNEY, CA 90240	Ind            	$4,876.09      	$18,643.9 1         	$0.00          	$23,520.0 0    	R shoulder; strain                                	9              	8202 FLORENCE AVE, DOWNEY, CA 90240             
+Vargas, Ana L              	2/25/202 5     	8/7/2025            	25W61M774 644  	MRAMIR EZ      	11/3/202 5     	Closed         	8202 FLORENCE AVE, DOWNEY, CA 90240	Med            	$736.44        	$0.00               	$0.00          	$736.44        	Poked Right Ring Finger with sharp plastic        	2              	11515 FIRESTONE BLVD. NORWALK, NORWALK, CA 90650
+                           	               	                    	               	               	               	               	                                   	               	               	                    	               	               	                                                  	               	                                                
+--------------------------------------------------------------------------------
+
+                                                                                                             
+                                                                                                             
+                                                                             
+                                                
+                                                                                               
+                                                                                                  Page 2 of 3
+
+
+================================================================================
+PAGE 4
+================================================================================
+
+                                                                                                             
+                                        AMWINS  HEALTHCARE  PROGRAM                                          
+                                                                                                             
+                                                  Claim Grid                                                 
+               Claims where Date Of Loss between 1/1/2025 and 12/31/2025 11:59 PM and Claim Status is Closed or Open As
+                      Of 11/10/2025 and Location is SKMGT SAVANT SENIOR LIVING MANAGEMENT LLC - W610614      
+                                                                                       Created: 11/10/2025 3:18:13 PM
+
+[TABLE 1]
+--------------------------------------------------------------------------------
+Name              	Date of Loss   	Claimant Report Date	Claim #        	Adjuster       	Date Closed    	Status         	Location Address                   	Type           	Total Paid     	Outstandi ng Reserve	Recovere d     	Total Incurred 	Accident Description                             	Insured Type   	Location2 Address                           
+------------------	---------------	--------------------	---------------	---------------	---------------	---------------	-----------------------------------	---------------	---------------	--------------------	---------------	---------------	-------------------------------------------------	---------------	--------------------------------------------
+Velasquez, Marta  	7/28/202 5     	7/28/202 5          	25W61M749 800  	SRORAB ACK     	               	Open           	8202 FLORENCE AVE, DOWNEY, CA 90240	Ind            	$2,290.56      	$5,096.69           	$0.00          	$7,387.25      	Slip/Trip/Fall changing trash; Wrist; Back; Knees	11             	21711 VENTURE BLVD, WOODLAND HILLS, CA 91364
+Villegas, Estrella	9/15/202 5     	9/15/202 5          	25W61M804 341  	MRAMIR EZ      	               	Open           	8202 FLORENCE AVE, DOWNEY, CA 90240	Med            	$991.03        	$2,513.97           	$0.00          	$3,505.00      	Transferring resident; R shoulder pain           	9              	8202 FLORENCE AVE, DOWNEY, CA 90240         
+                  	               	                    	               	               	               	               	                                   	               	               	                    	               	               	                                                 	               	                                            
+--------------------------------------------------------------------------------
+
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                             
+                                                
+                                                                                               
+                                                                                                  Page 3 of 3
+
+
+================================================================================
+PAGE 5
+================================================================================
+
+                                                                                                             
+                                        AMWINS  HEALTHCARE  PROGRAM                                          
+                                                                                                             
+                                                  Claim Grid                                                 
+               Claims where Date Of Loss between 1/1/2024 and 12/31/2024 11:59 PM and Claim Status is Closed or Open As
+                          Of 10/22/2025 and Location is one of SKMGT LE BLEU CHATEAU, INC. - W610628         
+                                                                                       Created: 10/22/2025 4:22:01 PM
+
+[TABLE 1]
+--------------------------------------------------------------------------------
+# Claims       	Total Paid     	Outstanding Reserve	Third Party Recovery	Total Incurred 	Reimbursements 	Net Incurred   
+---------------	---------------	-------------------	--------------------	---------------	---------------	---------------
+19             	$135,226.09    	$133,335.50        	$0.00               	$268,561.59    	$0.00          	$268,561.59    
+               	               	                   	                    	               	               	               
+--------------------------------------------------------------------------------
+
+[TABLE 2]
+--------------------------------------------------------------------------------
+Covg           	Name                   	Claimant Id    	Date of Loss   	Claim #        	Claim Entry Date	Date Closed    	Status         	Type           	Total Paid     	Outstanding Reserve	Total Incurred 	Location Name              
+---------------	-----------------------	---------------	---------------	---------------	----------------	---------------	---------------	---------------	---------------	-------------------	---------------	---------------------------
+WC             	Brizuela Martinez, Rosa	XXX-XX-XXXX    	7/20/2024      	24W61M222372   	7/24/2024       	10/24/2024     	Closed         	Ind            	$6,816.15      	$0.00              	$6,816.15      	SKMGT LE BLEU CHATEAU, INC.
+WC             	Brooks, Afina          	XXX-XX-XXXX    	2/4/2024       	24W61M098335   	4/9/2024        	7/31/2025      	Closed         	Ind            	$31,091.87     	$0.00              	$31,091.87     	SKMGT LE BLEU CHATEAU, INC.
+WC             	Canjura, Roxana        	XXX-XX-XXXX    	3/4/2024       	24W61M092882   	4/3/2024        	               	Open           	Ind            	$40,910.84     	$23,597.98         	$64,508.82     	SKMGT LE BLEU CHATEAU, INC.
+WC             	Castro, Faith S        	XXX-XX-XXXX    	11/8/2024      	24W61M584235   	2/28/2025       	               	Open           	Ind            	$3,186.67      	$17,833.33         	$21,020.00     	SKMGT LE BLEU CHATEAU, INC.
+WC             	Dorantes, Ana          	XXX-XX-XXXX    	11/7/2024      	24W61M456352   	11/11/2024      	2/10/2025      	Closed         	Med            	$547.30        	$0.00              	$547.30        	SKMGT LE BLEU CHATEAU, INC.
+WC             	Garcia, Erendira       	XXX-XX-XXXX    	6/18/2024      	24W61M191758   	6/24/2024       	5/16/2025      	Closed         	Ind            	$2,021.36      	$0.00              	$2,021.36      	SKMGT LE BLEU CHATEAU, INC.
+WC             	Garcia, Erendira B     	XXX-XX-XXXX    	6/18/2024      	24W61M201159   	7/2/2024        	9/25/2024      	Closed         	Ind            	$13,938.92     	$0.00              	$13,938.92     	SKMGT LE BLEU CHATEAU, INC.
+WC             	Garcia, Mario          	XXX-XX-XXXX    	9/5/2024       	24W61M368183   	9/11/2024       	11/1/2024      	Closed         	Med            	$868.31        	$0.00              	$868.31        	SKMGT LE BLEU CHATEAU, INC.
+WC             	Hubbard, Angelean      	XXX-XX-XXXX    	11/19/2024     	24W61M498186   	12/17/2024      	               	Open           	Ind            	$11,453.59     	$30,546.41         	$42,000.00     	SKMGT LE BLEU CHATEAU, INC.
+WC             	Lopez, Reina           	XXX-XX-XXXX    	6/15/2024      	24W61M191300   	6/24/2024       	8/1/2024       	Closed         	Med            	$539.64        	$0.00              	$539.64        	SKMGT LE BLEU CHATEAU, INC.
+WC             	Lott, Kadeejah         	XXX-XX-XXXX    	12/13/2024     	24W61M505915   	12/27/2024      	               	Open           	Ind            	$3,865.96      	$40,714.04         	$44,580.00     	SKMGT LE BLEU CHATEAU, INC.
+WC             	Ramirez, Rebecca       	XXX-XX-XXXX    	2/14/2024      	24W61M057004   	3/4/2024        	5/16/2024      	Closed         	Med            	$1,947.30      	$0.00              	$1,947.30      	SKMGT LE BLEU CHATEAU, INC.
+WC             	Rojas, Aniah           	XXX-XX-XXXX    	7/10/2024      	24W61M352375   	8/27/2024       	               	Open           	Ind            	$11,560.76     	$20,534.24         	$32,095.00     	SKMGT LE BLEU CHATEAU, INC.
+WC             	Rojas, Aniah           	XXX-XX-XXXX    	6/30/2024      	24W61M352742   	8/27/2024       	               	Open           	Ind            	$2,101.50      	$109.50            	$2,211.00      	SKMGT LE BLEU CHATEAU, INC.
+WC             	Ruvalcaba, Monserrat   	XXX-XX-XXXX    	8/31/2024      	24W61M364587   	9/9/2024        	12/17/2024     	Closed         	Ind            	$676.99        	$0.00              	$676.99        	SKMGT LE BLEU CHATEAU, INC.
+WC             	Schill, Julia          	XXX-XX-XXXX    	5/23/2024      	24W61M162775   	5/30/2024       	8/20/2024      	Closed         	Med            	$2,225.15      	$0.00              	$2,225.15      	SKMGT LE BLEU CHATEAU, INC.
+WC             	Stout, Michael         	XXX-XX-XXXX    	1/5/2024       	24W61K989268   	1/9/2024        	2/28/2024      	Closed         	Med            	$992.83        	$0.00              	$992.83        	SKMGT LE BLEU CHATEAU, INC.
+WC             	Valencia, Elizabeth    	XXX-XX-XXXX    	6/24/2024      	24W61M223074   	7/24/2024       	10/17/2024     	Closed         	Med            	$70.00         	$0.00              	$70.00         	SKMGT LE BLEU CHATEAU, INC.
+WC             	Vasquez, Kendra        	XXX-XX-XXXX    	5/28/2024      	24W61M161438   	5/29/2024       	8/8/2024       	Closed         	Med            	$410.95        	$0.00              	$410.95        	SKMGT LE BLEU CHATEAU, INC.
+               	                       	               	               	               	                	               	               	               	               	                   	               	                           
+--------------------------------------------------------------------------------
+
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                             
+                                                                                                             
+                                                
+                                                                                               
+                                                                                                  Page 1 of 1
+
+
+================================================================================
+PAGE 6
+================================================================================
+
+                                                                                                             
+                                        AMWINS  HEALTHCARE  PROGRAM                                          
+                                                                                                             
+                                                  Claim Grid                                                 
+               Claims where Date Of Loss between 1/1/2024 and 12/31/2024 11:59 PM and Claim Status is Closed or Open As
+                      Of 11/10/2025 and Location is SKMGT SAVANT SENIOR LIVING MANAGEMENT LLC - W610614      
+                                                                                       Created: 11/10/2025 3:17:43 PM
+
+[TABLE 1]
+--------------------------------------------------------------------------------
+# Claims       	Total Paid     	Outstanding Reserve	Third Party Recovery	Total Incurred 	Reimbursements 	Net Incurred   
+---------------	---------------	-------------------	--------------------	---------------	---------------	---------------
+34             	$334,722.36    	$277,443.24        	$0.00               	$612,165.60    	$0.00          	$612,165.60    
+               	               	                   	                    	               	               	               
+--------------------------------------------------------------------------------
+
+[TABLE 2]
+--------------------------------------------------------------------------------
+Name                   	Date of Loss   	Claimant Report Date	Claim #        	Adjuster       	Date Closed    	Status         	Location Address                   	Type           	Total Paid     	Outstandi ng Reserve	Recovere d     	Total Incurred 	Accident Description                           	Insured Type   	Location2 Address                        
+-----------------------	---------------	--------------------	---------------	---------------	---------------	---------------	-----------------------------------	---------------	---------------	--------------------	---------------	---------------	-----------------------------------------------	---------------	-----------------------------------------
+Barrientos, Virginia   	7/28/202 4     	7/28/202 4          	24W61M226 290  	SBLAYL OCK     	10/28/20 24    	Closed         	8202 FLORENCE AVE, DOWNEY, CA 90240	Med            	$0.00          	$0.00               	$0.00          	$0.00          	bruise on left thigh and left shoulder         	1              	1025 NORTH FAIRFAX, LOS ANGELES, CA 90046
+Barrientos, Virginia   	7/28/202 4     	7/28/202 4          	24W61M336 439  	JAMWILL IAM    	               	Open           	8202 FLORENCE AVE, DOWNEY, CA 90240	Ind            	$17,394.8 8    	$8,674.83           	$0.00          	$26,069.7 1    	Tripped and fell up stairs; hip/elbow          	1              	1025 NORTH FAIRFAX, LOS ANGELES, CA 90046
+Barrientos, Virginia   	8/1/2024       	8/1/2024            	24W61M600 624  	AKATZ          	3/27/202 5     	Closed         	8202 FLORENCE AVE, DOWNEY, CA 90240	Med            	$70.00         	$0.00               	$0.00          	$70.00         	multiple body parts                            	1              	1025 NORTH FAIRFAX, LOS ANGELES, CA 90046
+Bernal, Carlos         	10/3/202 4     	10/3/202 4          	24W61M401 165  	KDUSKE Y       	               	Open           	8202 FLORENCE AVE, DOWNEY, CA 90240	Ind            	$7,225.00      	$41,540.0 0         	$0.00          	$48,765.0 0    	Unsatisfied with investigation on stress claim.	1              	1025 NORTH FAIRFAX, LOS ANGELES, CA 90046
+Carrillos Mira, Marta G	7/1/2024       	7/1/2024            	24W61M599 298  	JMCINTY RE     	               	Open           	8202 FLORENCE AVE, DOWNEY, CA 90240	Ind            	$75.00         	$10,345.0 0         	$0.00          	$10,420.0 0    	Back pain when lifting patient                 	1              	1025 NORTH FAIRFAX, LOS ANGELES, CA 90046
+Cervantes, Rosa        	11/7/202 4     	11/7/202 4          	24W61M457 158  	NIWALLA CE     	1/3/2025       	Closed         	8202 FLORENCE AVE, DOWNEY, CA 90240	Ind            	$2,528.16      	$0.00               	$0.00          	$2,528.16      	assisting transfer - R wrist pain              	3              	12045 S. LAKEWOOD BLVD, DOWNEY, CA 90242 
+Gallegos, Hannah       	6/9/2024       	6/9/2024            	24W61M182 833  	PVAUGH N       	1/30/202 5     	Closed         	8202 FLORENCE AVE, DOWNEY, CA 90240	Ind            	$1,091.55      	$0.00               	$0.00          	$1,091.55      	slipped on bag hurt knee                       	4              	5711 RESEDA BLVDF., TARZANA, CA 91356    
+Garcia, Carmen         	10/14/20 24    	10/14/20 24         	24W61M514 071  	SHMILES        	2/24/202 5     	Closed         	8202 FLORENCE AVE, DOWNEY, CA 90240	Med            	$753.93        	$0.00               	$0.00          	$753.93        	Needlestick L finger                           	9              	8202 FLORENCE AVE, DOWNEY, CA 90240      
+Garcia, Gerardo        	10/14/20 24    	10/15/20 24         	24W61M420 525  	CPRESL EY      	12/5/202 4     	Closed         	8202 FLORENCE AVE, DOWNEY, CA 90240	Med            	$485.02        	$0.00               	$0.00          	$485.02        	Bumped top of Head on shelf; Scalp Contusion   	3              	12045 S. LAKEWOOD BLVD, DOWNEY, CA 90242 
+Garibay, Andrea        	11/22/20 24    	11/22/20 24         	24W61M477 141  	SRORAB ACK     	               	Open           	8202 FLORENCE AVE, DOWNEY, CA 90240	Ind            	$8,953.57      	$34,987.4 3         	$0.00          	$43,941.0 0    	Back Strain; Patient Assist                    	6              	4609 ARLINGTON AVE, RIVERSIDE, CA 92504  
+Gogo, Christine        	2/18/202 4     	2/20/202 4          	24W61M046 581  	ACRISO STOM    	4/26/202 4     	Closed         	8202 FLORENCE AVE, DOWNEY, CA 90240	Med            	$635.53        	$0.00               	$0.00          	$635.53        	Cutting carrots; Left Middle Finger Laceration 	4              	5711 RESEDA BLVDF., TARZANA, CA 91356    
+Harris, Zymira         	2/16/202 4     	2/16/202 4          	24W61M042 714  	ACRISO STOM    	10/17/20 24    	Closed         	8202 FLORENCE AVE, DOWNEY, CA 90240	Med            	$1,694.18      	$0.00               	$0.00          	$1,694.18      	Needlestick in Finger; After Blood Sugar Check 	3              	12045 S. LAKEWOOD BLVD, DOWNEY, CA 90242 
+Hernandez, Martha      	5/11/202 4     	5/11/202 4          	24W61M150 727  	ACRISO STOM    	6/17/202 4     	Closed         	8202 FLORENCE AVE, DOWNEY, CA 90240	Med            	$511.50        	$0.00               	$0.00          	$511.50        	Ladder in closet fell and struck her in the eye	1              	1025 NORTH FAIRFAX, LOS ANGELES, CA 90046
+Lainez, Angela         	4/4/2024       	4/5/2024            	24W61M096 862  	SRORAB ACK     	               	Open           	8202 FLORENCE AVE, DOWNEY, CA 90240	Ind            	$61,647.5 7    	$51,169.2 7         	$0.00          	$112,816. 84   	slip fall: tailbone/arm                        	1              	1025 NORTH FAIRFAX, LOS ANGELES, CA 90046
+Lara, Claudia          	2/24/202 4     	3/11/202 4          	24W61M067 349  	PVAUGH N       	2/19/202 5     	Closed         	8202 FLORENCE AVE, DOWNEY, CA 90240	Ind            	$59,546.8 2    	$0.00               	$0.00          	$59,546.8 2    	Going up stairs and fell; Left Knee            	1              	1025 NORTH FAIRFAX, LOS ANGELES, CA 90046
+Macaso, Abbygaile      	4/6/2024       	4/6/2024            	24W61M098 596  	ACRISO STOM    	7/31/202 4     	Closed         	8202 FLORENCE AVE, DOWNEY, CA 90240	Med            	$448.09        	$0.00               	$0.00          	$448.09        	needlestick/pinky finger                       	3              	12045 S. LAKEWOOD BLVD, DOWNEY, CA 90242 
+Marroquin, Paola       	12/1/202 4     	12/1/202 4          	24W61M484 137  	ACRISO STOM    	4/3/2025       	Closed         	8202 FLORENCE AVE, DOWNEY, CA 90240	Ind            	$2,346.29      	$0.00               	$0.00          	$2,346.29      	Bumped L shin on bed board                     	1              	1025 NORTH FAIRFAX, LOS ANGELES, CA 90046
+Mena, Maya             	12/18/20 24    	12/18/20 24         	24W61M508 265  	MRAMIR EZ      	2/7/2025       	Closed         	8202 FLORENCE AVE, DOWNEY, CA 90240	Med            	$571.14        	$0.00               	$0.00          	$571.14        	Tear on right shoulder from resident care.     	1              	1025 NORTH FAIRFAX, LOS ANGELES, CA 90046
+Mira, Marta C          	5/12/202 4     	5/12/202 4          	24W61M162 621  	JMCINTY RE     	               	Open           	8202 FLORENCE AVE, DOWNEY, CA 90240	Ind            	$3,000.67      	$4,790.00           	$0.00          	$7,790.67      	Lifting resident from bed alone right shouder. 	1              	1025 NORTH FAIRFAX, LOS ANGELES, CA 90046
+Mira, Marta C          	12/13/20 24    	12/13/20 24         	24W61M552 472  	JMCINTY RE     	               	Open           	8202 FLORENCE AVE, DOWNEY, CA 90240	Ind            	$6,510.49      	$26,549.5 1         	$0.00          	$33,060.0 0    	repetitive Trama; multiple injuries            	1              	1025 NORTH FAIRFAX, LOS ANGELES, CA 90046
+                       	               	                    	               	               	               	               	                                   	               	               	                    	               	               	                                               	               	                                         
+--------------------------------------------------------------------------------
+
+                                                                                                             
+                                                                             
+                                                                                                             
+                                                
+                                                                                               
+                                                                                                  Page 1 of 2
+
+
+================================================================================
+PAGE 7
+================================================================================
+
+                                                                                                             
+                                        AMWINS  HEALTHCARE  PROGRAM                                          
+                                                                                                             
+                                                  Claim Grid                                                 
+               Claims where Date Of Loss between 1/1/2024 and 12/31/2024 11:59 PM and Claim Status is Closed or Open As
+                      Of 11/10/2025 and Location is SKMGT SAVANT SENIOR LIVING MANAGEMENT LLC - W610614      
+                                                                                       Created: 11/10/2025 3:17:43 PM
+
+[TABLE 1]
+--------------------------------------------------------------------------------
+Name                 	Date of Loss   	Claimant Report Date	Claim #        	Adjuster       	Date Closed    	Status         	Location Address                   	Type           	Total Paid     	Outstandi ng Reserve	Recovere d     	Total Incurred 	Accident Description                              	Insured Type   	Location2 Address                               
+---------------------	---------------	--------------------	---------------	---------------	---------------	---------------	-----------------------------------	---------------	---------------	--------------------	---------------	---------------	--------------------------------------------------	---------------	------------------------------------------------
+Montoya, Kayla       	5/6/2024       	5/6/2024            	24W61M154 184  	SBLAYL OCK     	6/3/2024       	Closed         	8202 FLORENCE AVE, DOWNEY, CA 90240	Ind            	$1,990.52      	$0.00               	$0.00          	$1,990.52      	transferring resident/ hip strain                 	2              	11515 FIRESTONE BLVD. NORWALK, NORWALK, CA 90650
+Moran, Ana E         	8/4/2024       	8/4/2024            	24W61M764 154  	SRORAB ACK     	               	Open           	8202 FLORENCE AVE, DOWNEY, CA 90240	Ind            	$689.29        	$13,330.7 1         	$0.00          	$14,020.0 0    	Mental Health, Back, Shoulders, Feet, Arms, Waist 	9              	8202 FLORENCE AVE, DOWNEY, CA 90240             
+Ortega, Samuel       	8/5/2024       	8/5/2024            	24W61M248 444  	ACRISO STOM    	10/10/20 24    	Closed         	8202 FLORENCE AVE, DOWNEY, CA 90240	Med            	$2,284.38      	$0.00               	$0.00          	$2,284.38      	Moving hospital bed; Right Shoulder               	6              	4609 ARLINGTON AVE, RIVERSIDE, CA 92504         
+Perez, Andrea        	10/22/20 24    	10/22/20 24         	24W61M627 486  	KDUSKE Y       	10/15/20 25    	Closed         	8202 FLORENCE AVE, DOWNEY, CA 90240	Ind            	$28,366.2 8    	$0.00               	$0.00          	$28,366.2 8    	Head, Neck, Shoulder(s)                           	1              	1025 NORTH FAIRFAX, LOS ANGELES, CA 90046       
+Quintana, Esther     	10/17/20 24    	10/17/20 24         	24W61M415 318  	SRORAB ACK     	9/23/202 5     	Closed         	8202 FLORENCE AVE, DOWNEY, CA 90240	Ind            	$9,452.21      	$0.00               	$0.00          	$9,452.21      	Lower back strain                                 	5              	1 E COMMONWEALTH AVE., ALHAMBRA, CA 91801       
+Quintanilla, Jennifer	9/30/202 4     	9/30/202 4          	24W61M390 295  	ACRISO STOM    	11/12/20 24    	Closed         	8202 FLORENCE AVE, DOWNEY, CA 90240	Med            	$210.72        	$0.00               	$0.00          	$210.72        	Burn to left arm from water.                      	3              	12045 S. LAKEWOOD BLVD, DOWNEY, CA 90242        
+Rodriguez, Itzel     	11/6/202 4     	11/6/202 4          	24W61M467 905  	SRORAB ACK     	               	Open           	8202 FLORENCE AVE, DOWNEY, CA 90240	Med            	$17,237.2 5    	$7,617.75           	$0.00          	$24,855.0 0    	Tripped over a step; Low Back                     	4              	5711 RESEDA BLVDF., TARZANA, CA 91356           
+Valencia, Elizabeth  	6/24/202 4     	8/26/202 4          	24W61M352 409  	SRORAB ACK     	               	Open           	8202 FLORENCE AVE, DOWNEY, CA 90240	Ind            	$7,275.27      	$41,934.7 3         	$0.00          	$49,210.0 0    	UNK Cause; UNK Injury                             	9              	4609 ARLINGTON AVE, RIVERSIDE, CA 92504         
+Valenzuela, Karly    	2/28/202 4     	2/28/202 4          	24W61M058 933  	SBLAYL OCK     	6/3/2024       	Closed         	8202 FLORENCE AVE, DOWNEY, CA 90240	Med            	$4,474.74      	$0.00               	$0.00          	$4,474.74      	Lifting patient pain back to my tailbone.         	6              	1 E COMMONWEALTH AVE., ALHAMBRA, CA 91801       
+Van, Jonathan        	12/29/20 24    	12/29/20 24         	24W61M513 984  	MRAMIR EZ      	2/6/2025       	Closed         	8202 FLORENCE AVE, DOWNEY, CA 90240	Med            	$210.72        	$0.00               	$0.00          	$210.72        	Resident punched in R eye.                        	5              	1 E COMMONWEALTH AVE., ALHAMBRA, CA 91801       
+Vasquez, Nancy       	6/7/2024       	7/7/2024            	24W61M214 745  	NIWALLA CE     	8/23/202 4     	Closed         	8202 FLORENCE AVE, DOWNEY, CA 90240	Med            	$80.00         	$0.00               	$0.00          	$80.00         	Fell; Knees; Right Calf                           	3              	12045 S. LAKEWOOD BLVD, DOWNEY, CA 90242        
+Vera, Sarah          	8/8/2024       	8/9/2024            	24W61M338 989  	KDUSKE Y       	               	Open           	8202 FLORENCE AVE, DOWNEY, CA 90240	Ind            	$58,379.1 9    	$30,559.0 1         	$0.00          	$88,938.2 0    	tripped fell hurt L knee                          	3              	12045 S. LAKEWOOD BLVD, DOWNEY, CA 90242        
+VERA, SARAH          	6/11/202 4     	6/11/202 4          	24W61M606 306  	KDUSKE Y       	               	Open           	8202 FLORENCE AVE, DOWNEY, CA 90240	Med            	$55.00         	$5,945.00           	$0.00          	$6,000.00      	Head, Back, Shoulder(s), Nervous System, Psychiatr	3              	12045 S. LAKEWOOD BLVD, DOWNEY, CA 90242        
+Wenceslao, Wendy     	4/3/2024       	6/26/202 4          	24W61M194 636  	JHERCU LES     	8/1/2025       	Closed         	8202 FLORENCE AVE, DOWNEY, CA 90240	Ind            	$28,527.4 0    	$0.00               	$0.00          	$28,527.4 0    	Low Back; Transferring patient                    	3              	12045 S. LAKEWOOD BLVD, DOWNEY, CA 90242        
+                     	               	                    	               	               	               	               	                                   	               	               	                    	               	               	                                                  	               	                                                
+--------------------------------------------------------------------------------
+
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                             
+                                                
+                                                                                               
+                                                                                                  Page 2 of 2
+
+
+================================================================================
+PAGE 8
+================================================================================
+
+                                                                                                             
+                                        AMWINS  HEALTHCARE  PROGRAM                                          
+                                                                                                             
+                                                  Claim Grid                                                 
+               Claims where Date Of Loss between 1/1/2023 and 12/31/2023 11:59 PM and Claim Status is Closed or Open As
+                      Of 11/10/2025 and Location is SKMGT SAVANT SENIOR LIVING MANAGEMENT LLC - W610614      
+                                                                                       Created: 11/10/2025 3:17:17 PM
+
+[TABLE 1]
+--------------------------------------------------------------------------------
+# Claims       	Total Paid     	Outstanding Reserve	Third Party Recovery	Total Incurred 	Reimbursements 	Net Incurred   
+---------------	---------------	-------------------	--------------------	---------------	---------------	---------------
+13             	$201,239.51    	$102,826.74        	$0.00               	$304,066.25    	$0.00          	$304,066.25    
+               	               	                   	                    	               	               	               
+--------------------------------------------------------------------------------
+
+[TABLE 2]
+--------------------------------------------------------------------------------
+Name             	Date of Loss   	Claimant Report Date	Claim #        	Adjuster       	Date Closed    	Status         	Location Address                   	Type           	Total Paid     	Outstandi ng Reserve	Recovere d     	Total Incurred 	Accident Description                            	Insured Type   	Location2 Address                               
+-----------------	---------------	--------------------	---------------	---------------	---------------	---------------	-----------------------------------	---------------	---------------	--------------------	---------------	---------------	------------------------------------------------	---------------	------------------------------------------------
+Angeles, Irene   	5/16/202 3     	6/16/202 3          	23W61K777 351  	GLANGS TON     	10/31/20 23    	Closed         	8202 FLORENCE AVE, DOWNEY, CA 90240	Med            	$741.35        	$0.00               	$0.00          	$741.35        	hurt L hand                                     	3              	12045 S. LAKEWOOD BLVD, DOWNEY, CA 90242        
+Ariza, Yessica   	12/17/20 23    	12/24/20 23         	23W61K971 420  	STRIPHA N      	2/1/2024       	Closed         	8202 FLORENCE AVE, DOWNEY, CA 90240	Med            	$426.14        	$0.00               	$0.00          	$426.14        	lifting resident; back and arm pain             	1              	1025 NORTH FAIRFAX, LOS ANGELES, CA 90046       
+Barco, Antonia   	3/26/202 3     	3/27/202 3          	23W61K660 921  	KDUSKE Y       	               	Open           	8202 FLORENCE AVE, DOWNEY, CA 90240	Ind            	$137,168. 42   	$62,428.8 8         	$0.00          	$199,597. 30   	EE slipped on bed sheet; Fell on knee and hand. 	1              	1025 NORTH FAIRFAX, LOS ANGELES, CA 90046       
+Campos, Heidy    	12/30/20 23    	12/30/20 23         	23W61K985 018  	NIWALLA CE     	2/8/2024       	Closed         	8202 FLORENCE AVE, DOWNEY, CA 90240	Ind            	$2,142.87      	$0.00               	$0.00          	$2,142.87      	sharp pain lower back taking out bags of garbage	1              	1025 NORTH FAIRFAX, LOS ANGELES, CA 90046       
+De Sagun, Jovita 	10/11/20 23    	11/13/20 23         	23W61K929 174  	CPRESL EY      	2/22/202 4     	Closed         	8202 FLORENCE AVE, DOWNEY, CA 90240	Med            	$742.80        	$0.00               	$0.00          	$742.80        	Lifting resident; lower back                    	4              	5711 RESEDA BLVDF., TARZANA, CA 91356           
+Estrella, Simone 	8/5/2023       	8/5/2023            	23W61K828 435  	NIWALLA CE     	9/28/202 3     	Closed         	8202 FLORENCE AVE, DOWNEY, CA 90240	Ind            	$2,983.34      	$0.00               	$0.00          	$2,983.34      	Caught in between equipment injuring right hand 	5              	1 E COMMONWEALTH AVE., ALHAMBRA, CA 91801       
+Hercules, Carlos 	5/9/2023       	5/9/2023            	23W61K665 697  	NIWALLA CE     	6/13/202 3     	Closed         	8202 FLORENCE AVE, DOWNEY, CA 90240	Ind            	$33.00         	$0.00               	$0.00          	$33.00         	EE was burned while cooking                     	1              	1025 NORTH FAIRFAX, LOS ANGELES, CA 90046       
+Hernandez, Martha	4/8/2023       	4/8/2023            	23W61K905 514  	SBLAYL OCK     	2/26/202 4     	Closed         	8202 FLORENCE AVE, DOWNEY, CA 90240	Ind            	$70.00         	$0.00               	$0.00          	$70.00         	Wrist, hand, fingers, back.                     	1              	1025 NORTH FAIRFAX, LOS ANGELES, CA 90046       
+Lopez, Fernanda  	6/23/202 3     	6/23/202 3          	23W61K792 790  	JHERCU LES     	5/1/2024       	Closed         	8202 FLORENCE AVE, DOWNEY, CA 90240	Ind            	$17,036.9 1    	$0.00               	$0.00          	$17,036.9 1    	Deep cut on left hand thumb.                    	2              	11515 FIRESTONE BLVD. NORWALK, NORWALK, CA 90650
+Macaso, Abbygaile	7/11/202 3     	7/11/202 3          	23W61K798 178  	GLANGS TON     	10/31/20 23    	Closed         	8202 FLORENCE AVE, DOWNEY, CA 90240	Med            	$396.83        	$0.00               	$0.00          	$396.83        	Needle stick; Right Thumb                       	3              	12045 S. LAKEWOOD BLVD, DOWNEY, CA 90242        
+Rall, Naoko      	11/13/20 23    	11/13/20 23         	23W61K935 186  	STRIPHA N      	12/27/20 23    	Closed         	8202 FLORENCE AVE, DOWNEY, CA 90240	Ind            	$591.54        	$0.00               	$0.00          	$591.54        	dog bite; L shin                                	7              	8221 3RD STREET, SUITE 208, DOWNEY, CA 90241    
+Saavedra, Teresa 	9/17/202 3     	9/17/202 3          	23W61K870 322  	JHERCU LES     	1/25/202 4     	Closed         	8202 FLORENCE AVE, DOWNEY, CA 90240	Ind            	$304.17        	$0.00               	$0.00          	$304.17        	Fall - L shin                                   	3              	12045 S. LAKEWOOD BLVD, DOWNEY, CA 90242        
+Saravia, Rubidia 	5/7/2023       	5/7/2023            	23W61K689 376  	JAMWILL IAM    	               	Open           	8202 FLORENCE AVE, DOWNEY, CA 90240	Ind            	$38,602.1 4    	$40,397.8 6         	$0.00          	$79,000.0 0    	sustained injuries due to repetitive work       	1              	1025 NORTH FAIRFAX, LOS ANGELES, CA 90046       
+                 	               	                    	               	               	               	               	                                   	               	               	                    	               	               	                                                	               	                                                
+--------------------------------------------------------------------------------
+
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                             
+                                                
+                                                                                               
+                                                                                                  Page 1 of 1
+
+
+================================================================================
+PAGE 9
+================================================================================
+
+                                                                                                             
+                                        AMWINS  HEALTHCARE  PROGRAM                                          
+                                                                                                             
+                                                  Claim Grid                                                 
+               Claims where Date Of Loss between 2/1/2023 and 12/31/2023 11:59 PM and Claim Status is Closed or Open As
+                          Of 10/22/2025 and Location is one of SKMGT LE BLEU CHATEAU, INC. - W610628         
+                                                                                       Created: 10/22/2025 4:18:05 PM
+
+[TABLE 1]
+--------------------------------------------------------------------------------
+# Claims       	Total Paid     	Outstanding Reserve	Third Party Recovery	Total Incurred 	Reimbursements 	Net Incurred   
+---------------	---------------	-------------------	--------------------	---------------	---------------	---------------
+16             	$411,958.96    	$75,811.93         	$0.00               	$487,770.89    	$0.00          	$487,770.89    
+               	               	                   	                    	               	               	               
+--------------------------------------------------------------------------------
+
+[TABLE 2]
+--------------------------------------------------------------------------------
+Covg           	Name              	Claimant Id    	Date of Loss   	Claim #        	Claim Entry Date	Date Closed    	Status         	Type           	Total Paid     	Outstanding Reserve	Total Incurred 	Location Name              
+---------------	------------------	---------------	---------------	---------------	----------------	---------------	---------------	---------------	---------------	-------------------	---------------	---------------------------
+WC             	Ambriz, Breanna   	XXX-XX-XXXX    	10/30/2023     	23W61K931625   	11/14/2023      	2/29/2024      	Closed         	Med            	$940.21        	$0.00              	$940.21        	SKMGT LE BLEU CHATEAU, INC.
+WC             	Bhowmik, Prashanta	XXX-XX-XXXX    	7/27/2023      	23W61K816208   	8/1/2023        	9/11/2023      	Closed         	Med            	$623.63        	$0.00              	$623.63        	SKMGT LE BLEU CHATEAU, INC.
+WC             	Brizuela, Rosa    	XXX-XX-XXXX    	5/25/2023      	23W61K692375   	6/7/2023        	7/18/2023      	Closed         	Med            	$195.84        	$0.00              	$195.84        	SKMGT LE BLEU CHATEAU, INC.
+WC             	Cedillo, Julia    	XXX-XX-XXXX    	12/7/2023      	23W61K967033   	12/20/2023      	               	Open           	Ind            	$81,702.97     	$75,811.93         	$157,514.90    	SKMGT LE BLEU CHATEAU, INC.
+WC             	DeAndra, Rebecca  	XXX-XX-XXXX    	12/27/2023     	23W61K972333   	12/28/2023      	1/30/2024      	Closed         	Med            	$902.69        	$0.00              	$902.69        	SKMGT LE BLEU CHATEAU, INC.
+WC             	Del Cid, Paloma   	XXX-XX-XXXX    	7/3/2023       	23W61K798689   	7/14/2023       	8/22/2023      	Closed         	Med            	$380.66        	$0.00              	$380.66        	SKMGT LE BLEU CHATEAU, INC.
+WC             	Ferreira, Carola  	XXX-XX-XXXX    	12/29/2023     	23W61K985541   	1/4/2024        	4/19/2024      	Closed         	Med            	$5,635.21      	$0.00              	$5,635.21      	SKMGT LE BLEU CHATEAU, INC.
+WC             	Gomez, Maria      	XXX-XX-XXXX    	12/30/2023     	23W61K988350   	1/8/2024        	1/29/2024      	Closed         	Med            	$1,092.23      	$0.00              	$1,092.23      	SKMGT LE BLEU CHATEAU, INC.
+WC             	Jimenez, Roxsana  	XXX-XX-XXXX    	9/23/2023      	23W61K938899   	11/21/2023      	9/6/2024       	Closed         	Ind            	$20,406.32     	$0.00              	$20,406.32     	SKMGT LE BLEU CHATEAU, INC.
+WC             	Jones, Barrie D   	XXX-XX-XXXX    	9/8/2023       	23W61K872363   	9/20/2023       	1/17/2024      	Closed         	Ind            	$1,233.43      	$0.00              	$1,233.43      	SKMGT LE BLEU CHATEAU, INC.
+WC             	Ponce, Kassandra  	XXX-XX-XXXX    	7/10/2023      	23W61K798281   	7/13/2023       	10/13/2023     	Closed         	Med            	$430.32        	$0.00              	$430.32        	SKMGT LE BLEU CHATEAU, INC.
+WC             	Ponce, Kassandra  	XXX-XX-XXXX    	10/9/2023      	23W61K893827   	10/10/2023      	12/28/2023     	Closed         	Med            	$590.05        	$0.00              	$590.05        	SKMGT LE BLEU CHATEAU, INC.
+WC             	Ramirez, Maria    	XXX-XX-XXXX    	10/6/2023      	23W61K892686   	10/9/2023       	11/8/2023      	Closed         	Med            	$1,533.79      	$0.00              	$1,533.79      	SKMGT LE BLEU CHATEAU, INC.
+WC             	Tiu, Lerma        	XXX-XX-XXXX    	8/19/2023      	23W61K842736   	8/23/2023       	9/26/2025      	Closed         	Ind            	$234,458.84    	$0.00              	$234,458.84    	SKMGT LE BLEU CHATEAU, INC.
+WC             	Urmeneta, Gindy   	XXX-XX-XXXX    	8/21/2023      	23W61K847599   	8/28/2023       	5/3/2024       	Closed         	Ind            	$60,308.62     	$0.00              	$60,308.62     	SKMGT LE BLEU CHATEAU, INC.
+WC             	Zeledon, Karen    	XXX-XX-XXXX    	10/31/2023     	23W61K932667   	11/15/2023      	1/23/2024      	Closed         	Med            	$1,524.15      	$0.00              	$1,524.15      	SKMGT LE BLEU CHATEAU, INC.
+               	                  	               	               	               	                	               	               	               	               	                   	               	                           
+--------------------------------------------------------------------------------
+
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                                                             
+                                                                             
+                                                
+                                                                                                             
+                                                                                               
+                                                                                                  Page 1 of 1
+
