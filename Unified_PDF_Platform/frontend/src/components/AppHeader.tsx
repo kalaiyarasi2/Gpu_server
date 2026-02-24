@@ -31,7 +31,7 @@ const AppHeader = () => {
           </div>
           <div className="hidden sm:block">
             <h1 className="text-2xl font-bold tracking-tight text-[hsl(var(--header-fg))] whitespace-nowrap">
-              Insurance Form Extractor
+              Data Retrieval Ingestion Verification Engine
             </h1>
             <p className="text-sm text-[hsl(var(--header-fg))]/70">AI-Powered PDF Processing & Data Extraction</p>
           </div>

@@ -14,33 +14,24 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
-# Import ClaimsAnalyzer for summary feature
-import sys
-sys.path.append(str(Path(__file__).parent.parent / "Insurance_pdf_extractor-main" / "backend"))
-from summary_for_json import ClaimsAnalyzer
 
-# Import our router logic
-from unified_router import UnifiedRouter
-
-# Setup directories
-BASE_DIR = Path(__file__).parent
-UPLOAD_DIR = BASE_DIR / "uploads"
-UPLOAD_DIR.mkdir(exist_ok=True)
+# Import shared resources
+from shared_configs import router_engine, file_path_cache, _perform_extraction, BASE_DIR, UPLOAD_DIR
+# Import summary functions
+from summary_api import get_claim_summary, cognethro_trigger, cognethro_trigger_docs
 
 # Load environment variables from parent directory
 load_dotenv(BASE_DIR.parent / ".env")
 
 app = FastAPI(
-    title="Cognethro",
+    title="Data Retrieval Ingestion Verification Engine",
     description="Unified API for Insurance Document Extraction",
     version="1.0.0",
     docs_url=None,  # Override for custom download buttons logic
     redoc_url="/redoc"
 )
-router_engine = UnifiedRouter()
 
-# File path cache: maps filename -> full absolute path
-file_path_cache = {}
+# BASE_DIR and UPLOAD_DIR are now imported from shared_configs
 
 # Configure CORS
 app.add_middleware(
@@ -52,6 +43,13 @@ app.add_middleware(
 )
 
 # BASE_DIR and UPLOAD_DIR are now defined at the top
+# Explicitly map summary_api routes to avoid 405 mapping issues
+app.get("/cognethro", include_in_schema=False)(cognethro_trigger_docs)
+app.post("/cognethro", 
+    summary="Cognethro Trigger Point — Extract Document",
+    include_in_schema=True)(cognethro_trigger)
+app.post("/api/claim-summary", 
+    summary="Generate AI Summary")(get_claim_summary)
 
 # Mount static and templates for the new React frontend
 frontend_dist_path = BASE_DIR / "frontend" / "dist"
@@ -62,104 +60,8 @@ else:
     print(f"⚠️ Warning: Frontend dist folder not found at {frontend_dist_path}. Run build first.")
 
 
-async def _perform_extraction(file: UploadFile, request: Request):
-    print(f"\n[Unified][API] Received request for: {file.filename}")
-    
-    file_ext = Path(file.filename).suffix.lower()
-    if file_ext not in [".pdf", ".xlsx", ".xls", ".csv"]:
-        raise HTTPException(status_code=400, detail="Only PDF, Excel and CSV files are supported")
-    
-    file_path = UPLOAD_DIR / file.filename
-    try:
-        # Save the uploaded file
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-            
-        # Run the unified router
-        print(f"[Unified][API] Routing document...")
-        result = router_engine.process(str(file_path))
-        
-        if "error" in result:
-            raise HTTPException(status_code=500, detail=result["error"])
-        
-        # Extract filenames and full paths
-        excel_path = result.get("excel")
-        json_path = result.get("json")
-        
-        excel_filename = Path(excel_path).name if excel_path else None
-        json_filename = Path(json_path).name if json_path else None
-        
-        # Cache the full paths for download endpoint
-        if excel_path:
-            file_path_cache[excel_filename] = excel_path
-            print(f"[Unified][API] Cached Excel: {excel_filename} -> {excel_path}")
-        if json_path:
-            file_path_cache[json_filename] = json_path
-            print(f"[Unified][API] Cached JSON: {json_filename} -> {json_path}")
-        
-        # Transform response to match frontend expectations
-        doc_type = result.get("type", "UNKNOWN")
-        
-        # Build base URL for downloads
-        base_url = str(request.base_url).rstrip("/")
-        
-        # Build base response with clickable URLs
-        response = {
-            "type": doc_type,
-            "output_file": excel_filename,
-            "output_json": json_filename,
-            "excel": f"{base_url}/api/download/{excel_filename}" if excel_filename else None,
-            "json": f"{base_url}/api/download/{json_filename}" if json_filename else None
-        }
-        
-        # Add Work Compensation specific metadata
-        if doc_type == "WORK_COMPENSATION" and json_path:
-            try:
-                import json as json_lib
-                with open(json_path, "r", encoding="utf-8") as f:
-                    wc_data = json_lib.load(f)
-                
-                inner = wc_data.get("data", {})
-                demographics = inner.get("demographics", {})
-                premium_calc = inner.get("premiumCalculation", {})
-                rating_by_state = inner.get("ratingByState", [])
-                
-                # Detect form type from wcStates field or state list
-                wc_states_raw = demographics.get("wcStates", "") or ""
-                wc_states = [s.strip().upper() for s in wc_states_raw.replace(",", " ").split() if s.strip()]
-                
-                if "CA" in wc_states:
-                    form_type = "California ACORD"
-                elif "FL" in wc_states:
-                    form_type = "Florida ACORD"
-                elif wc_states:
-                    form_type = f"ACORD ({', '.join(wc_states[:3])})"
-                else:
-                    form_type = "Standard ACORD 130"
-                
-                # Get total premium
-                total_premium = premium_calc.get("totalEstimatedAnnualPremium", 0) or 0
-                if not total_premium and rating_by_state:
-                    total_premium = sum(
-                        float(r.get("estimatedAnnualPremium", 0) or 0)
-                        for r in rating_by_state
-                    )
-                
-                applicant_name = demographics.get("applicantName", "N/A")
-                
-                response["work_comp_metadata"] = {
-                    "form_type": form_type,
-                    "total_premium": total_premium,
-                    "applicant_name": applicant_name,
-                    "wc_states": wc_states
-                }
-            except Exception as meta_err:
-                print(f"[Unified][WARN] Could not extract work comp metadata: {meta_err}")
-        
-        return response
-    except Exception as e:
-        print(f"[Unified][ERROR] {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+
+# _perform_extraction is now imported from shared_configs
 
 @app.post("/api/extract", include_in_schema=False)
 async def extract_document(request: Request, file: UploadFile = File(...)):
@@ -224,49 +126,6 @@ async def custom_swagger_ui_html():
 # Injecting the custom Script via a separate HTML header middleware if needed, 
 # or just keeping it simple for now to get it working.
 
-@app.get("/cognethro", include_in_schema=False)
-async def cognethro_trigger_docs():
-    """Redirect human visitors from the trigger point to the 'Real' standard Swagger documentation."""
-    return RedirectResponse(url="/docs")
-
-@app.post("/cognethro",
-    summary="Cognethro Trigger Point — Extract Document",
-    description="""
-The **Cognethro Trigger Point**.
-
-- **Browser**: Visit `GET /cognethro` to open the interactive Swagger UI.
-- **API/curl**: `POST /cognethro` with a `file` field to extract and get download URLs.
-- **Direct Download**: Add `download=true` to your POST request to get a ZIP file containing both Excel and JSON directly as a single download.
-""")
-async def cognethro_trigger(request: Request, file: UploadFile = File(...), download: bool = False):
-    result = await _perform_extraction(file, request)
-    if isinstance(result, dict):
-        result["trigger_point"] = "cognethro"
-        
-        # If direct download is requested, create a ZIP and return it
-        if download and "error" not in result:
-            excel_filename = result.get("output_file")
-            json_filename = result.get("output_json")
-            
-            excel_path = file_path_cache.get(excel_filename)
-            json_path = file_path_cache.get(json_filename)
-            
-            if excel_path and json_path:
-                zip_filename = f"{Path(file.filename).stem}_extracted.zip"
-                zip_path = Path(tempfile.gettempdir()) / zip_filename
-                
-                with zipfile.ZipFile(zip_path, 'w') as zipf:
-                    zipf.write(excel_path, excel_filename)
-                    zipf.write(json_path, json_filename)
-                
-                print(f"[Unified][API] Returning ZIP download for {file.filename}")
-                return FileResponse(
-                    path=zip_path,
-                    filename=zip_filename,
-                    media_type="application/zip"
-                )
-    
-    return result
 
 @app.get("/api/download/{filepath:path}", include_in_schema=False)
 async def download_file(filepath: str):
@@ -274,6 +133,14 @@ async def download_file(filepath: str):
     print(f"[Download] Requested file: {filepath}")
     
     # First, check the cache for the full path
+    if filepath in file_path_cache:
+        file_path = Path(file_path_cache[filepath])
+    else:
+        # Safety: If the path contains a URL (e.g. from a bad frontend call), strip it
+        if "://" in filepath:
+            filepath = filepath.split("/")[-1]
+            print(f"[Download] Stripped URL from path, now: {filepath}")
+            
     if filepath in file_path_cache:
         file_path = Path(file_path_cache[filepath])
         print(f"[Download] Found in cache: {file_path}")
@@ -330,41 +197,6 @@ async def download_file(filepath: str):
         
     return FileResponse(path=file_path, filename=filename, media_type=media_type)
 
-@app.post("/api/claim-summary")
-async def get_claim_summary(request: Request):
-    """
-    Generate an AI summary for provided data (Claims or Invoices)
-    """
-    try:
-        data = await request.json()
-    except Exception:
-        return JSONResponse({"error": "Invalid JSON payload"}, status_code=400)
-
-    if not data or 'claims' not in data:
-        # Check if it's a list directly
-        if isinstance(data, list):
-            claims_data = {'claims': data}
-        else:
-            return JSONResponse({'error': 'No data provided (expected "claims" field)'}, status_code=400)
-    else:
-        claims_data = data
-
-    try:
-        # Initialize analyzer with API key from environment
-        analyzer = ClaimsAnalyzer(api_key=os.getenv("OPENAI_API_KEY"))
-        summary = analyzer.generate_claim_summary(claims_data)
-
-        return {
-            'success': True,
-            'summary': summary
-        }
-
-    except Exception as e:
-        print(f"❌ Error generating summary: {e}")
-        return JSONResponse({
-            'error': str(e),
-            'success': False
-        }, status_code=500)
 
 @app.get("/{path:path}", response_class=HTMLResponse)
 async def serve_frontend(request: Request, path: str = ""):

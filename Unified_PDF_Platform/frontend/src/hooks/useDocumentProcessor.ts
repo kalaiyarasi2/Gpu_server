@@ -75,7 +75,7 @@ export function useDocumentProcessor() {
 
                 // Handle unified router response format
                 const documentType = json.type || "UNKNOWN";
-                const jsonPath = json.json || json.output_json;
+                const jsonPath = json.output_json || json.json;
 
                 // Fetch the JSON file from the backend
                 let schema: any = null;
