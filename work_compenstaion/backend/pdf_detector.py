@@ -31,74 +31,86 @@ class PDFDetector:
         if not self.pdf_path.exists():
             raise FileNotFoundError(f"PDF file not found: {pdf_path}")
     
-    def is_scanned(self, text_threshold=50, pages_to_check=3):
+    def is_page_scanned(self, page_index, text_threshold=50):
         """
-        Check if PDF is scanned (image-based) or contains extractable text.
-        Also detects if the text layer is unreadable (garbage encoding).
-        
-        Args:
-            text_threshold: Minimum characters to consider page as having text
-            pages_to_check: Number of pages to sample for detection
-            
-        Returns:
-            bool: True if PDF appears to be scanned or unreadable, False otherwise
+        Check if a specific page is scanned or contains unreadable text.
         """
         import re
         try:
             reader = PdfReader(str(self.pdf_path))
-            total_pages = len(reader.pages)
+            if page_index >= len(reader.pages):
+                return True
+                
+            page = reader.pages[page_index]
+            text = page.extract_text()
             
-            # Check first few pages for text content
+            if not text or len(text.strip()) < text_threshold:
+                return True
+            
+            text = text.strip()
+            
+            # HEURISTIC: Check if text is actually readable
+            
+            # 1. Check for (cid:XX) tags
+            cid_count = text.count("(cid:")
+            
+            # 2. Check for slash-coded characters
+            slash_digit_count = len(re.findall(r'/[0-9]', text))
+            
+            # 3. Check alphanumeric ratio
+            alnum_text = re.sub(r'[^a-zA-Z0-9]', '', text)
+            alnum_ratio = len(alnum_text) / len(text) if len(text) > 0 else 0
+            
+            is_garbage = False
+            if alnum_ratio < 0.3:
+                is_garbage = True
+            elif slash_digit_count > len(text) * 0.05:
+                is_garbage = True
+            elif cid_count * 7 > len(text) * 0.1:
+                is_garbage = True
+                
+            return is_garbage
+            
+        except Exception:
+            return True
+
+    def is_scanned(self, text_threshold=50, pages_to_check=3):
+        """
+        Check if PDF is scanned by sampling pages.
+        """
+        try:
+            reader = PdfReader(str(self.pdf_path))
+            total_pages = len(reader.pages)
             pages_to_check = min(pages_to_check, total_pages)
             
-            text_found = False
             for i in range(pages_to_check):
-                text = reader.pages[i].extract_text()
-                if not text:
-                    continue
-                
-                text = text.strip()
-                if len(text) < text_threshold:
-                    continue
+                if not self.is_page_scanned(i, text_threshold):
+                    return False # Found a readable page
+            
+            return True # No readable pages found in sample
+        except Exception:
+            return True
 
-                # HEURISTIC: Check if text is actually readable
-                
-                # 1. Check for (cid:XX) tags which indicate broken font mapping (pdfminer style)
-                cid_count = text.count("(cid:")
-                
-                # 2. Check for slash-coded characters (pypdf style)
-                # These look like /114 /j107 etc.
-                slash_digit_count = len(re.findall(r'/[0-9]', text))
-                
-                # 3. Check alphanumeric ratio
-                alnum_text = re.sub(r'[^a-zA-Z0-9]', '', text)
-                alnum_ratio = len(alnum_text) / len(text) if len(text) > 0 else 0
-                
-                # DETECTION CRITERIA:
-                # - If ratio is very low (< 30%)
-                # - OR if there's a high density of slash codes (> 5% of characters)
-                # - OR if there's a high density of CID tags (> 10% of characters)
-                
-                is_garbage = False
-                if alnum_ratio < 0.3:
-                    print(f"   ⚠️ detected low alphanumeric ratio ({alnum_ratio:.2f}) on page {i+1}")
-                    is_garbage = True
-                elif slash_digit_count > len(text) * 0.05:
-                    print(f"   ⚠️ detected high slash-code density on page {i+1}")
-                    is_garbage = True
-                elif cid_count * 7 > len(text) * 0.1:
-                    print(f"   ⚠️ detected high CID density on page {i+1}")
-                    is_garbage = True
-                
-                if not is_garbage:
-                    text_found = True
-                    break
+    def has_form_fields(self):
+        """
+        Check if the PDF contains fillable form fields (AcroForms or XFA).
+        """
+        try:
+            reader = PdfReader(str(self.pdf_path))
+            # Check for AcroForm in root
+            if "/AcroForm" in reader.trailer["/Root"]:
+                return True
             
-            return not text_found  # Scanned if no substantial readable text found
-            
-        except Exception as e:
-            print(f"Error checking PDF type: {e}")
-            return True  # Default to OCR if unsure
+            # Check individual pages for fields
+            for page in reader.pages:
+                if "/Annots" in page:
+                    for annot in page["/Annots"]:
+                        obj = annot.get_object()
+                        if obj.get("/Subtype") == "/Widget" and obj.get("/FT"):
+                            return True
+            return False
+        except Exception:
+            return False
     
     def get_pdf_info(self):
         """
@@ -115,6 +127,7 @@ class PDFDetector:
                 'file_size_kb': self.pdf_path.stat().st_size / 1024,
                 'total_pages': len(reader.pages),
                 'is_scanned': self.is_scanned(),
+                'has_form_fields': self.has_form_fields(),
                 'metadata': reader.metadata if reader.metadata else {}
             }
             
@@ -129,7 +142,7 @@ class PDFDetector:
         Perform full analysis and print results.
         
         Returns:
-            str: Recommended extraction method ('digital' or 'ocr')
+            str: Recommended extraction method ('digital', 'ocr', or 'hybrid')
         """
         print(f"\n{'='*80}")
         print(f"PDF ANALYSIS")
@@ -141,10 +154,18 @@ class PDFDetector:
         
         if info:
             print(f"Pages: {info['total_pages']}")
-            print(f"Type: {'Scanned (Image-based)' if info['is_scanned'] else 'Digital (Text-based)'}")
-            print(f"Recommended method: {'OCR Extraction' if info['is_scanned'] else 'Digital Extraction'}")
+            print(f"Type: {'Scanned' if info['is_scanned'] else 'Digital'}")
+            print(f"Form Fields: {'Detected' if info['has_form_fields'] else 'Not Found'}")
+            
+            method = 'digital'
+            if info['is_scanned']:
+                method = 'ocr'
+            elif info['has_form_fields']:
+                method = 'hybrid' # Use digital + form extraction
+            
+            print(f"Recommended method: {method.upper()}")
             print(f"{'='*80}\n")
             
-            return 'ocr' if info['is_scanned'] else 'digital'
+            return method
         
-        return 'ocr'  # Default to OCR if analysis fails
+        return 'ocr'

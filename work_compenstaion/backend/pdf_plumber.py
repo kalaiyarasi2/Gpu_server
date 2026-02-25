@@ -5,6 +5,7 @@ Preserves layout and formatting in output TXT file
 """
 
 import pdfplumber
+from pypdf import PdfReader
 import json
 import os
 from typing import List, Dict, Optional, Tuple
@@ -86,7 +87,7 @@ PAGE SAMPLES:
 """
         
         response = client.chat.completions.create(
-            model="gpt-4.1",
+            model="gpt-4o",
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"},
             max_tokens=800,
@@ -127,6 +128,64 @@ def filter_watermark_text(text: str, watermark_patterns: List[str]) -> str:
             filtered_text = pattern.sub("", filtered_text)
     
     return filtered_text
+
+
+def extract_form_data(pdf_path: str) -> str:
+    """
+    Extract data from fillable form fields (AcroForms or XFA).
+    Returns a formatted string of key-value pairs.
+    """
+    form_text = ""
+    try:
+        reader = PdfReader(pdf_path)
+        fields = reader.get_fields()
+        
+        if not fields:
+            # Try XFA extraction if AcroForms fields are empty
+            try:
+                xfa = reader.xfa
+                if xfa:
+                    # Very basic XFA parsing - just grab the text for now
+                    import xml.etree.ElementTree as ET
+                    xfa_text = ""
+                    for key in xfa:
+                        if hasattr(xfa[key], 'decode'):
+                            xfa_text += xfa[key].decode('utf-8', errors='ignore')
+                        else:
+                            xfa_text += str(xfa[key])
+                    if xfa_text:
+                        form_text += "\n[XFA FORM DATA DETECTED]\n"
+                        form_text += xfa_text + "\n"
+            except:
+                pass
+            return form_text
+
+        form_text += "\n" + "="*80 + "\n"
+        form_text += "FORM FIELD DATA (Editable PDF)\n"
+        form_text += "="*80 + "\n\n"
+        
+        found_data = False
+        for field_name, field_data in fields.items():
+            value = field_data.get('/V')
+            if value:
+                # Handle potential bytes or complex objects
+                if hasattr(value, 'to_unicode'):
+                    value = value.to_unicode()
+                elif isinstance(value, bytes):
+                    value = value.decode('utf-8', errors='ignore')
+                
+                form_text += f"{field_name}: {value}\n"
+                found_data = True
+        
+        if not found_data:
+            return ""
+            
+        return form_text + "\n"
+    except Exception as e:
+        print(f"   ⚠️ Form extraction failed: {e}")
+        return ""
+
+
 
 
 def extract_pdf_with_pdfplumber(pdf_path: str, output_txt: str = None) -> tuple[str, list[dict]]:

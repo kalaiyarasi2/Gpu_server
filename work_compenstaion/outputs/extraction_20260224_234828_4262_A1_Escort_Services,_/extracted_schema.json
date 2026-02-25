@@ -1,11 +1,11 @@
 {
   "data": {
     "demographics": {
-      "applicantName": "A ESCORT SERVICE LLC",
-      "businessDescription": "AUTO TRANSPORT",
+      "applicantName": "A1 ESCORT SERVICE LLC",
+      "businessDescription": "",
       "email": "CALEXANDER@A1ESCORTLLC.COM",
       "fein": "29-7016548",
-      "mailingStreet": "120-4 bhopeton oc",
+      "mailingStreet": "120-4 thopeton",
       "mailingCity": "WILMINGTON",
       "mailingState": "DE",
       "mailingZip": "19801",
@@ -13,13 +13,24 @@
       "mobilePhone": "",
       "website": "",
       "yearsInBusiness": "",
-      "sicCode": "",
+      "sicCode": "47846",
       "naicsCode": "",
       "proposedEffectiveDate": "06/29/2025",
       "proposedExpirationDate": "06/29/2026",
       "wcStates": "Maryland",
       "agencyCustomerId": ""
     },
+    "ratingByState": [
+      {
+        "state": "Maryland",
+        "classCode": 8810,
+        "fullTimeEmployees": 2.0,
+        "partTimeEmployees": 0.0,
+        "estAnnualPayroll": 586837.0,
+        "ratePer100Payroll": 13.91,
+        "estAnnualPremium": 81629.0
+      }
+    ],
     "generalQuestions": {
       "q1": "N",
       "q2": "N",
@@ -49,8 +60,8 @@
     "priorCarriers": [
       {
         "year": 2022,
-        "carrierName": "Trove",
-        "policyNumber": "600400000",
+        "carrierName": "Chesapeake Employers' Ins",
+        "policyNumber": "5048788",
         "experienceMod": 0.0,
         "annualPremium": 27591.0,
         "numberOfClaims": 0.0,
@@ -59,7 +70,7 @@
       },
       {
         "year": 2023,
-        "carrierName": "Fo",
+        "carrierName": "Chesapeake Employers' Ins",
         "policyNumber": "800400007",
         "experienceMod": 0.0,
         "annualPremium": 13903.0,
@@ -68,32 +79,15 @@
         "reserveAmount": 0.0
       }
     ],
-    "ratingByState": [
-      {
-        "state": "Maryland",
-        "classCode": 8801,
-        "fullTimeEmployees": 0.0,
-        "partTimeEmployees": 0.0,
-        "estAnnualPayroll": 546079.0,
-        "ratePer100Payroll": 0.0,
-        "estAnnualPremium": 125558.0
-      }
-    ],
     "individuals": [
       {
-        "name": "CHERISE",
-        "title": "OWNER",
-        "ownershipPercentage": 0.0,
-        "included": "Y"
-      },
-      {
-        "name": "DONOVAN TAYLOR",
+        "name": "Cherise Alexander",
         "title": "Officer",
         "ownershipPercentage": 0.0,
         "included": "Y"
       },
       {
-        "name": "GARRET TAYLOR",
+        "name": "Donovan Taylor",
         "title": "Officer",
         "ownershipPercentage": 0.0,
         "included": "Y"

@@ -69,13 +69,15 @@ class InsuranceClaim:
     indemnity_reserve: Optional[float] = None
     expense_paid: Optional[float] = None
     expense_reserve: Optional[float] = None
+    total_paid: Optional[float] = None
+    total_reserve: Optional[float] = None
     total_incurred: Optional[float] = None
     litigation: Optional[str] = "N"
     reopen: Optional[str] = "False"
     carrier_name: Optional[str] = None
     policy_number: Optional[str] = None
     confidence_score: Optional[float] = None
-    extraction_metadata: Optional[Dict] = None
+    
 
 
 @dataclass
@@ -160,6 +162,12 @@ class EnhancedInsuranceExtractor:
                 
                 if info.get('fallback_used'):
                     print(f"   ℹ️ Hybrid Extraction recovered {len(info.get('recovered_claims', []))} claims using Smart Append")
+                
+                # STAGE 1.5: Vision Recovery (Targeted Patching)
+                # Check for missing data (like names) and patch via Vision only where needed
+                from vision_recovery import VisionRecoveryHandler
+                recovery_handler = VisionRecoveryHandler(self.client)
+                text = recovery_handler.patch_text_with_vision(pdf_path, metadata)
                     
                 return text, metadata
                 
@@ -210,7 +218,6 @@ class EnhancedInsuranceExtractor:
         
         return full_text, pages_metadata
     
-    
     def _detect_claim_numbers_ai(self, text: str) -> Dict:
         """
         Use AI to detect ALL claim numbers in the document
@@ -234,7 +241,8 @@ POLICY NUMBERS:
 CLAIM NUMBERS:
 - Identify a SINGLE claim/incident (one employee's injury)
 - Each claim is UNIQUE and appears only once in the document
-- Examples: "CLAIM-123", "ABC-456", "2024-001"
+    - [STRICT] Do NOT invent examples.
+    - [STRICT] If a claim number is NOT present in the text, DO NOT create one. Do NOT use placeholders. Simply skip the row or mark as null if it's a summary row.
 - Often shown after "Claim #", "Claim No", or similar labels
 - Can be simple numeric format OR prefixed format
 
@@ -250,7 +258,7 @@ IMPORTANT INSTRUCTIONS:
    - Extract the claim number EXACTLY as it is written in the document.
    - **NEVER** invent, assume, or append suffixes (like "-01", "-02") if they aren't explicitly typed in the text.
    - **Berkshire Homestates/Redwood Blacklist**: EXPLICITLY IGNORE any strings starting with `CRWC`. These are Policy Numbers, NOT claim numbers. 
-   - **Homestates Format**: Claim numbers are typically 8-digit integers (e.g., `44070643`).
+   - **Homestates Format**: Claim numbers are typically 8-digit integers.
    - If the document says `ABC123`, result must be `ABC123`. Do NOT add `-01`.
 
 2. **The Header vs. Row Separation**:
@@ -308,7 +316,7 @@ Return a JSON object with this structure:
 {{
   "claim_numbers": [
     {{
-      "claim_number": "20825",
+      "claim_number": "[CLAIM_NUMBER_1]",
       "pattern_description": "Follows 'Claim#' label",
       "first_occurrence": "near line 45",
       "confidence": 0.95,
@@ -328,7 +336,7 @@ Return a JSON object with this structure:
     {{
       "pattern_name": "FCBIF format",
       "pattern_description": "Claim# followed by digits",
-      "example": "Claim# 20825",
+      "example": "Claim# [NUMBER]",
       "count": 7
     }}
   ],
@@ -740,18 +748,33 @@ Return ONLY the JSON. Ensure the dynamic_rules is extremely precise."""
                 "confidence": 0.0
             }
     
-    def _extract_all_claims(self, all_text: str, vision_pattern: Optional[Dict] = None) -> Dict:
+    def _extract_all_claims(self, all_text: str, vision_pattern: Optional[Dict] = None,
+                             pre_built_master_list: Optional[List[str]] = None) -> Dict:
         """
         UNIVERSAL EXTRACTION: Works with ANY format
         Uses a three-stage approach:
         1. Pre-Discovery: Detect all valid Claim IDs (Master List)
         2. Format Analysis: Understand the layout
         3. Constrained Extraction: Extract only those IDs
+
+        RC1b: When called from ChunkedInsuranceExtractor, `pre_built_master_list`
+        is the global list built from the full document.  Skips per-chunk
+        re-detection so boundary claims are never filtered out.
         """
         # STAGE 0: Pre-Discovery (Master List)
-        detected_claims_info = self._detect_claim_numbers_ai(all_text)
-        master_claim_list = [c["claim_number"] for c in detected_claims_info.get("claim_numbers", [])]
-        
+        # RC1b: use the pre-built global list if provided, else detect locally
+        if pre_built_master_list is not None:
+            master_claim_list = pre_built_master_list
+            if master_claim_list:
+                print(f"   ✓ Using pre-built global master list ({len(master_claim_list)} IDs).")
+            else:
+                print("   ℹ️ Pre-built master list is empty — falling back to per-chunk detection.")
+                detected_claims_info = self._detect_claim_numbers_ai(all_text)
+                master_claim_list = [c["claim_number"] for c in detected_claims_info.get("claim_numbers", [])]
+        else:
+            detected_claims_info = self._detect_claim_numbers_ai(all_text)
+            master_claim_list = [c["claim_number"] for c in detected_claims_info.get("claim_numbers", [])]
+
         if not master_claim_list:
             print("   ⚠️ No unique claim numbers discovered. Falling back to layout-only extraction.")
             master_list_str = "No pre-detected list available. Detect claims dynamically."
@@ -788,7 +811,7 @@ Return ONLY the JSON. Ensure the dynamic_rules is extremely precise."""
 === ACCURACY CONSTRAINTS (MANDATORY) ===
 1. MASTER CLAIM LIST: {master_list_str}
 2. 🛑 ZERO-PHANTOM POLICY: Extract ONLY claims from the MASTER CLAIM LIST above. 
-   - NEVER include placeholder names like 'John Smith', 'Jane Doe', or 'Jane Smith'. 
+   - NEVER include placeholder names like 'John Smith', 'Jane Doe', 'John Doe', or 'Jane Smith'. 
    - These are calibration examples and NOT real data in this document.
    - If a claim ID is not in the list, DO NOT extract it.
 3. 🛑 FIELD INTEGRITY: Do NOT swap Medical and Indemnity columns. Check headers for each row.
@@ -797,6 +820,10 @@ Return ONLY the JSON. Ensure the dynamic_rules is extremely precise."""
    - If there is NO mention of litigation, you MUST return null. 
    - NEVER assume 'No' if the field is missing.
 6. 🛑 MULTIPLE EXPENSES: If a document has multiple expense columns/rows (e.g., Legal, Other, Admin, LAE), you MUST SUM THEM into the 'expense_paid' or 'expense_reserve' fields. Do NOT ignore any expense row.
+7. 🛑 POLICY NUMBER: Extract ONLY a real alphanumeric policy identifier (e.g., W610628, SWC1364773).
+   - A policy number is a short code assigned by the insurer to identify the policy.
+   - NEVER use the insured/company name (e.g., 'A TOTAL SOLUTION INC') as a policy number.
+   - If no explicit policy number is visible in the document, set policy_number to null.
 """
         
         if format_type == 'complex_multi_row':
@@ -889,7 +916,7 @@ Extract EVERY SINGLE CLAIM from this document.
 
 Return JSON:
 {{
-  "policy_number": "string or null",
+  "policy_number": "alphanumeric policy code (e.g. W610628) or null if not explicitly present",
   "carrier_name": "Insurance company name (The entity financially responsible) or null",
   "insured_name": "string or null",
   "report_date": "YYYY-MM-DD or null",
@@ -898,7 +925,7 @@ Return JSON:
     {{
       "employee_name": "full name",
       "carrier_name": "The insurance company for this claim or report",
-      "policy_number": "same as top level or specific for claim",
+      "policy_number": "alphanumeric policy code for this specific claim's policy year, or null if not found",
       "claim_number": "claim number",
       "injury_date_time": "YYYY-MM-DD",
       "claim_year": 2020,
@@ -921,7 +948,7 @@ Return JSON:
 }}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-� GENERAL EXTRACTION RULES (Apply to ALL formats)
+ GENERAL EXTRACTION RULES (Apply to ALL formats)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 
@@ -939,7 +966,7 @@ Return JSON:
    **CLAIM NUMBERS:**
    - Identify a SINGLE claim/incident (one employee's injury)
    - Each claim number is UNIQUE - appears only ONCE in the document
-   - Examples: 3510012, 20825, DEL22003452, Claim#20677
+   - Examples: [UNIQUE_CLAIM_ID]
    - Found in fields labeled: "Claim #", "Claim No", "Claim Number", "Converted #"
    
    **FORMAT-SPECIFIC GUIDANCE:**
@@ -961,9 +988,9 @@ Return JSON:
    D. **Strict Identification Rules (CRITICAL):**
       - **NO SUFFIX INVENTION**: Do NOT append characters to a number unless you see them in the raw text.
       - **CRWC Blacklist**: Numbers starting with `CRWC` are POLICY NUMBERS. Never extract them as claims. 
-      - **Berkshire Homestates**: Claim numbers are 8-digit integers found next to the name (e.g., `44096049`).
+      - **Berkshire Homestates**: Claim numbers are 8-digit integers found next to the name.
       - **BiBERK (N9WC)**: These *do* have literal suffixes in the text (e.g., `-001`). Extract them exactly.
-      - **Literal Match**: If the row says `44062808`, yours must be `44062808`. Do NOT add `-01`, `-02` etc.
+      - **Literal Match**: Ensure extracted claim numbers match exactly what is in the document. Do NOT add `-01`, `-02` etc.
    
    **VALIDATION:**
    - If you see the SAME number appearing for multiple different employees → It's a POLICY number, NOT a claim number
@@ -1131,6 +1158,10 @@ Follow the format-specific instructions above. Validate your extractions."""
             claims_in_text = detected_claims_info.get('total_unique_claims', 0)
             claims_extracted = len(data.get("claims", []))
             
+            # Pass the master claim list to post-processing for strict filtering
+            master_claim_list = [c["claim_number"] for c in detected_claims_info.get("claim_numbers", [])]
+            data = self._post_process_claims(data, master_claim_list=master_claim_list)
+            
             if claims_in_text > claims_extracted:
                 print(f"\n   ⚠️  INCOMPLETE EXTRACTION DETECTED")
                 print(f"   Claims detected by AI: {claims_in_text}")
@@ -1195,7 +1226,7 @@ Follow the format-specific instructions above. Validate your extractions."""
             
 
     
-    def _post_process_claims(self, data: Dict) -> Dict:
+    def _post_process_claims(self, data: Dict, master_claim_list: Optional[List[str]] = None) -> Dict:
         """
         Post-process extracted claims to fix formatting and field mapping
         Cleanup and deduplicate claims using math-driven quality scores.
@@ -1203,6 +1234,9 @@ Follow the format-specific instructions above. Validate your extractions."""
         if "claims" not in data or not data["claims"]:
             return data
             
+        if master_claim_list:
+             print(f"   🔍 Post-processing with master list: {', '.join(master_claim_list)}")
+
         # Status Mapping
         status_map = {
             'C': 'Closed', 'CL': 'Closed', 'CLOSED': 'Closed', 'RECLOSED': 'Closed',
@@ -1339,21 +1373,42 @@ Follow the format-specific instructions above. Validate your extractions."""
                     claim["employee_name"] = f"{last}, {first}"
             
             # 7. Deduplicate using Seen dictionary
-            claim_num = str(claim.get("claim_number", "unknown")).strip()
-            if claim_num != "unknown":
-                if claim_num not in seen_claim_numbers:
+            claim_num_raw = claim.get("claim_number")
+            
+            # STRICT FILTERING: Reject null, empty, or "none" claim numbers
+            if claim_num_raw is None:
+                print(f"      🗑️  Filtering claim with null/missing claim number")
+                continue
+                
+            claim_num = str(claim_num_raw).strip()
+            
+            # Reject only truly invalid/placeholder claim numbers.
+            # ⚠️ NEVER hardcode real-looking numeric IDs here — they may be
+            #    valid claims from any carrier (e.g. FCBI uses 5-digit integers).
+            #    Real phantom filtering is handled by the MASTER LIST below.
+            INVALID_STRINGS = {"none", "null", "unknown", "n/a", "[claim_number_1]", ""}
+            if not claim_num or claim_num.lower() in INVALID_STRINGS:
+                print(f"      🗑️  Filtering invalid/placeholder claim number: '{claim_num}'")
+                continue
+                
+            # MASTER LIST ENFORCEMENT
+            if master_claim_list:
+                # Use case-insensitive comparison but be cautious with leading zeros
+                if claim_num not in master_claim_list and claim_num.lstrip('0') not in [m.lstrip('0') for m in master_claim_list]:
+                    print(f"      🗑️  Filtering claim {claim_num} (Not in master claim list)")
+                    continue
+
+            if claim_num not in seen_claim_numbers:
+                seen_claim_numbers[claim_num] = (claim, quality_score)
+            else:
+                existing_claim, old_score = seen_claim_numbers[claim_num]
+                # RC4 FIX: Only replace if new claim has STRICTLY better math.
+                # When scores are equal, keep the FIRST (existing) extraction.
+                # Replacing by field-count is dangerous — more non-zero fields
+                # can mean more wrong values from a boundary-truncated chunk.
+                if quality_score > old_score:
                     seen_claim_numbers[claim_num] = (claim, quality_score)
-                else:
-                    existing_claim, old_score = seen_claim_numbers[claim_num]
-                    # If this one has better math, keep it
-                    if quality_score > old_score:
-                        seen_claim_numbers[claim_num] = (claim, quality_score)
-                    elif quality_score == old_score:
-                        # If scores equal, keep the one with more data
-                        new_count = sum(1 for f in num_fields if claim.get(f, 0) > 0)
-                        old_count = sum(1 for f in num_fields if existing_claim.get(f, 0) > 0)
-                        if new_count > old_count:
-                            seen_claim_numbers[claim_num] = (claim, quality_score)
+                # (equal score → keep existing — no replacement)
             
         # Rebuild claims list and apply global filters
         final_claims = []
@@ -1363,13 +1418,20 @@ Follow the format-specific instructions above. Validate your extractions."""
             name_clean = name_raw.replace(",", "").replace(".", "").strip()
             
             # Catch calibration examples and phantom placeholders
-            phantom_names = [
-                "john smith", "doe john", "john doe", "smith jane", "jane smith", 
-                "alice johnson", "johnson alice", "michael johnson", "johnson michael"
+            # and generic business entities incorrectly identified as employees
+            phantom_keywords = [
+                "john smith", "smith john", "john doe", "doe john",
+                "jane smith", "smith jane", "jane doe", "doe jane",
+                "alice johnson", "johnson alice", "michael johnson", "johnson michael",
+                "escort service", "insurance company", "employers insurance", "policy total"
             ]
-            if name_clean in phantom_names:
-                print(f"      🗑️  Filtering phantom calibration claim: {claim.get('employee_name')}")
+            if any(k in name_clean for k in phantom_keywords):
+                print(f"      🗑️  Filtering phantom/business claim: {claim.get('employee_name')}")
                 continue
+                
+            if " llc" in name_clean or " corp" in name_clean or " inc" in name_clean:
+                 print(f"      🗑️  Filtering suspected business entity: {claim.get('employee_name')}")
+                 continue
                 
             if any(f in name_raw for f in ["placeholder", "test person"]):
                 continue
@@ -1766,10 +1828,8 @@ Return ONLY the JSON object for claim {target_claim_number}."""
             json.dump(analysis_data, f, indent=2, ensure_ascii=False)
         print(f"✓ Analysis saved: {analysis_file}")
         
-        # Save schema (ONLY claims array - clean output)
-        claims_only = {
-            "claims": schema_data.get("claims", [])
-        }
+        # Save schema (direct claims array - no wrapper)
+        claims_only = schema_data.get("claims", [])
         schema_file = session_dir / "extracted_schema.json"
         with open(schema_file, 'w', encoding='utf-8') as f:
             json.dump(claims_only, f, indent=2, ensure_ascii=False)

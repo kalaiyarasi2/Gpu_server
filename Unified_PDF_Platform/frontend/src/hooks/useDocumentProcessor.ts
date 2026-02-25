@@ -94,8 +94,8 @@ export function useDocumentProcessor() {
                 let processedResult = schema;
 
                 if (documentType === "INSURANCE" || documentType === "INSURANCE_CLAIMS") {
-                    // Insurance format: { claims: [...] }
-                    const claims = schema?.claims || [];
+                    // Insurance format: { claims: [...] } or direct [...]
+                    const claims = Array.isArray(schema) ? schema : (schema?.claims || []);
                     claimsCount = claims.length;
                 } else if (documentType === "INVOICE") {
                     // Invoice format: [...] (flat array of records)

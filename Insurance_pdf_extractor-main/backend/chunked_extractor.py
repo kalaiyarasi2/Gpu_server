@@ -6,6 +6,11 @@ from pdf_rotation import auto_rotate_pdf_content
 import tempfile
 import shutil
 
+# Overlap added to each chunk boundary so claim rows straddling a boundary
+# are fully visible in both chunks (RC2 / RC2b fix).
+CHUNK_OVERLAP_CHARS = 600
+
+
 class PolicyChunker:
     """Helper class to split text into chunks based on Policy Number headers."""
     
@@ -16,37 +21,43 @@ class PolicyChunker:
         """
         Use AI to detect policy headers and their approximate locations.
         Returns a list of dicts: {"policy_number": "...", "start_index": int}
+        
+        RC6 FIX: Removed hardcoded company-name examples that biased detection
+        toward SKMGT-style documents. Now uses fully generic placeholders.
         """
         print(f"\n🔍 Detecting policy boundaries in text ({len(text)} chars)...")
         
-        # We only need to scan for headers, so we can use a subset of text if it's too long,
-        # but for policy detection, scanning the full text is safer if within limits.
-        # If text is extremely long, we might need to chunk the detection itself.
-        text_preview = text if len(text) < 100000 else text[:100000] # Safety limit
+        text_preview = text if len(text) < 100000 else text[:100000]
         
+        # RC6: All examples now use generic placeholders – no real company names
         prompt = f"""Analyze the following insurance document text and identify all UNIQUE policy sections.
 Look for "Policy Number", "Policy #", "Pol #", "NUMBER: [ID]" or similar headers that start a new section for a specific policy.
 Note: Policy numbers may be on the line BELOW the label "Policy Number".
 
-NEW REQUIREMENT: This document repeats policy numbers for different years. 
-Identify a new boundary if you see a header line with a Policy Number (e.g., W610628) AND/OR a new year section description like:
+NEW REQUIREMENT: This document may repeat policy numbers for different years. 
+Identify a new boundary if you see a header line with a Policy Number AND/OR a new year section description like:
 "Claims where Date Of Loss between 1/1/2024 and 12/31/2024"
 
 Return a JSON object with a list of detected boundaries and the EXACT snippet of text that identifies the header.
 
-Example Response:
+Example Response (use generic placeholders like these — do NOT assume specific company names):
 {{
   "boundaries": [
     {{
-      "identifier": "W610628 - 2025",
-      "header_snippet": "Location is one of SKMGT LE BLEU CHATEAU, INC. - W610628"
+      "identifier": "[POLICY_NUMBER] - [YEAR]",
+      "header_snippet": "[EXACT TEXT FROM DOCUMENT THAT MARKS A NEW SECTION]"
     }},
     {{
-      "identifier": "W610614 - 2025",
-      "header_snippet": "Location is SKMGT SAVANT SENIOR LIVING MANAGEMENT LLC - W610614"
+      "identifier": "[POLICY_NUMBER_2] - [YEAR]",
+      "header_snippet": "[EXACT TEXT FROM DOCUMENT THAT MARKS NEXT SECTION]"
     }}
   ]
 }}
+
+Important:
+- The "header_snippet" MUST be EXACT text copied verbatim from the document below.
+- Do NOT invent or paraphrase snippets.
+- Identify boundaries for ALL carriers, ANY company name format.
 
 DOCUMENT TEXT:
 {text_preview}
@@ -69,7 +80,6 @@ DOCUMENT TEXT:
             for p in items:
                 snippet = p.get("header_snippet")
                 if snippet:
-                    # Find first occurrence of snippet
                     idx = text.find(snippet)
                     if idx != -1:
                         boundaries.append({
@@ -81,7 +91,7 @@ DOCUMENT TEXT:
             # Sort by index
             boundaries.sort(key=lambda x: x["start_index"])
             
-            # Deduplicate by index (sometimes AI might return similar snippets)
+            # Deduplicate by index
             unique_boundaries = []
             last_idx = -1
             for b in boundaries:
@@ -96,15 +106,21 @@ DOCUMENT TEXT:
             print(f"⚠️ Policy boundary detection failed: {e}")
             return []
 
-    def split_into_chunks(self, text: str, boundaries: List[Dict]) -> List[Dict]:
-        """Splits the text into chunks based on detected boundaries."""
+    def split_into_chunks(self, text: str, boundaries: List[Dict], overlap: int = CHUNK_OVERLAP_CHARS) -> List[Dict]:
+        """
+        Splits the text into chunks based on detected boundaries.
+        
+        RC2 FIX: Each chunk now includes `overlap` chars from the END of the
+        previous chunk so claim rows that straddle a policy boundary are fully
+        visible in at least one chunk's context window.
+        """
         if not boundaries:
             return [{"policy_number": "Unknown", "text": text}]
             
         chunks = []
         
-        # Add content BEFORE the first boundary if it exists
-        if boundaries[0]["start_index"] > 10: # Threshold for meaningful start content
+        # Add content BEFORE the first boundary if meaningful
+        if boundaries[0]["start_index"] > 10:
             first_idx = boundaries[0]["start_index"]
             pre_chunk = text[:first_idx].strip()
             if pre_chunk:
@@ -117,7 +133,10 @@ DOCUMENT TEXT:
             start_idx = boundaries[i]["start_index"]
             end_idx = boundaries[i+1]["start_index"] if i+1 < len(boundaries) else len(text)
             
-            chunk_text = text[start_idx:end_idx].strip()
+            # RC2: extend start backward by overlap so boundary claims aren't cut
+            overlap_start = max(0, start_idx - overlap) if i > 0 else start_idx
+            
+            chunk_text = text[overlap_start:end_idx].strip()
             chunks.append({
                 "policy_number": boundaries[i]["policy_number"],
                 "text": chunk_text
@@ -125,10 +144,14 @@ DOCUMENT TEXT:
             
         return chunks
 
+
 class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
     """
-    Extends EnhancedInsuranceExtractor to support policy-based chunking.
-    This prevents token limit issues by splitting large documents into policy-specific chunks.
+    Extends EnhancedInsuranceExtractor to support two chunking modes:
+    1. Policy+Year-boundary chunking  (via detect_policy_boundaries)
+    2. Page-aware chunking            (secondary fallback for large chunks)
+    
+    Implements all 6 RC fixes to prevent missed/false claims.
     """
     
     def process_pdf_with_verification(self, pdf_path: str, target_claim_number: Optional[str] = None) -> Dict:
@@ -142,15 +165,9 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
         print(f"🚀 PROCESSING: {os.path.basename(pdf_path)}")
         print(f"{'='*60}")
         
-        # --- PRE-PROCESSING: AUTO-ROTATION ---
-        # Create a temporary file for potential rotation
-        # We need to use a temp file because we don't want to modify the source 
-        # (especially if it differs from input_path in app.py context)
-        # However, for consistency, we'll use a temp file in a safe location.
-        
         temp_rotated_dir = tempfile.mkdtemp()
         temp_rotated_pdf = os.path.join(temp_rotated_dir, "rotated_temp.pdf")
-        original_pdf_path = pdf_path # Keep track of original
+        original_pdf_path = pdf_path
         
         try:
             print(f"🔄 Checking for rotation...")
@@ -158,7 +175,7 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
             
             if was_rotated:
                 print(f"   ✓ Document rotated. Processing corrected version.")
-                pdf_path = temp_rotated_pdf # SWAP the path!
+                pdf_path = temp_rotated_pdf
             else:
                 print(f"   ✓ Document orientation correct.")
         except Exception as e:
@@ -171,7 +188,7 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
         session_dir = self.output_dir / f"extraction_{session_id}"
         session_dir.mkdir(parents=True, exist_ok=True)
         
-        self.current_session_dir = session_dir # Capture for use in extract_schema_from_text
+        self.current_session_dir = session_dir
         
         # Step 1: Extract text
         all_text, pages_metadata = self.extract_text_from_pdf(pdf_path)
@@ -182,7 +199,7 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
             f.write(all_text)
         print(f"\n✓ Combined text saved: {text_file}")
         
-        # Step 2: Extract schema (this will call our overridden version)
+        # Step 2: Extract schema
         print(f"\n{'='*60}")
         print(f"📋 SCHEMA EXTRACTION")
         print(f"{'='*60}")
@@ -203,19 +220,17 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
         }
         schema_data['extraction_metadata'] = extraction_metadata
         
-        # Prepare data for separation
+        # Separate math fields from schema output
         all_claims = schema_data.get("claims", [])
         clean_claims_for_schema = []
         claims_analysis_data = []
 
         for claim in all_claims:
-            # Create a copy for schema without math fields
             schema_claim = claim.copy()
             math_valid = schema_claim.pop("math_valid", None)
             math_diff = schema_claim.pop("math_diff", None)
             clean_claims_for_schema.append(schema_claim)
 
-            # Collect analysis data
             claims_analysis_data.append({
                 "claim_number": claim.get("claim_number"),
                 "math_valid": math_valid,
@@ -237,8 +252,8 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
         with open(analysis_file, 'w', encoding='utf-8') as f:
             json.dump(analysis_data, f, indent=2, ensure_ascii=False)
             
-        # Save schema (CLEAN)
-        claims_only = {"claims": clean_claims_for_schema}
+        # Save schema (direct claims array - no wrapper)
+        claims_only = clean_claims_for_schema
         schema_file = session_dir / "extracted_schema.json"
         with open(schema_file, 'w', encoding='utf-8') as f:
             json.dump(claims_only, f, indent=2, ensure_ascii=False)
@@ -256,7 +271,7 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
                 "total_pages": len(pages_metadata),
                 "scanned_pages": sum(1 for p in pages_metadata if p.get('is_scanned', False)),
                 "avg_confidence": sum(p.get('confidence', 0.0) for p in pages_metadata) / len(pages_metadata) if pages_metadata else 0.0,
-                "claims_count": len(claims_only["claims"])
+                "claims_count": len(claims_only)
             }
         }
         verification_file = session_dir / "verification_package.json"
@@ -268,11 +283,11 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
         print(f"{'='*60}")
         print(f"Output: {session_dir}")
         
-        # Cleanup temporary rotated file if it was created
+        # Cleanup temp rotated file
         try:
             if 'temp_rotated_dir' in locals() and os.path.exists(temp_rotated_dir):
                 shutil.rmtree(temp_rotated_dir, ignore_errors=True)
-        except Exception as e:
+        except Exception:
             pass
 
         return verification_data
@@ -280,11 +295,25 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
     def extract_schema_from_text(self, all_text: str, target_claim_number: Optional[str] = None, num_pages: Optional[int] = None, vision_pattern: Optional[Dict] = None) -> Dict:
         """
         OVERRIDE: Implements chunking before calling extraction.
+        
+        RC1 FIX: Build the GLOBAL master claim list from full text BEFORE
+        chunking so each per-chunk extraction filters against the correct
+        universe of IDs (not just the IDs visible in one slice).
         """
         if target_claim_number:
             return super().extract_schema_from_text(all_text, target_claim_number, vision_pattern=vision_pattern)
             
         print(f"\n⭐ NEW STEP: POLICY DETECTION & CHUNKING ⭐")
+
+        # ── RC1: Build GLOBAL master list on full text ONCE ──────────────────
+        print(f"\n📋 Building GLOBAL master claim list from full document...")
+        global_detected = self._detect_claim_numbers_ai(all_text)
+        global_master_list = [c["claim_number"] for c in global_detected.get("claim_numbers", [])]
+        if global_master_list:
+            print(f"   ✅ Global master list: {len(global_master_list)} IDs → {', '.join(global_master_list)}")
+        else:
+            print(f"   ⚠️ No global claim IDs detected — will use per-chunk detection.")
+        # ──────────────────────────────────────────────────────────────────────
         
         chunker = PolicyChunker(self.client)
         boundaries = chunker.detect_policy_boundaries(all_text)
@@ -293,13 +322,12 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
         strategy = "policy-based"
         
         if len(boundaries) <= 1:
-            # CHECK FOR LARGE DOCUMENT FALLBACK
+            # Large document fallback → dynamic AI chunking
             if num_pages and num_pages >= 55:
                 print(f"   ⚠️ Large document ({num_pages} pages) with no clear policy boundaries.")
                 print("   🔄 Falling back to dynamic AI chunking to avoid token limits...")
                 dynamic_chunks = self._chunk_text_dynamically(all_text)
                 
-                # Normalize dynamic chunks for processing
                 for dc in dynamic_chunks:
                     chunks.append({
                         "policy_number": f"Part {dc.get('chunk_id', 0) + 1}",
@@ -308,44 +336,56 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
                 strategy = "dynamic-fallback"
             else:
                 print("   ℹ️ Single policy or no boundaries detected. Proceeding with single-shot extraction.")
-                return super()._extract_all_claims(all_text, vision_pattern=vision_pattern)
+                return super()._extract_all_claims(all_text, vision_pattern=vision_pattern,
+                                                   pre_built_master_list=global_master_list or None)
         else:
-            chunks = chunker.split_into_chunks(all_text, boundaries)
+            # RC2: split_into_chunks now adds CHUNK_OVERLAP_CHARS boundary overlap
+            chunks = chunker.split_into_chunks(all_text, boundaries, overlap=CHUNK_OVERLAP_CHARS)
             
-        # --- SECONDARY FALLBACK: PAGE-LEVEL SPLITTING FOR LARGE CHUNKS ---
+        # ── RC2b: Page-aware secondary fallback for large chunks ──────────────
         final_chunks = []
         for chunk in chunks:
             if len(chunk["text"]) > 20000:
                 print(f"   ⚠️ Chunk '{chunk['policy_number']}' is too large ({len(chunk['text'])} chars). Splitting by pages...")
-                # Split by PAGE X markers
                 page_markers = list(re.finditer(r'(=+\nPAGE \d+\n=+|Page \d+ of \d+)', chunk["text"]))
                 
                 if page_markers:
                     last_pos = 0
+                    sub_part = 1
                     for i, m in enumerate(page_markers):
-                        if m.start() > last_pos + 100: # Found a meaningful segment
+                        if m.start() > last_pos + 100:
+                            # RC2b: include CHUNK_OVERLAP_CHARS before the page marker
+                            seg_end = m.start()
+                            # extend into next segment by overlap so boundary claims are complete
+                            overlap_end = min(len(chunk["text"]), seg_end + CHUNK_OVERLAP_CHARS)
                             final_chunks.append({
-                                "policy_number": f"{chunk['policy_number']} (Part {len(final_chunks)+1})",
-                                "text": chunk["text"][last_pos:m.start()].strip()
+                                "policy_number": f"{chunk['policy_number']} (Part {sub_part})",
+                                "text": chunk["text"][last_pos:overlap_end].strip()
                             })
-                            last_pos = m.start()
+                            last_pos = m.start()   # next chunk starts at the marker (not after overlap)
+                            sub_part += 1
                     
-                    # Add remaining
+                    # Add remaining tail
                     final_chunks.append({
-                        "policy_number": f"{chunk['policy_number']} (Part {len(final_chunks)+1})",
+                        "policy_number": f"{chunk['policy_number']} (Part {sub_part})",
                         "text": chunk["text"][last_pos:].strip()
                     })
                 else:
-                    # Fallback to simple char split if no markers found
+                    # Char-split fallback: always overlap adjacent splits
                     chunk_size = 15000
                     text = chunk["text"]
+                    part = 1
                     for i in range(0, len(text), chunk_size):
+                        # RC2b: start each block CHUNK_OVERLAP_CHARS before cut point
+                        block_start = max(0, i - CHUNK_OVERLAP_CHARS) if i > 0 else 0
                         final_chunks.append({
-                            "policy_number": f"{chunk['policy_number']} (Split {i//chunk_size + 1})",
-                            "text": text[i:i+chunk_size]
+                            "policy_number": f"{chunk['policy_number']} (Split {part})",
+                            "text": text[block_start:i + chunk_size]
                         })
+                        part += 1
             else:
                 final_chunks.append(chunk)
+        # ─────────────────────────────────────────────────────────────────────
                 
         chunks = final_chunks
         print(f"   ✂️ Final processing: {len(chunks)} chunks using {strategy} strategy.")
@@ -356,9 +396,10 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
             "num_chunks": len(chunks),
             "strategy": strategy,
             "num_pages": num_pages,
+            "global_master_list": global_master_list,
             "chunks": [],
             "total_chunked_chars": sum(len(c["text"]) for c in chunks),
-            "integrity_check": "Sum of chunk lengths is close to original"
+            "integrity_check": "Chunks include overlap — total may exceed original"
         }
         
         for c in chunks:
@@ -369,7 +410,7 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
                 "preview_end": c["text"][-100:]
             })
             
-        # Save to file if we have a session directory
+        # Save chunking report
         if hasattr(self, 'current_session_dir'):
             report_file = self.current_session_dir / "chunking_report.json"
             with open(report_file, 'w', encoding='utf-8') as f:
@@ -382,32 +423,50 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
             print(f"📦 CHUNK {i+1}/{len(chunks)}: Policy {chunk['policy_number']}")
             print(f"{'='*40}")
             
-            chunk_result = super()._extract_all_claims(chunk["text"], vision_pattern=vision_pattern)
+            # RC1: Pass global master list so each chunk filters against full ID universe.
+            # Per-chunk detection is skipped when global list is available.
+            chunk_result = super()._extract_all_claims(
+                chunk["text"],
+                vision_pattern=vision_pattern,
+                pre_built_master_list=global_master_list or None
+            )
             
             if "claims" in chunk_result:
-                # Inject chunk-specific policy number into each claim
                 for c in chunk_result["claims"]:
                     if not c.get("policy_number") or c.get("policy_number") == "Multiple":
-                        # Strip (Part X) suffix if present to keep the clean policy number
+                        # RC5: Strip (Part X) AND year suffix from policy label
                         clean_policy = re.sub(r' \(Part \d+\)$', '', str(chunk.get("policy_number", "")))
+                        clean_policy = re.sub(r'\s*-\s*\d{4}$', '', clean_policy).strip()
                         c["policy_number"] = clean_policy
                 all_results.append(chunk_result)
             else:
                 print(f"   ⚠️ No claims found in chunk {i+1}")
                 
-        merged_result = self._merge_chunks(all_results)
+        merged_result = self._merge_chunks(all_results, all_text=all_text,
+                                           global_master_list=global_master_list,
+                                           vision_pattern=vision_pattern)
         return merged_result
 
-    def _merge_chunks(self, results_list: List[Dict]) -> Dict:
-        """Merges multiple extraction results into a single report."""
+    def _merge_chunks(self, results_list: List[Dict], all_text: str = "",
+                      global_master_list: Optional[List[str]] = None,
+                      vision_pattern: Optional[Dict] = None) -> Dict:
+        """
+        Merges multiple extraction results into a single report.
+        
+        RC3 FIX: After merging all chunks, compare against the global master
+        list and run a final recovery pass on the FULL document for any IDs
+        still missing — these are the boundary-straddle casualties.
+        
+        RC4 FIX: Tie-breaking in _post_process_claims is now 'keep first'
+        (i.e., existing wins when math scores are equal) — see insurance_extractor.py.
+        """
         print(f"\n⭐ MERGING {len(results_list)} CHUNKS ⭐")
         
         if not results_list:
             return {"claims": []}
             
-        # Use metadata from the first result as a baseline
         merged = {
-            "policy_number": "Multiple", # Or a joined string of policy numbers
+            "policy_number": "Multiple",
             "insured_name": results_list[0].get("insured_name"),
             "report_date": results_list[0].get("report_date"),
             "policy_period": "Multiple",
@@ -418,7 +477,6 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
         for res in results_list:
             if res.get("policy_number"):
                 policy_numbers.add(res["policy_number"])
-            
             if "claims" in res and isinstance(res["claims"], list):
                 merged["claims"].extend(res["claims"])
         
@@ -427,18 +485,51 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
         elif policy_numbers:
             merged["policy_number"] = ", ".join(sorted(list(policy_numbers)))
             
-        # FINAL PASS: Global post-processing for deduplication and normalization
+        # Global post-processing + deduplication (RC4 tie-breaker is in _post_process_claims)
         print(f"   🔍 Performing global post-extraction audit...")
-        merged = self._post_process_claims(merged)
+        merged = self._post_process_claims(merged, master_claim_list=global_master_list or None)
         
-        print(f"   ✅ Merged Result: {len(merged['claims'])} total claims.")
+        print(f"   ✅ After merge: {len(merged['claims'])} total claims.")
+        
+        # ── RC3: Final global recovery for boundary-straddle casualties ──────
+        if global_master_list and all_text:
+            extracted_ids = {str(c.get("claim_number", "")).strip() for c in merged.get("claims", [])}
+            # Normalise leading zeros for comparison
+            extracted_ids_norm = {cid.lstrip("0") for cid in extracted_ids}
+            still_missing = [
+                m for m in global_master_list
+                if str(m).strip() not in extracted_ids
+                and str(m).strip().lstrip("0") not in extracted_ids_norm
+            ]
+            
+            if still_missing:
+                print(f"\n   🔁 RC3 GLOBAL RECOVERY: {len(still_missing)} claim(s) still missing after merge.")
+                print(f"   Missing IDs: {', '.join(str(m) for m in still_missing)}")
+                
+                batch_size = 5
+                for i in range(0, len(still_missing), batch_size):
+                    batch = still_missing[i:i + batch_size]
+                    print(f"   🔄 Global Recovery Batch {i//batch_size + 1}: {', '.join(str(b) for b in batch)}")
+                    try:
+                        recovery_data = self._extract_missing_claims_by_number(all_text, merged, batch)
+                        if recovery_data and "claims" in recovery_data and recovery_data["claims"]:
+                            merged["claims"].extend(recovery_data["claims"])
+                            print(f"      ✓ Recovered {len(recovery_data['claims'])} claim(s) in this batch.")
+                    except Exception as e:
+                        print(f"      ⚠️ Global recovery batch failed: {e}")
+                
+                # Final dedup pass after recovery
+                merged = self._post_process_claims(merged, master_claim_list=global_master_list)
+                print(f"   ✅ Final count after global recovery: {len(merged['claims'])} claims.")
+            else:
+                print(f"   ✅ All {len(global_master_list)} global claim IDs accounted for.")
+        # ─────────────────────────────────────────────────────────────────────
+        
         return merged
 
+
 if __name__ == "__main__":
-    # Example usage (can be replaced by main_chunked.py)
     import os
     from dotenv import load_dotenv
     load_dotenv()
-    
-    # Use a dummy test if needed or just leave as is for import
     print("ChunkedInsuranceExtractor loaded.")

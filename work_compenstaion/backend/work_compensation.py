@@ -193,121 +193,91 @@ class EnhancedInsuranceExtractor:
     
     def extract_text_from_pdf(self, pdf_path: str) -> Tuple[str, List[Dict]]:
         """
-        Extract text from PDF using detection and appropriate extraction method.
+        Extract text from PDF using page-level hybrid strategy (Digital + OCR + Form Fields).
+        Covers: Scanned, Digital, Combined, and Editable PDFs.
         """
         from pdf_detector import PDFDetector
+        from pdf_plumber import extract_pdf_with_pdfplumber, extract_form_data
+        from ocr_text import OCRPDFExtractor
         
         try:
-            print(f"🔍 Detecting PDF type...")
+            print(f"🔍 Analyzing PDF structure for 100% coverage...")
             detector = PDFDetector(pdf_path)
-            is_scanned = detector.is_scanned()
             
-            # CHECK FOR VISION EXTRACTION OVERRIDE (Forced Accuracy)
+            # 1. CHECK FOR VISION EXTRACTION OVERRIDE
             if getattr(config, 'USE_VISION_EXTRACTION', False):
                 print(f"👁️ VISION EXTRACTION ENABLED: Processing images with {config.VISION_MODEL}")
                 return self._extract_via_vision(pdf_path)
 
-            if is_scanned:
-                print(f"📸 SCANNED PDF DETECTED: Using Tesseract OCR fallback")
-                from ocr_text import OCRPDFExtractor
-                ocr_extractor = OCRPDFExtractor(pdf_path)
-                return ocr_extractor.extract(
-                    dpi=config.OCR_DPI,
-                    psm_mode=config.OCR_PSM_MODE,
-                    enhancements={
-                        'contrast': config.OCR_CONTRAST,
-                        'sharpness': config.OCR_SHARPNESS,
-                        'grayscale': config.OCR_GRAYSCALE,
-                        'binarize': config.OCR_BINARIZE,
-                        'edge_enhance': config.OCR_EDGE_ENHANCE,
-                        'morphology': getattr(config, 'ENABLE_MORPHOLOGY_CLEANING', False)
-                    }
-                )
-            else:
-                print(f"📄 DIGITAL PDF DETECTED: Using Hybrid Extraction (pdfplumber + pymupdf fallback)")
-                from pdf_plumber import extract_pdf_hybrid
-                # Hybrid extraction returns (text, metadata, info)
-                text, metadata, info = extract_pdf_hybrid(pdf_path)
-                
-                if info.get('fallback_used'):
-                    print(f"   ℹ️ Hybrid Extraction recovered {len(info.get('recovered_claims', []))} claims using Smart Append")
+            # 2. EXTRACT FORM FIELD DATA (Top Priority for Editable PDFs)
+            form_data = extract_form_data(pdf_path)
+            if form_data:
+                print(f"✅ Extracted data from fillable form fields/XFA.")
 
-                # STAGE 3: ACORD Recovery Pass
-                # If we see ACORD but don't see typical headers, it might be a "Digital Scan"
-                # (A PDF that has some text but the main form content is an image)
-                should_run_ocr_recovery = False
+            # 3. PAGE-LEVEL HYBRID EXTRACTION
+            all_text_parts = []
+            if form_data:
+                all_text_parts.append(form_data)
+            
+            pages_metadata = []
+            
+            # Initial digital extraction to get page count and base text
+            # We use pdfplumber for better layout
+            digital_text, digital_metadata = extract_pdf_with_pdfplumber(pdf_path)
+            total_pages = len(digital_metadata)
+            
+            print(f"📄 Processing {total_pages} pages using Page-Level Hybrid Strategy...")
+            
+            for i in range(total_pages):
+                page_num = i + 1
+                page_digital = digital_metadata[i]
+                page_text = page_digital.get("text", "")
                 
-                # Check for ACORD keyword or signature patterns
-                has_acord_keyword = "ACORD" in text.upper()
+                # Check if this specific page needs OCR recovery
+                is_scanned_page = detector.is_page_scanned(i)
                 
-                # Use alphanumeric character count for more accurate density check
-                # (filters out thousands of spaces/pipes from pdfplumber)
-                alnum_text_len = len(re.sub(r'[^a-zA-Z0-9]', '', text))
-                avg_alnum_per_page = alnum_text_len / len(metadata) if len(metadata) > 0 else 0
+                # Text density check (Alphanumeric ratio)
+                alnum_text = re.sub(r'[^a-zA-Z0-9]', '', page_text)
+                is_low_density = len(alnum_text) < 100
                 
-                is_very_low_density = alnum_text_len < 100 * len(metadata) # Less than 100 alnum chars per page average
+                needs_ocr = is_scanned_page or is_low_density
                 
-                if has_acord_keyword:
-                    # Check for missing Agency ID or Applicant Name
-                    # If we see the label but no value, or no label at all, it's likely hollow
-                    has_applicant_data = False
-                    # Look for typical name patterns or specific names extracted in the text
-                    # (This is a fuzzy check - if the text is digital, we expect common labels to have values)
-                    if "APPLICANT NAME:" in text.upper() or "NAME (FIRST NAMED INSURED)" in text.upper():
-                        # If the label is found, let's see if something follows it other than spaces/pipes
-                        # This is a bit complex, but simple density works too
-                        pass
-                        
-                    if alnum_text_len < 600 * len(metadata): # Increased threshold for ACORD
-                        print(f"   ⚠️ Low text density detected for ACORD ({alnum_text_len} alnum chars for {len(metadata)} pages). Triggering OCR recovery...")
-                        should_run_ocr_recovery = True
-                    elif "APPLICANT NAME" in text.upper() and len(re.sub(r'[^a-zA-Z0-9]', '', text.split("APPLICANT NAME")[1][:100])) < 5:
-                        # Label exists but very little text follows it in the next 100 chars
-                        print(f"   ⚠️ APPLICANT NAME field appears empty in digital text. Triggering OCR recovery...")
-                        should_run_ocr_recovery = True
-                elif is_very_low_density and alnum_text_len > 0:
-                    print(f"   ⚠️ Extremely low text density detected ({alnum_text_len} alnum chars). Triggering OCR recovery pass...")
-                    should_run_ocr_recovery = True
-
-                if should_run_ocr_recovery:
+                if needs_ocr:
+                    print(f"   Page {page_num}: {'Scanned/Unreadable' if is_scanned_page else 'Low Density'} -> Running OCR Recovery...")
                     try:
-                        from ocr_text import OCRPDFExtractor
+                        # Extract only this page via OCR
                         ocr_extractor = OCRPDFExtractor(pdf_path)
-                        ocr_text, ocr_meta = ocr_extractor.extract(
+                        # We need a way to extract a specific page... 
+                        # For now, we'll use the existing extract() but we should optimize this soon
+                        # Since we want to be robust, we'll run OCR and pick the page
+                        # (Ideally OCRPDFExtractor should support page_index)
+                        ocr_text_full, ocr_meta = ocr_extractor.extract(
                             dpi=config.OCR_DPI,
                             psm_mode=config.OCR_PSM_MODE,
-                            verbose=False,
-                            enhancements={
-                                'contrast': config.OCR_CONTRAST,
-                                'sharpness': config.OCR_SHARPNESS,
-                                'grayscale': config.OCR_GRAYSCALE,
-                                'binarize': config.OCR_BINARIZE,
-                                'edge_enhance': config.OCR_EDGE_ENHANCE,
-                                'morphology': getattr(config, 'ENABLE_MORPHOLOGY_CLEANING', False)
-                            }
+                            verbose=False
                         )
                         
-                        # Merge metadata
-                        for i, page in enumerate(ocr_meta):
-                            if i < len(metadata):
-                                metadata[i]["ocr_text"] = page.get("raw_text", "")
-                        
-                        # Append OCR text as a recovery block
-                        text += "\n\n" + "="*80 + "\n"
-                        text += "OCR RECOVERY BLOCK\n"
-                        text += "="*80 + "\n\n"
-                        text += ocr_text
-                        
-                        print(f"   ✅ OCR recovery complete. Added to extracted text.")
-                    except Exception as ocr_err:
-                        print(f"   ⚠️ OCR recovery failed: {ocr_err}")
-                    
-                return text, metadata
+                        if i < len(ocr_meta):
+                            ocr_page_text = ocr_meta[i].get("text", "")
+                            # Append OCR text to digital text for this page
+                            page_text += "\n\n--- OCR RECOVERY DATA (Page {page_num}) ---\n"
+                            page_text += ocr_page_text
+                            page_digital["extraction_method"] += "+ocr-recovery"
+                            page_digital["is_scanned"] = True
+                    except Exception as e:
+                        print(f"   ⚠️ OCR Recovery failed for page {page_num}: {e}")
                 
-                return text, metadata
+                all_text_parts.append(page_text)
+                page_digital["text"] = page_text # Update with merged text
+                pages_metadata.append(page_digital)
+            
+            combined_text = "\n\n".join(all_text_parts)
+            return combined_text, pages_metadata
                 
         except Exception as e:
             print(f"⚠️ Detection/Extraction error: {e}")
+            import traceback
+            traceback.print_exc()
             print(f"   Falling back to standard pdfplumber...")
             from pdf_plumber import extract_pdf_with_pdfplumber as external_extract
             return external_extract(pdf_path)
@@ -569,7 +539,7 @@ Return ONLY the JSON. No explanations. Ensure you catch EVERY claim number, espe
 
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4.1",
+                model="gpt-4o",
                 messages=[{
                     "role": "user",
                     "content": prompt
@@ -655,7 +625,7 @@ IMPORTANT:
 
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4.1",
+                model="gpt-4o",
                 messages=[{
                     "role": "user",
                     "content": [
@@ -782,7 +752,7 @@ DOCUMENT SAMPLE:
         
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4.1",
+                model="gpt-4o",
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
                 max_tokens=1500,
@@ -914,7 +884,7 @@ Return ONLY the JSON."""
 
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4.1",
+                model="gpt-4o",
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
                 max_tokens=1500,
@@ -1014,7 +984,7 @@ Return ONLY the JSON object following the strict schema provided.
 
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4.1",
+                model="gpt-4o",
                 messages=[{
                     "role": "user",
                     "content": prompt
@@ -1207,7 +1177,7 @@ Return ONLY the JSON."""
 
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4.1",
+                model="gpt-4o",
                 messages=[{"role": "user", "content": retry_prompt}],
                 response_format={"type": "json_object"},
                 max_tokens=8000,
@@ -1268,7 +1238,7 @@ Return ONLY the JSON object for claim {target_claim_number}."""
 
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4.1",
+                model="gpt-4o",
                 messages=[{
                     "role": "user",
                     "content": prompt

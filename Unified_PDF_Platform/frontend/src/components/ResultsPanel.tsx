@@ -244,7 +244,7 @@ const ResultsPanel = ({
             <p className="text-sm font-semibold text-foreground">
               {isInvoice
                 ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(metadata?.total_value || 0)
-                : (metadata?.claims_count || result?.claims?.length || 0)
+                : (metadata?.claims_count ?? (Array.isArray(result) ? result.length : (result?.claims?.length || 0)))
               }
             </p>
           </div>

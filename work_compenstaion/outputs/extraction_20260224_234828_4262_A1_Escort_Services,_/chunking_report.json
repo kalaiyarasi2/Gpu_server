@@ -1,0 +1,26 @@
+{
+  "total_original_chars": 24091,
+  "num_chunks": 3,
+  "chunks": [
+    {
+      "policy": "Initial Section",
+      "length": 15001,
+      "preview_start": "================================================================================\nPAGE 1\n============",
+      "preview_end": "IDE INFORMATION FOR THE PAST 5 YEARS AND USE THE REMARKS SECTION FOR LOSS DETAILS |) LOSSRUNATTACHED"
+    },
+    {
+      "policy": "5048788",
+      "length": 113,
+      "preview_start": "POL #: 5048788\nCO: CHESAPEAKE EMPLOYERS' INS | fo\n2022 Trove 600400000 $27,591\n2023 Fo 800400007 $13",
+      "preview_end": "8\nCO: CHESAPEAKE EMPLOYERS' INS | fo\n2022 Trove 600400000 $27,591\n2023 Fo 800400007 $13,903 $138,307"
+    },
+    {
+      "policy": "800400002",
+      "length": 8973,
+      "preview_start": "POL #: 800400002 $787\n\nNATURE OF BUSINESS / DESCRIPTION OF OPERATIONS\n\nGIVE COMMENTS AND DESCRIPTION",
+      "preview_end": "er, Owner or Partner} PRODUCER'S SIGNATURE NATIONAL PRODUCER NUMBER\n\nACORD 130 (2017/05) Page 4 of 4"
+    }
+  ],
+  "total_chunked_chars": 24087,
+  "integrity_check": "Sum of chunk lengths is close to original"
+}
