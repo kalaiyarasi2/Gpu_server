@@ -941,6 +941,8 @@ Return JSON:
       "indemnity_reserve": "string",
       "expense_paid": "string",
       "expense_reserve": "string",
+      "total_paid": "string",
+      "total_reserve": "string",
       "total_incurred": "string",
       "litigation": "Yes if explicitly Yes/Y, else No"
     }}
@@ -1247,7 +1249,7 @@ Follow the format-specific instructions above. Validate your extractions."""
         # Numeric fields to clean
         num_fields = [
             "medical_paid", "medical_reserve", "indemnity_paid", "indemnity_reserve",
-            "expense_paid", "expense_reserve", "total_incurred"
+            "expense_paid", "expense_reserve", "total_paid", "total_reserve", "total_incurred"
         ]
         
         seen_claim_numbers = {} # claim_number -> (claim_obj, quality_score)
@@ -1317,6 +1319,14 @@ Follow the format-specific instructions above. Validate your extractions."""
                         claim[field] = 0.0
                 elif val is None:
                     claim[field] = 0.0
+
+            # 3a. Populate total_paid and total_reserve if missing OR for sanity
+            calculated_paid = claim.get("medical_paid", 0.0) + claim.get("indemnity_paid", 0.0) + claim.get("expense_paid", 0.0)
+            calculated_reserve = claim.get("medical_reserve", 0.0) + claim.get("indemnity_reserve", 0.0) + claim.get("expense_reserve", 0.0)
+            
+            # Update values
+            claim["total_paid"] = round(calculated_paid, 2)
+            claim["total_reserve"] = round(calculated_reserve, 2)
 
             # 3b. MED-only Guardrail: If injury_type is Medical Only, Indemnity MUST be 0
             if claim.get("injury_type") == "Medical Only":
@@ -1557,6 +1567,8 @@ Return a JSON object with this structure:
   "indemnity_reserve": "string",
   "expense_paid": "string",
   "expense_reserve": "string",
+  "total_paid": "string",
+  "total_reserve": "string",
   "total_incurred": "string",
   "litigation": "Yes if explicitly Yes/Y, else No"
 }}
@@ -1620,6 +1632,8 @@ Return a JSON object with this structure:
   "indemnity_reserve": 0.0,
   "expense_paid": 0.0,
   "expense_reserve": 0.0,
+  "total_paid": 0.0,
+  "total_reserve": 0.0,
   "total_incurred": 0.0,
   "litigation": "Y if explicitly Yes/Y, else N"
 }}
