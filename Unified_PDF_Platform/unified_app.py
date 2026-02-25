@@ -18,12 +18,13 @@ from dotenv import load_dotenv
 # Import shared resources
 from shared_configs import router_engine, file_path_cache, _perform_extraction, BASE_DIR, UPLOAD_DIR
 # Import summary functions
-from summary_api import get_claim_summary, cognethro_trigger, cognethro_trigger_docs
+from summary_api import get_claim_summary, cognethro_trigger, cognethro_trigger_docs, work_comp_trigger, work_comp_trigger_docs
 
 # Import documentation constants
 from swagger_docs import (
     API_TITLE, API_DESCRIPTION, API_VERSION, 
-    CUSTOM_SWAGGER_JS, COGNETHRO_SUMMARY
+    CUSTOM_SWAGGER_JS, COGNETHRO_SUMMARY,
+    WORK_COMP_SUMMARY, WORK_COMP_SWAGGER_JS
 )
 
 # Load environment variables from parent directory
@@ -57,6 +58,13 @@ app.post("/cognethro",
 app.post("/api/claim-summary", 
     summary="Generate AI Summary")(get_claim_summary)
 
+# Work Compensation dedicated endpoint
+app.get("/work-comp", include_in_schema=False)(work_comp_trigger_docs)
+app.post("/work-comp",
+    summary=WORK_COMP_SUMMARY,
+    tags=["Workers Compensation"],
+    include_in_schema=True)(work_comp_trigger)
+
 # Mount static and templates for the new React frontend
 frontend_dist_path = BASE_DIR / "frontend" / "dist"
 if frontend_dist_path.exists():
@@ -87,6 +95,19 @@ async def custom_swagger_ui_html():
     
     html_content = response.body.decode("utf-8")
     new_html = html_content.replace("</body>", f"{custom_js}</body>")
+    return HTMLResponse(content=new_html, status_code=response.status_code)
+
+@app.get("/work-comp-docs", include_in_schema=False)
+async def work_comp_swagger_ui():
+    """Dedicated Swagger UI for the Work Compensation endpoint with JSON-only download button."""
+    response = get_swagger_ui_html(
+        openapi_url="/openapi.json",
+        title="Work Compensation Extractor",
+        swagger_js_url="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js",
+        swagger_css_url="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css"
+    )
+    html_content = response.body.decode("utf-8")
+    new_html = html_content.replace("</body>", f"{WORK_COMP_SWAGGER_JS}</body>")
     return HTMLResponse(content=new_html, status_code=response.status_code)
 
 # Injecting the custom Script via a separate HTML header middleware if needed, 

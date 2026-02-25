@@ -73,6 +73,10 @@ export function useDocumentProcessor() {
 
                 const json = await response.json();
 
+                if (json.error) {
+                    throw new Error(json.error);
+                }
+
                 // Handle unified router response format
                 const documentType = json.type || "UNKNOWN";
                 const jsonPath = json.output_json || json.json;

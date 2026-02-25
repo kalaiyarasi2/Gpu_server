@@ -147,35 +147,41 @@ class ExcelExtractor:
 
     def get_semantic_mapping(self, columns, provider_hint=""):
         """Phase 2: Semantic Mapping. AI generates the rename dictionary."""
+        clean_cols = [c for c in columns if not str(c).startswith("Unnamed_")]
+        
         from universal_pdf_extractor_v3 import REQUIRED_FIELDS
         target_fields = [f for f in REQUIRED_FIELDS if f not in ["TEXT", "METADATA", "TABLE_DATA"]]
         
         print(f"\n[PHASE 2] Semantic Mapping - Generating rename rules...")
+        print(f"  [INFO] Source Columns (Cleaned): {clean_cols}")
         
         prompt = f"""You are a data mapping specialist. 
-        Map these source columns to the TARGET fields.
+        Map these source columns to the TARGET fields for an insurance carrier invoice/report.
         
-        SOURCE: {columns}
+        SOURCE: {clean_cols}
         TARGET: {target_fields}
         
-        RULES:
-        1. Return ONLY valid JSON.
-        2. Map 'Subscriber ID', 'Member ID', 'Emp ID', 'Certificate' -> 'MEMBERID'
-        3. Map 'Monthly Premium', 'Current Charges', 'Medical' -> 'CURRENT_PREMIUM'
-        4. Map 'Subscriber Name', 'Full Name', 'Employee Name' -> 'FULL_NAME'
-        5. Map 'Effective Date', 'Invoice Date' -> 'INV_DATE'
-    6. Map 'Product', 'Plan', 'Benefit Description' -> 'PLAN_NAME'
-        6. Return JSON like: {{"SourceCol": "TargetField"}}
+        SPECIFIC RULES:
+        1. Map 'Subscriber ID', 'Member ID', 'Emp ID', 'Certificate', or 'ID' -> 'MEMBERID'
+        2. Map 'Monthly Premium', 'Current Charges', 'Medical', 'Charge Amount', or 'Premium' -> 'CURRENT_PREMIUM'
+        3. Map 'Subscriber Name', 'Full Name', 'Employee Name', or 'Member' -> 'FULL_NAME'
+        4. Map 'Effective Date', 'Invoice Date', or 'Coverage Dates' -> 'INV_DATE'
+        5. Map 'Product', 'Plan', 'Benefit Description', or 'Policy' -> 'PLAN_NAME'
+        
+        GENERAL RULES:
+        - Return ONLY valid JSON.
+        - Return JSON like: {{"SourceCol": "TargetField"}}
+        - If a source column doesn't match a target field, ignore it.
         """
         
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4.1",
+                model="gpt-4.1-mini",
                 messages=[{"role": "user", "content": prompt}],
                 response_format={ "type": "json_object" }
             )
             mapping = json.loads(response.choices[0].message.content)
-            print(f"  [OK] Mapping generated successfully.")
+            print(f"  [OK] Mapping generated: {mapping}")
             return mapping
         except Exception as e:
             print(f"  [ERR] Mapping failed: {e}")
@@ -235,104 +241,221 @@ class ExcelExtractor:
             print(f"  [ERR] AI Header detection failed: {e}")
             return -1
 
-    def process(self, excel_path):
-        file_ext = Path(excel_path).suffix.lower()
-        if file_ext == ".csv":
-            print(f"[STEP] Reading CSV directly: {excel_path}")
-        else:
-            print(f"[STEP] Reading Excel directly: {excel_path}")
+    def scan_for_tables(self, df_all):
+        """Scan a full DataFrame to find all potential table segments."""
+        found_segments = []
+        header_keywords = ["employee id", "member id", "member id no.", "subscriber id", "subscriber name", "last name", "first name", "ssn", "certificate number", "currentcharges", "premium", "charges", "policy", "plan", "coverage dates"]
         
+        header_indices = []
+        for i in range(min(len(df_all), 300)):
+            row_vals = df_all.iloc[i].fillna("").astype(str).tolist()
+            row_str = " ".join(row_vals).lower()
+            matches = [x for x in header_keywords if x in row_str]
+            if len(matches) >= 2:
+                if not header_indices or (i - header_indices[-1] > 5):
+                    header_indices.append(i)
+        
+        if not header_indices:
+            ai_idx = self.ai_find_header(df_all.head(40))
+            if ai_idx != -1: header_indices = [ai_idx]
+
+        for seg_num, idx in enumerate(header_indices):
+            next_idx = header_indices[seg_num + 1] if seg_num + 1 < len(header_indices) else len(df_all)
+            cols = df_all.iloc[idx].tolist()
+            cols = [str(c).strip() if pd.notna(c) else f"Unnamed_{j}" for j, c in enumerate(cols)]
+            segment_df = df_all.iloc[idx+1:next_idx].copy()
+            segment_df.columns = cols
+            segment_df = segment_df.dropna(how='all')
+            if segment_df.empty: continue
+            
+            mapping = self.get_semantic_mapping(segment_df.columns.tolist())
+            if mapping:
+                segment_df = segment_df.rename(columns=mapping)
+                if segment_df.columns.duplicated().any():
+                    seen_cols = set()
+                    keep = []
+                    for col in segment_df.columns:
+                        if col not in seen_cols:
+                            keep.append(col)
+                            seen_cols.add(col)
+                    segment_df = segment_df[keep]
+                
+                if any(col in segment_df.columns for col in ['MEMBERID', 'LASTNAME', 'FULL_NAME', 'CURRENT_PREMIUM']):
+                    found_segments.append(segment_df)
+        return found_segments
+
+    def clean_val(self, x):
+        """Standardize currency/number values."""
+        if pd.isna(x): return 0.0
+        if isinstance(x, (int, float)): return float(x)
+        s = str(x).replace('$', '').replace(',', '').strip()
+        if not s or s == '-' or s.lower() == 'nan': return 0.0
+        try: 
+            if s.startswith('(') and s.endswith(')'):
+                s = '-' + s[1:-1]
+            return float(s)
+        except: return 0.0
+
+    def split_name(self, name):
+        """Split combined FULL_NAME into LASTNAME, FIRSTNAME, MIDDLENAME."""
+        if not isinstance(name, str): return None, None, None
+        clean_name = name.strip()
+        if not clean_name: return None, None, None
+        
+        if ',' in clean_name:
+            parts = [p.strip() for p in clean_name.split(',')]
+            last = parts[0]
+            first_mid_str = parts[1] if len(parts) > 1 else ""
+            f_m_parts = [px.strip() for px in first_mid_str.split(' ') if px.strip()]
+            first = f_m_parts[0] if len(f_m_parts) > 0 else None
+            mid = " ".join(f_m_parts[1:]) if len(f_m_parts) > 1 else None
+            if mid:
+                last = f"{last} {mid}"
+                mid = None
+            return last, first, mid
+        else:
+            parts = [p.strip() for p in clean_name.split(' ') if p.strip()]
+            if len(parts) == 1: return parts[0], None, None
+            if len(parts) == 2: return parts[1], parts[0], None
+            first = parts[0]
+            last = parts[-1]
+            mid = " ".join(parts[1:-1]) if len(parts) > 2 else None
+            if mid:
+                last = f"{last} {mid}"
+                mid = None
+            return last, first, mid
+
+    def is_summary(self, val):
+        """Check if a value looks like a summary/subtotal label."""
+        summary_keywords = [
+            "Total", "Summary", "Subtotal", "Legend", "Requests", "Anthem", "Billing",
+            "Change", "Legend:", "Invoice", "CURRENT CHARGES", "PREVIOUS BALANCE",
+            "PAYMENT", "A/R ADJUSTMENTS", "MEMBERSHIP CHANGES", "BALANCE DUE",
+            "UPDATED BALANCE", "PAID THROUGH", "Bill Category", "Report Format"
+        ]
+        if pd.isna(val): return False
+        s = str(val).strip()
+        if s.startswith('$') or s.startswith('(') or (s.startswith('-') and len(s)>1 and s[1].isdigit()):
+            return True
+        return any(k.lower() in s.lower() for k in summary_keywords)
+
+    def clean_and_standardize(self, df, doc_metadata):
+        """Apply the Phase 3 schema standardization and cleaning Layer 5."""
+        from universal_pdf_extractor_v3 import REQUIRED_FIELDS
+        
+        # Currency cleaning
+        if 'CURRENT_PREMIUM' in df.columns:
+            df['CURRENT_PREMIUM'] = df['CURRENT_PREMIUM'].apply(self.clean_val)
+        if 'ADJUSTMENT_PREMIUM' in df.columns:
+            df['ADJUSTMENT_PREMIUM'] = df['ADJUSTMENT_PREMIUM'].apply(self.clean_val)
+
+        # Name splitting
+        if 'FULL_NAME' in df.columns and ('LASTNAME' not in df.columns or df['LASTNAME'].isnull().all()):
+            def apply_split(row):
+                l, f, m = self.split_name(row['FULL_NAME'])
+                return pd.Series({'LASTNAME': l, 'FIRSTNAME': f, 'MIDDLENAME': m})
+            df[['LASTNAME', 'FIRSTNAME', 'MIDDLENAME']] = df.apply(apply_split, axis=1)
+
+        # Ensure required fields
+        for field in REQUIRED_FIELDS:
+            if field not in df.columns:
+                df[field] = None
+        
+        # Metadata injection
+        if doc_metadata:
+            for field, val in doc_metadata.items():
+                if field in df.columns:
+                    df[field] = df[field].apply(lambda x: val if pd.isna(x) or str(x).strip() in ["", "0", "0.0", "None"] else x)
+        
+        # Dropping noise (Phase 3 Relaxed Filters)
+        valid_indicators = [c for c in ['LASTNAME', 'FULL_NAME', 'MEMBERID', 'CURRENT_PREMIUM'] if c in df.columns]
+        if valid_indicators:
+            df = df.dropna(subset=valid_indicators, how='all')
+        
+        if len(df.columns) > 5:
+            df = df[df.notna().sum(axis=1) >= 3]
+
+        header_like_values = {"last name", "first name", "lastname", "firstname", "name"}
+        if 'LASTNAME' in df.columns:
+            df = df[~df['LASTNAME'].astype(str).str.strip().str.lower().isin(header_like_values)]
+        
+        if 'LASTNAME' in df.columns: df = df[~df['LASTNAME'].apply(self.is_summary)]
+        if 'FULL_NAME' in df.columns: df = df[~df['FULL_NAME'].apply(self.is_summary)]
+        if 'MEMBERID' in df.columns: df = df[~df['MEMBERID'].apply(self.is_summary)]
+        
+        return df.reindex(columns=REQUIRED_FIELDS)
+
+    def process(self, excel_path):
+        """Main orchestration logic. Returns path to processed XLSX."""
         try:
+            file_ext = Path(excel_path).suffix.lower()
             all_dfs = []
-            from universal_pdf_extractor_v3 import REQUIRED_FIELDS
-            cols = REQUIRED_FIELDS
             doc_metadata = {}
-
-            def scan_for_tables(df_all):
-                """Scan a full DataFrame to find all potential table segments."""
-                found_segments = []
-                # Scan depth increased to 300 to handle deep reports like Bloom
-                header_keywords = ["employee id", "member id", "member id no.", "subscriber id", "subscriber name", "last name", "first name", "ssn", "certificate number", "currentcharges", "premium", "charges"]
-                
-                header_indices = []
-                for i in range(min(len(df_all), 300)):
-                    row_vals = df_all.iloc[i].fillna("").astype(str).tolist()
-                    row_str = " ".join(row_vals).lower()
-                    # Require at least 2 keywords to match to reduce noise
-                    matches = [x for x in header_keywords if x in row_str]
-                    if len(matches) >= 2:
-                        # Avoid picking the same header multiple times if they are adjacent
-                        if not header_indices or (i - header_indices[-1] > 5):
-                            header_indices.append(i)
-                
-                if not header_indices:
-                    # Fallback to AI for very top if nothing found
-                    ai_idx = self.ai_find_header(df_all.head(40))
-                    if ai_idx != -1: header_indices = [ai_idx]
-
-                for seg_num, idx in enumerate(header_indices):
-                    # Slice only between this header and the next header (or end of file)
-                    next_idx = header_indices[seg_num + 1] if seg_num + 1 < len(header_indices) else len(df_all)
-                    
-                    cols = df_all.iloc[idx].tolist()
-                    cols = [str(c).strip() if pd.notna(c) else f"Unnamed_{j}" for j, c in enumerate(cols)]
-                    
-                    segment_df = df_all.iloc[idx+1:next_idx].copy()
-                    segment_df.columns = cols
-                    
-                    # Drop completely empty rows within the segment
-                    segment_df = segment_df.dropna(how='all')
-                    
-                    if segment_df.empty:
-                        continue
-                    
-                    # Phase 2: Dynamic Mapping
-                    mapping = self.get_semantic_mapping(segment_df.columns.tolist())
-                    if mapping:
-                        segment_df = segment_df.rename(columns=mapping)
-                        
-                        # Deduplicate columns within this segment BEFORE appending
-                        # (pd.concat fails if any individual df has duplicate columns)
-                        if segment_df.columns.duplicated().any():
-                            seen_cols = set()
-                            keep = []
-                            for col in segment_df.columns:
-                                if col not in seen_cols:
-                                    keep.append(col)
-                                    seen_cols.add(col)
-                            segment_df = segment_df[keep]
-                        
-                        # Validation: must have at least one key column
-                        if any(col in segment_df.columns for col in ['MEMBERID', 'LASTNAME', 'FULL_NAME', 'CURRENT_PREMIUM']):
-                            found_segments.append(segment_df)
-                return found_segments
+            
+            print(f"[STEP] Reading {'CSV' if file_ext == '.csv' else 'Excel'} directly: {excel_path}")
 
             if file_ext == ".csv":
-                # Read entire CSV without headers first to scan
-                df_raw = pd.read_csv(excel_path, header=None)
-                # Capture metadata from top rows using AI
+                try:
+                    df_raw = pd.read_csv(excel_path, header=None, engine='python', on_bad_lines='skip', encoding='utf-8-sig', names=list(range(100)))
+                except UnicodeDecodeError:
+                    print("[WARN] UTF-8 decode failed for CSV. Attempting latin-1 fallback...")
+                    df_raw = pd.read_csv(excel_path, header=None, engine='python', on_bad_lines='skip', encoding='latin-1', names=list(range(100)))
+                
                 doc_metadata.update(self.extract_global_metadata(df_raw.head(20)))
-                segments = scan_for_tables(df_raw)
+                segments = self.scan_for_tables(df_raw)
                 all_dfs.extend(segments)
             else:
-                xl = pd.ExcelFile(excel_path)
-                for sheet_name in xl.sheet_names:
-                    print(f"[INFO] Inspecting sheet: {sheet_name}")
-                    df_raw = pd.read_excel(xl, sheet_name=sheet_name, header=None)
-                    # Capture metadata from top rows using AI
-                    doc_metadata.update(self.extract_global_metadata(df_raw.head(20)))
-                    segments = scan_for_tables(df_raw)
-                    all_dfs.extend(segments)
-            
+                # Robust Excel Reading: try openpyxl first, then fallback to xlrd 
+                try:
+                    print(f"[INFO] Attempting to read Excel with openpyxl engine...")
+                    xl = pd.ExcelFile(excel_path, engine='openpyxl')
+                    for sheet_name in xl.sheet_names:
+                        print(f"[INFO] Inspecting sheet: {sheet_name}")
+                        df_raw = pd.read_excel(xl, sheet_name=sheet_name, header=None, engine='openpyxl')
+                        doc_metadata.update(self.extract_global_metadata(df_raw.head(20)))
+                        segments = self.scan_for_tables(df_raw)
+                        all_dfs.extend(segments)
+                except Exception as openpyxl_err:
+                    print(f"[WARN] openpyxl failed: {openpyxl_err}. Attempting xlrd fallback...")
+                    try:
+                        xl = pd.ExcelFile(excel_path, engine='xlrd')
+                        for sheet_name in xl.sheet_names:
+                            print(f"[INFO] Inspecting sheet (xlrd): {sheet_name}")
+                            df_raw = pd.read_excel(xl, sheet_name=sheet_name, header=None, engine='xlrd')
+                            doc_metadata.update(self.extract_global_metadata(df_raw.head(20)))
+                            segments = self.scan_for_tables(df_raw)
+                            all_dfs.extend(segments)
+                    except Exception as xlrd_err:
+                        print(f"      xlrd error: {xlrd_err}. Attempting read_html fallback...")
+                        try:
+                            # Some "Excel" files are actually HTML tables
+                            dfs_html = pd.read_html(excel_path)
+                            if dfs_html:
+                                for i, df_html in enumerate(dfs_html):
+                                    print(f"[INFO] Inspecting HTML table {i}")
+                                    doc_metadata.update(self.extract_global_metadata(df_html.head(20)))
+                                    segments = self.scan_for_tables(df_html)
+                                    all_dfs.extend(segments)
+                            else:
+                                raise ValueError("No tables found in HTML")
+                        except Exception as html_err:
+                            print(f"      HTML error: {html_err}. Finally attempting read_csv fallback...")
+                            try:
+                                # Final fallback: some files are CSV with wrong extension
+                                df_raw = pd.read_csv(excel_path, header=None, engine='python', on_bad_lines='skip', names=list(range(100)), encoding='latin-1')
+                                doc_metadata.update(self.extract_global_metadata(df_raw.head(20)))
+                                segments = self.scan_for_tables(df_raw)
+                                all_dfs.extend(segments)
+                            except Exception as csv_err:
+                                print(f"      Final CSV fallback also failed: {csv_err}")
+                                raise xlrd_err
+
             if not all_dfs:
-                print("[ERR] No valid data sheets found in Excel")
-                return None
+                print("[ERR] No valid data found in spreadsheet after all fallback attempts.")
+                return {"error": "No valid data found in spreadsheet. The file might be corrupted or in an unsupported format."}
                 
-            # Safe concat: convert each segment to records first to avoid Reindexing errors
-            # from duplicate column names across segments with different schemas
             all_records = []
             for seg in all_dfs:
-                # Ensure unique columns per segment one more time
                 if seg.columns.duplicated().any():
                     seen_c = set()
                     keep_c = []
@@ -341,179 +464,40 @@ class ExcelExtractor:
                             keep_c.append(c)
                             seen_c.add(c)
                     seg = seg[keep_c]
-                all_records.extend(seg.to_dict('records'))
+                if not seg.empty:
+                    all_records.extend(seg.to_dict('records'))
             
-            df = pd.DataFrame(all_records)
-            df = df.reset_index(drop=True)
-
-            print(f"  [INFO] Initial DataFrame shape: {df.shape}")
-            
-            # Handle duplicate columns early — use loc-based approach to avoid Reindexing errors
-            if df.columns.duplicated().any():
-                print(f"[WARN] Duplicate columns detected in merged data. Forcing uniqueness...")
-                cols_to_keep = []
-                seen = set()
-                for i, col in enumerate(df.columns):
-                    if col not in seen:
-                        cols_to_keep.append(i)
-                        seen.add(col)
-                df = df.iloc[:, cols_to_keep]
-            
-            # Ensure we have a clean copy to avoid SettingWithCopy warnings
-            df = df.copy()
-        
-            # Clean currency columns early
-            def clean_val(x):
-                # Ensure we handle scalar values correctly in apply
-                if pd.isna(x): return 0.0
-                if isinstance(x, (int, float)): return float(x)
-                # Remove $, commas, etc
-                s = str(x).replace('$', '').replace(',', '').strip()
-                if not s or s == '-' or s.lower() == 'nan': return 0.0
-                try: 
-                    # Handle parentheses for negative numbers (123.45)
-                    if s.startswith('(') and s.endswith(')'):
-                        s = '-' + s[1:-1]
-                    return float(s)
-                except: return 0.0
-
-            if 'CURRENT_PREMIUM' in df.columns:
-                df['CURRENT_PREMIUM'] = df['CURRENT_PREMIUM'].apply(clean_val)
-            if 'ADJUSTMENT_PREMIUM' in df.columns:
-                df['ADJUSTMENT_PREMIUM'] = df['ADJUSTMENT_PREMIUM'].apply(clean_val)
-
-            # Handle Combined Name field
-            if 'FULL_NAME' in df.columns and ('LASTNAME' not in df.columns or df['LASTNAME'].isnull().all()):
-                print("[INFO] Splitting FULL_NAME into LASTNAME, FIRSTNAME, and MIDDLENAME...")
-                def split_name(name):
-                    if not isinstance(name, str): return None, None, None
-                    clean_name = name.strip()
-                    if not clean_name: return None, None, None
-                    
-                    if ',' in clean_name:
-                        parts = [p.strip() for p in clean_name.split(',')]
-                        last = parts[0]
-                        first_mid_str = parts[1] if len(parts) > 1 else ""
-                        f_m_parts = [px.strip() for px in first_mid_str.split(' ') if px.strip()]
-                        first = f_m_parts[0] if len(f_m_parts) > 0 else None
-                        mid = " ".join(f_m_parts[1:]) if len(f_m_parts) > 1 else None
-                        
-                        # [USER REQ] Merge middle names into last name
-                        if mid:
-                            last = f"{last} {mid}"
-                            mid = None
-                        return last, first, mid
-                    else:
-                        parts = [p.strip() for p in clean_name.split(' ') if p.strip()]
-                        if len(parts) == 1: 
-                            return parts[0], None, None
-                        if len(parts) == 2: 
-                            return parts[1], parts[0], None
-                        
-                        # Assume Last name is the last part
-                        first = parts[0]
-                        last = parts[-1]
-                        mid = " ".join(parts[1:-1]) if len(parts) > 2 else None
-                        
-                        # [USER REQ] Merge middle names into last name
-                        if mid:
-                            last = f"{last} {mid}"
-                            mid = None
-                        return last, first, mid
-
-                def apply_split(row):
-                    l, f, m = split_name(row['FULL_NAME'])
-                    return pd.Series({'LASTNAME': l, 'FIRSTNAME': f, 'MIDDLENAME': m})
-
-                df[['LASTNAME', 'FIRSTNAME', 'MIDDLENAME']] = df.apply(apply_split, axis=1)
-
-            # Ensure all required fields exist
-            for field in REQUIRED_FIELDS:
-                if field not in df.columns:
-                    df[field] = None
-            
-            # ── Inject extracted Row-0 metadata into every row ──
-            if doc_metadata:
-                print(f"  [Meta] Injecting header metadata into {len(df)} rows: {list(doc_metadata.keys())}")
-                for field, val in doc_metadata.items():
-                    if field in df.columns:
-                        # Only fill if current value is null/empty/zero
-                        df[field] = df[field].apply(lambda x: val if pd.isna(x) or str(x).strip() in ["", "0", "0.0", "None"] else x)
-            
-            # Drop empty rows or total/summary rows
-            # Key filter: must have a name AND (a premium OR a member ID) to be a valid row
-            drop_subset = [c for c in ['LASTNAME', 'FULL_NAME'] if c in df.columns]
-            if drop_subset:
-                df = df.dropna(subset=drop_subset, how='all')
-            
-            # For the second dropna, ensure columns exist or use REQUIRED_FIELDS which are guaranteed
-            df = df.dropna(subset=['CURRENT_PREMIUM', 'MEMBERID'], how='all')
-            
-            # Drop stray repeated header rows (e.g., LASTNAME == "Last Name" from sub-sections)
-            header_like_values = {"last name", "first name", "lastname", "firstname", "name"}
-            if 'LASTNAME' in df.columns:
-                df = df[~df['LASTNAME'].astype(str).str.strip().str.lower().isin(header_like_values)]
-            
-            # Remove rows where LASTNAME, FULL_NAME, or MEMBERID looks like a subtotal/summary
-            summary_keywords = [
-                "Total", "Summary", "Subtotal", "Legend", "Requests", "Anthem", "Billing",
-                "Change", "Legend:", "Invoice", "CURRENT CHARGES", "PREVIOUS BALANCE",
-                "PAYMENT", "A/R ADJUSTMENTS", "MEMBERSHIP CHANGES", "BALANCE DUE",
-                "UPDATED BALANCE", "PAID THROUGH", "Bill Category", "Report Format"
-            ]
-            def is_summary(val):
-                if pd.isna(val): return False
-                s = str(val).strip()
-                # Filter rows where LASTNAME contains currency symbols or digits only
-                if s.startswith('$') or s.startswith('(') or s.startswith('-'):
-                    return True
-                # Filter rows that look like metadata keywords
-                return any(k.lower() in s.lower() for k in summary_keywords)
-            
-            if 'LASTNAME' in df.columns:
-                df = df[~df['LASTNAME'].apply(is_summary)]
-            if 'FULL_NAME' in df.columns:
-                df = df[~df['FULL_NAME'].apply(is_summary)]
-            if 'MEMBERID' in df.columns:
-                df = df[~df['MEMBERID'].apply(is_summary)]
-            
-            # Final Reorder and Filtering
-            # Use reindex to be defensive against missing columns
-            available_cols = [c for c in cols if c in df.columns]
-            missing_cols = [c for c in cols if c not in df.columns]
-            if missing_cols:
-                print(f"  [INFO] Adding missing required columns as empty: {missing_cols}")
-                # We'll let reindex handle adding them
-            
-            df = df.reindex(columns=cols)
-            # Ensure no duplicates remain in the schema
-            if df.columns.duplicated().any():
-                df = df.loc[:, ~df.columns.duplicated()]
-            
-            # Add Manual Total Row at the bottom of Excel (will be filtered in JSON)
-            try:
-                total_premium = df['CURRENT_PREMIUM'].fillna(0).sum()
-                # Create as a single-row DataFrame with same columns to avoid FutureWarning
-                # and ensure dtypes match as much as possible
-                total_data = {col: [None] for col in df.columns}
-                total_df = pd.DataFrame(total_data)
-                total_df.loc[0, 'CURRENT_PREMIUM'] = total_premium
-                if 'LASTNAME' in total_df.columns: 
-                    total_df.loc[0, 'LASTNAME'] = "TOTAL"
+            if not all_records:
+                print("[ERR] Resulting record set is empty.")
+                return {"error": "No data rows could be extracted from the file."}
                 
-                df = pd.concat([df, total_df], ignore_index=True)
-                print(f"  [INFO] Added manual total row: ${total_premium:,.2f}")
+            df = pd.DataFrame(all_records)
+            df = self.clean_and_standardize(df, doc_metadata)
+            
+            # Layer 5: Summary Totals
+            try:
+                if 'CURRENT_PREMIUM' in df.columns:
+                    total_premium = df['CURRENT_PREMIUM'].sum()
+                    total_data = {col: [None] for col in df.columns}
+                    total_df = pd.DataFrame(total_data)
+                    total_df.loc[0, 'CURRENT_PREMIUM'] = total_premium
+                    if 'LASTNAME' in total_df.columns: 
+                        total_df.loc[0, 'LASTNAME'] = "TOTAL"
+                    df = pd.concat([df, total_df], ignore_index=True)
+                    print(f"  [INFO] Added manual total row: ${total_premium:,.2f}")
             except Exception as total_err:
                 print(f"  [WARN] Failed to add total row: {total_err}")
 
             output_xlsx = self.output_base / f"{Path(excel_path).stem}_processed.xlsx"
             df.to_excel(output_xlsx, index=False)
             return str(output_xlsx)
+            
         except Exception as e:
-            print(f"[ERR] Excel extraction failed: {e}")
+            print(f"\n[CRITICAL ERROR] Spreadsheet extraction failed: {e}")
             import traceback
             traceback.print_exc()
-            return None
+            return {"error": f"Internal process error during extraction: {str(e)}"}
+
 
 
 class UnifiedRouter:
@@ -1598,8 +1582,8 @@ OUTPUT:"""
         
         # Layer 4 Override: If it's an Excel/CSV file but misclassified as INSURANCE,
         # redirect to INVOICE extractor because Insurance extractor only supports PDF.
-        if file_ext in [".xlsx", ".xls", ".csv"] and doc_type == "INSURANCE":
-            print(f"[WARN] Data file {file_path.name} was classified as INSURANCE, but Excel/CSV extraction is only supported in the INVOICE pipeline. Redirecting...")
+        if file_ext in [".xlsx", ".xls", ".csv"] and doc_type != "INVOICE":
+            print(f"[WARN] Data file {file_path.name} was classified as {doc_type}, but spreadsheet extraction is only supported in the INVOICE pipeline. Redirecting...")
             doc_type = "INVOICE"
 
         # Step 2: Route to appropriate extractor (Layer 4)
@@ -1609,7 +1593,10 @@ OUTPUT:"""
                 extractor = ExcelExtractor(output_base=OUTPUT_BASE)
                 excel_path = extractor.process(file_path)
                 
-                if excel_path:
+                if isinstance(excel_path, dict) and "error" in excel_path:
+                    # ExcelExtractor returned a graceful failure
+                    result = excel_path
+                elif excel_path:
                     result = {
                         "type": "INVOICE",
                         "excel": excel_path,
@@ -1665,10 +1652,24 @@ OUTPUT:"""
                         print(f"[ERR] Structural fallback also failed: {structural_result.get('error')}")
 
         elif doc_type == "INSURANCE_CLAIMS":
-            if file_ext != ".pdf":
+            if file_ext in [".xlsx", ".xls", ".csv"]:
+                print(f"[INFO] Routing Claim Spreadsheet to Structured Extractor...")
+                extractor = ExcelExtractor(output_base=OUTPUT_BASE)
+                excel_path = extractor.process(file_path)
+
+                if excel_path:
+                    result = {
+                        "type": "INSURANCE_CLAIMS",
+                        "excel": excel_path,
+                        "json": self.xlsx_to_json(Path(excel_path))
+                    }
+                else:
+                    result = {"error": "Excel/CSV claim extraction failed to yield structured data"}
+            elif file_ext == ".pdf":
+                result = self.run_insurance_extractor(file_path)
+            else:
                  print(f"[ERR] Insurance extractor called for {file_ext} file. Not supported yet.")
-                 return {"error": "Insurance extraction (Loss Runs/Claims) currently only supports PDF format. Please convert your file to PDF or upload an Invoice."}
-            result = self.run_insurance_extractor(file_path)
+                 return {"error": "Insurance extraction (Loss Runs/Claims) currently only supports PDF or common spreadsheet formats (XLSX, CSV)."}
         elif doc_type == "WORK_COMPENSATION":
             result = self.run_work_compensation_extractor(file_path)
         elif doc_type == "IDENTIFICATION":

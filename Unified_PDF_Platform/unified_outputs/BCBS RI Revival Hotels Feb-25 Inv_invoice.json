@@ -11,10 +11,10 @@
         "POLICYID":null,
         "MEMBERID":201042830.0,
         "PLAN_NAME":"MEDICAL",
-        "PLAN_TYPE":null,
+        "PLAN_TYPE":"MEDICAL",
         "COVERAGE":null,
         "CURRENT_PREMIUM":2194.1,
-        "ADJUSTMENT_PREMIUM":null,
+        "ADJUSTMENT_PREMIUM":0.0,
         "PRICING_ADJUSTMENT":null
     },
     {
@@ -29,10 +29,10 @@
         "POLICYID":null,
         "MEMBERID":201118969.0,
         "PLAN_NAME":"MEDICAL",
-        "PLAN_TYPE":null,
+        "PLAN_TYPE":"MEDICAL",
         "COVERAGE":null,
         "CURRENT_PREMIUM":541.32,
-        "ADJUSTMENT_PREMIUM":null,
+        "ADJUSTMENT_PREMIUM":0.0,
         "PRICING_ADJUSTMENT":null
     },
     {
@@ -47,10 +47,10 @@
         "POLICYID":null,
         "MEMBERID":201042825.0,
         "PLAN_NAME":"MEDICAL",
-        "PLAN_TYPE":null,
+        "PLAN_TYPE":"MEDICAL",
         "COVERAGE":null,
         "CURRENT_PREMIUM":566.48,
-        "ADJUSTMENT_PREMIUM":null,
+        "ADJUSTMENT_PREMIUM":0.0,
         "PRICING_ADJUSTMENT":null
     }
 ]

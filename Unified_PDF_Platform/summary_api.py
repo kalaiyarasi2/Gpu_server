@@ -11,7 +11,7 @@ from shared_configs import _perform_extraction, file_path_cache
 from summary_for_json import ClaimsAnalyzer
 
 # Import documentation constants
-from swagger_docs import COGNETHRO_SUMMARY, COGNETHRO_DESCRIPTION
+from swagger_docs import COGNETHRO_SUMMARY, COGNETHRO_DESCRIPTION, WORK_COMP_SUMMARY, WORK_COMP_DESCRIPTION
 
 router = APIRouter()
 
@@ -51,6 +51,50 @@ async def cognethro_trigger(request: Request, file: UploadFile = File(...), down
                     media_type="application/zip"
                 )
     
+    return result
+
+
+@router.get("/work-comp", include_in_schema=False)
+async def work_comp_trigger_docs():
+    """Redirect human visitors to the Swagger documentation page."""
+    return RedirectResponse(url="/docs")
+
+
+@router.post("/work-comp",
+    summary=WORK_COMP_SUMMARY,
+    description=WORK_COMP_DESCRIPTION,
+    tags=["Workers Compensation"])
+async def work_comp_trigger(request: Request, file: UploadFile = File(...)):
+    """
+    Upload a Workers Compensation PDF and receive a direct JSON file download.
+    Only PDF files are accepted.
+    """
+    from pathlib import Path as _Path
+    from fastapi import HTTPException as _HTTPException
+    from fastapi.responses import FileResponse as _FileResponse
+
+    file_ext = _Path(file.filename).suffix.lower()
+    if file_ext != ".pdf":
+        raise _HTTPException(
+            status_code=400,
+            detail=f"Workers Compensation endpoint only accepts PDF files. Received: {file_ext}"
+        )
+
+    result = await _perform_extraction(file, request)
+
+    if isinstance(result, dict) and "error" not in result:
+        json_filename = result.get("output_json")
+        json_full_path = file_path_cache.get(json_filename)
+
+        if json_full_path and _Path(json_full_path).exists():
+            print(f"[Work Comp] Returning direct file download: {json_filename}")
+            return _FileResponse(
+                path=json_full_path,
+                filename=json_filename,
+                media_type="application/json"
+            )
+
+    # Fallback: return error dict if extraction failed
     return result
 
 @router.post("/api/claim-summary")

@@ -34,7 +34,8 @@ async def _perform_extraction(file: UploadFile, request: Request):
         result = router_engine.process(str(file_path))
         
         if "error" in result:
-            raise HTTPException(status_code=500, detail=result["error"])
+            print(f"[Unified][WARN] Extraction returned error: {result['error']}")
+            return {"error": result["error"]}
         
         # Extract filenames and full paths
         excel_path = result.get("excel")
