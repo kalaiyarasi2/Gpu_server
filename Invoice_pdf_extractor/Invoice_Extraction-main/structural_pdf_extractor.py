@@ -165,7 +165,7 @@ def process_with_structural_layer(pdf_path, output_excel=None):
     chunks = map_and_segment_text(text)
     
     all_line_items = []
-    final_header = {field: None for field in v3.REQUIRED_FIELDS if field in ["INV_DATE", "INV_NUMBER", "BILLING_PERIOD", "GROUP_NUMBER", "PRICING_ADJUSTMENT"]}
+    final_header = {field: None for field in v3.REQUIRED_FIELDS if field in ["INV_DATE", "INV_NUMBER", "BILLING_PERIOD", "GROUP_NUMBER"]}
     
     print(f"  [Layer] Segmented document into {len(chunks)} contextual chunks.")
     

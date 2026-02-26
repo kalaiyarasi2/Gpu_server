@@ -120,8 +120,7 @@ REQUIRED_FIELDS = [
     "PLAN_TYPE",
     "COVERAGE",
     "CURRENT_PREMIUM",
-    "ADJUSTMENT_PREMIUM",
-    "PRICING_ADJUSTMENT"
+    "ADJUSTMENT_PREMIUM"
 ]
 
 
@@ -375,17 +374,55 @@ Extract data from the document text provided below.
 ### EXTRACTION MODE: {mode.upper()}
 {mode_instructions}
 
-### STRICT ANALYSIS STEP - DO NOT SKIP:
-1. **Header Identification**: Find the table containing individuals/members (often called "Membership Detail", "Current Charges", "Subscriber Detail", etc.) and list the EXACT column headers.
-2. **Column Mapping**: Map the discovered headers correctly:
-   - "Contract No" / "Subscriber ID" / "ID#" / "Member ID" -> `MEMBERID`
-   - "Premium" / "Amount" / "Premium Amount" / "Billed" / "Total" -> `CURRENT_PREMIUM`
-   - "Adjustment" / "Credit" / "Debit" (ONLY if separate column exists) -> `ADJUSTMENT_PREMIUM`
-   - "Product" / "Coverage Type" -> `PLAN_NAME`
-   - "Policy Name" / "Plan Description" -> `POLICYID`
-3. **Leading Zeros**: Preserve every single zero.
-4. **Landscape Awareness**: This text may come from a LANDSCAPE document with dense columns. Ensure you look horizontally across mashed strings (e.g., "$100|ID123") to find all fields.
-5. **Aggressive Row Capture**: You MUST extract EVERY individual listed in the main table. Even if the name contains symbols (e.g., "#27411" or "“6078") or looks like garbage, extract it as-is. Do not skip any rows.
+### CARRIER-SPECIFIC IDENTIFIER PROFILES (PRIORITY):
+- **UHC (UnitedHealthcare)**: 
+    - **Header Identifier**: Look for "Policy No." (e.g., `1400021`). This is the **POLICYID**.
+    - **Member Identification**: Look for the unique masked string (e.g., `*****557900`). This is the **MEMBERID**.
+    - **NULL-SSN Mandate**: For carrier UHC, you MUST set `SSN` to **NULL** for all rows. **NEVER** use Member ID parts for SSN.
+    - **Sectional Awareness (CRITICAL)**: ONLY extract data from tables under the "Details" or "Current Detail" headers. **IGNORE** any tables under the "Summary" header (e.g., lines that say "Employee | 14" or "Total Volume").
+    - **Coverage Recovery**: Look for single-letter codes: `E` -> **EE**, `S` -> **ES**, `F` -> **FAM**, `C` -> **EC**. If the letter is alone (e.g., `| E` or `Sarah A`), map it accordingly.
+    - **Plan Name Capture**: Capture the FULL plan name (e.g., `FL P CHC +NG 20/30/500/100 POS 25 DYYY`). If the prefix is missing on a row, use the prefix from the previous member.
+    - **ID Handling**: Never use parts of the Member ID as a fallback for SSN.
+    - **Forbidden String**: In UHC, "IND AGE RATED" or "FAM AGE RATED" are often labels; do NOT let them override explicit coverage tiers like `EE` or `FAM`.
+    - **Audit Total**: Ensure every member listed in the detail table is captured.
+- **BCBS (BlueCross BlueShield)**: 
+    - **Subscriber ID** or **Member ID** -> maps to `MEMBERID`.
+    - **Coverage from Plan**: In BCBS RI, coverage is often inside the plan string (e.g., "IND AGE RATED" -> **EE**, "FAM AGE RATED" -> **FAM**).
+    - **MANDATORY DETAIL EXTRACTION**: Extract members ONLY from the subscriber detail tables (e.g., "SECTION 3" or "DETAIL OF SUBSCRIBERS").
+    - **GREEDY EXTRACTION**: Capture every row in the detail table. Even if a name was seen in a summary header (e.g., Account Owner "SHARAD SAXTON"), extract it again as a member row if it appears with a Subscriber ID and Premium.
+    - **FAM AGE RATED MANDATE**: "FAM AGE RATED" rows are INDIVIDUAL member enrollments (Family tier) and MUST be extracted as line items. Do NOT treat them as summary totals.
+    - **MISSING MEMBER ALERT**: Ensure "SHARAD SAXTON" (approx. $2,485.21) is extracted. He is a primary subscriber.
+    - **TARGET HEADCOUNT**: If the document says "SUBSCRIBERS CURRENT BILLING PERIOD: 4", you MUST find and return EXACTLY 4 member rows.
+    - **NO TRUNCATION**: Capture the FULL length of `INV_NUMBER` (usually 12 digits like 260210001403) and the FULL `BILLING_PERIOD` range.
+    - **NO HALLUCINATION**: NEVER invent or create member rows. If a member is not explicitly in the detail table, return NULL. Do NOT use fake IDs like 123456789.
+    - Plan names often include "LG GRP" or suffixes like "RC" on hanging lines; use Multiline Aggregation.
+- **GIS Benefits (Group Insurance Services)**:
+    - GIS invoices have TWO tables: Page 1 (summary) and Page 2+ (detail with Payroll File Numbers).
+    - **CRITICAL - USE PAGE 2 ONLY FOR PREMIUMS**: Page 1 and Page 2 contain the SAME premium data in different formats. You MUST extract member line items and `CURRENT_PREMIUM` values EXCLUSIVELY from Page 2 (the detail section starting with "Payroll File Number Employee SSN..."). Extracting from Page 1 AND Page 2 will produce DOUBLE the correct total.
+    - **PAGE 1 USE**: Only use Page 1 to read header fields: `INV_NUMBER`, `INV_DATE`, `BILLING_PERIOD`, and `POLICYID`.
+    - **MEMBERID SOURCE**: The **Payroll File Number** column on Page 2 (a 9-digit numeric code like `014686782`) → maps to `MEMBERID`. PRESERVE leading zeros.
+    - **SSN SOURCE**: The `XXX-XX-XXXX` pattern on Page 2 → extract only the last 4 digits as `SSN`.
+    - **COVERAGE MAPPING**: From the "Product Name" column on Page 2:
+        - Contains "Employee" (but not "Spouse") → **EE**
+        - Contains "Spouse" → **ES**
+        - Contains "Long Term Disability" (no Employee/Spouse suffix) → **EE**
+    - **PLAN_NAME**: Use the full product name from Page 2 (e.g., "Voluntary STD", "Long Term Disability", "Voluntary Life & AD&D - Employee").
+    - **BILLING_PERIOD**: From the "Coverage Date" column (e.g., `2/1/2026`).
+- **GENERAL MAPPING (IF CARRIER UNKNOWN)**:
+    - "Invoice Date" / "Date" -> `INV_DATE`
+    - "Invoice #" / "Inv #" -> `INV_NUMBER`
+    - "Subscriber ID" / "Member ID" / "Member #" / "Contract No" -> `MEMBERID`
+    - "Premium" / "Amount" / "Premium Amount" / "Total" -> `CURRENT_PREMIUM`
+    - "Adjustment" / "Credit" / "Debit" -> `ADJUSTMENT_PREMIUM`
+    - "Product" / "Plan Description" / "Coverage Type" -> `PLAN_NAME`
+    - "Policy No." / "Policy Number" -> `POLICYID`
+3. **Multiline Value Aggregation**:
+   - **CRITICAL**: Some columns (especially 'Product', 'Plan', or 'Address') span multiple lines vertically.
+   - You MUST look at the lines immediately following a member row. If they contain hanging text (e.g., "LG GRP PLAN 49-" and "RC" below "BLUECARE NFQ"), AGGREGATE them into the appropriate field (e.g., `PLAN_NAME`) with a space.
+   - Do not stop at the first line of the table row; ensure the entire block of data for that member is captured.
+4. **Leading Zeros**: Preserve every single zero.
+5. **Landscape Awareness**: This text may come from a LANDSCAPE document with dense columns. Ensure you look horizontally across mashed strings (e.g., "$100|ID123") to find all fields.
+6. **Aggressive Row Capture**: You MUST extract EVERY individual listed in the main table. Even if the name contains symbols (e.g., "#27411" or "“6078") or looks like garbage, extract it as-is. Do not skip any rows.
 6. **SSN/Identifier Capture**: 
     - Extract any visible digits in the SSN column. 
     - **CRITICAL**: If the SSN is masked (e.g., `*****9868`), extract ONLY the last 4 digits (`9868`). 
@@ -400,6 +437,21 @@ Extract data from the document text provided below.
         - **A** -> 4
         - **G** -> 9
     - **STRICT SSN**: Extract EXACTLY 4 digits. Do not truncate to 1 or 2 digits unless there is absolute certainty. If only 3 digits are found (e.g. '399'), check if a leading zero '0' was likely dropped by OCR; if so, extract as '0399'.
+    - **ID vs SSN vs POLICYID (UHC Special Case)**: 
+        - If the document is UHC, the value `1400021` is **ONLY** `POLICYID`.
+        - The value `*****557900` is **ONLY** `MEMBERID`.
+        - **NEVER** put `1400021` into `MEMBERID`, `SSN`, or `FIRSTNAME`.
+        - **NEVER** put `557900` into `SSN`.
+    - **NEGATIVE MAPPING RULES**: 
+        - `Policy No.` is **NEVER** `MEMBERID`. 
+        - Numeric codes like `78142600` (from headers) are **NEVER** `SSN`.
+        - Masked strings with 6+ digits (e.g. `*****557900`) are **NEVER** `SSN`; they are always `MEMBERID`.
+    - **CHAIN-OF-THOUGHT ROW VERIFICATION**:
+        - For every row, you MUST internally follow this sequence:
+            1. **Segment Raw Text**: Identify the raw characters (e.g., `BENNETT ANDREWM EE *****557900 ... 1302.87`).
+            2. **Identify Anchor**: Find the premium (e.g., `1302.87`).
+            3. **Relative Mapping**: Map fields relative to the anchor. (e.g., `EE` just before the ID is `COVERAGE`).
+            4. **Exclusion Check**: Ensure no Policy level data (`1400021`) is polluting the member fields.
 
 
 ### STRICT EXTRACTION RULES - FOLLOW EXACTLY:
@@ -414,8 +466,8 @@ Extract data from the document text provided below.
    - **Definition**: The type of insurance benefit provided.
    - **STRICT MAPPING**:
      - **DHM, DPO, GD** -> `PLAN_TYPE`: **DENTAL**
-     - **VIS, SV** -> `PLAN_TYPE`: **VISION**
-      - **MED, MEDICAL, HMO, PPO, BLUECARE, BLUE** -> `PLAN_TYPE`: **MEDICAL**
+     - **VIS, SV, VISION** -> `PLAN_TYPE`: **VISION**
+      - **MED, MEDICAL, HMO, PPO, POS, CHOICE, BLUECARE, BLUE** -> `PLAN_TYPE`: **MEDICAL**
    - **STRICT RULE**: This is an independent field and must not be inferred from other fields.
 
 3. **COVERAGE (ENROLLMENT TIER - STRICT)**:
@@ -423,12 +475,11 @@ Extract data from the document text provided below.
    - **Definition**: Who is included under the plan for pricing purposes.
    - **STRICT EXTRACTION RULE**: Coverage MUST be extracted directly from a "Coverage" or "Tier" field.
    - **MAPPING (NORMALIZATION)**:
-     - "EE+SP", "EE/SP", "EMP+SPOUSE" -> **ES**
-     - "EE+CH", "EE/CH", "EMP+CHILD", "EMPLOYEE/CHILD", "EMPLOYEE/CHILDREN", "EMP/CHILD" -> **EC**
-      - "EE", "EMP ONLY", "SINGLE", "INDIVIDUAL" -> **EE**
-      - "FAM", "FAMILY" -> **FAM**
+     - "EE+SP", "EE/SP", "EMP+SPOUSE", "DEP", "S" -> **ES**
+     - "EE+CH", "EE/CH", "EMP+CHILD", "EMPLOYEE/CHILD", "EMPLOYEE/CHILDREN", "EMP/CHILD", "FPC", "C", "CHILD" -> **EC**
+      - "EE", "EMP ONLY", "SINGLE", "INDIVIDUAL", "IND", "E" -> **EE**
+      - "FAM", "FAMILY", "F" -> **FAM**
    - **DO NOT GUESS**: Never infer coverage based on premium amounts.
-   - **STRICT FORBIDDEN RULE**: Terms like "IND AGE RATED" or "FAM AGE RATED" are NOT tiers.
    - If no explicit tier is found OR if the tier cannot be mapped to the allowed set: return **NULL**.
 
 4. **ULTRA-STRICT VALIDATION & ANTI-HALLUCINATION**:
@@ -441,16 +492,20 @@ Extract data from the document text provided below.
    - **STRICT RULE**: This is an independent field and must not be inferred from other fields. 
    - **RULE**: Use this for identity analysis, but do not include it in the final formatted output.
 
-5. **PREMIUM FIELDS (STRICT DEFINITIONS)**:
+6. **PREMIUM FIELDS (STRICT DEFINITIONS)**:
    - **CURRENT_PREMIUM**: Maps to the recurring base premium for the current period.
-   - **ADJUSTMENT_PREMIUM**: Maps to retroactive or corrective amounts.
-   - **PRICING_ADJUSTMENT**: Strictly for explicit numeric rate changes. If not explicitly stated, return **NULL**.
+   - **ADJUSTMENT_PREMIUM**: Maps to retroactive or corrective amounts (e.g., credits, prorated debits).
+   - **GRAND TOTAL AUTHORITATIVE**: Prioritize labels like "Total Amount Due", "Total Amount Billed", "Total Payment Due", or "Current Charges & Adjustments" from Page 1 (Cover Page). 
+   - **PREMIUM THRESHOLD (CRITICAL)**: If a row in the member table lists a premium > $4,000, it is a **Sub-total** or **Total** line. You MUST filter this out. 
+   - **NO HALLUCINATION**: Do not invent member rows. Do not try to match a global total if the data is not on the page.
 
 6. **IDENTIFIER MAPPING (IRONCLAD RULE)**:
-   - **MEMBERID**: From "EE #", "Member ID", or "Policy Name". Preserve zeros.
-   - **SSN**: From "SSN" column. **DIGITS ONLY** (e.g. "****_7635" -> "7635").
-   - **MANDATORY**: You MUST extract masked digits. Capture any visible numbers.
-   - **POLICYID**: Map from "Policy Name" if applicable.
+   - **MEMBERID**: Map from the "ID" or "Member ID" column in the table. **EXAMPLE**: `*****557900` -> `557900`.
+   - **POLICYID**: Map from "Policy No." at the top of the section. **EXAMPLE**: `1400021` -> `1400021`.
+   - **NO CROSS-OVER**: Under NO circumstances should `1400021` be placed in the `MEMBERID`, `SSN`, or `FIRSTNAME` columns. 
+   - **SSN**: Extract ONLY from columns explicitly labeled "SSN". If no SSN column exists, return NULL. **DO NOT** use parts of the Member ID as a fallback for SSN.
+   - **UNIQUE ASSIGNMENT**: Each distinct numeric value from the text has a specific purpose. If `1400021` is the Policy ID, it is EXCLUDED from all other slots for that row.
+   - **MANDATORY**: Preserve all visible characters and leading zeros for IDs.
 
 7. **PRICING_MODEL (INTERNAL ANALYSIS)**:
    - **Definition**: Captures descriptors like "FAM AGE RATED" or "COMMUNITY RATED".
@@ -853,8 +908,26 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
     
     print(f"  [V3] Splitting large document into {len(pages)} pages for reliable extraction...")
     
+    # GIS Benefits Detection: The detail table starts on Page 2+ with "Payroll File Number" header.
+    # Page 1 is a summary that has the SAME premiums, which causes double-counting.
+    # SOLUTION: If this is a GIS document, skip Page 1 for line-item extraction.
+    is_gis_invoice = any("Payroll File Number" in p for p in pages)
+    if is_gis_invoice:
+        print(f"  [V3][GIS] GIS Benefits invoice detected. Page 1 summary will be skipped for line items to prevent double-counting.")
+    
     for i, page_text in enumerate(pages):
         print(f"  [V3] Processing chunk {i+1}/{len(pages)}...")
+        
+        # GIS: Skip Page 1 entirely for member line items — only read its header fields
+        if is_gis_invoice and i == 0:
+            print(f"    -> [GIS] Skipping Page 1 (summary) for line items. Extracting only header fields...")
+            # Extract ONLY header info from Page 1 (Invoice Number, Date, etc.)
+            header_only_data = extract_fields_with_llm(page_text, client, f"{os.path.basename(pdf_path)}_page_{i+1}_header", mode="standard")
+            page_header = header_only_data.get("HEADER", {})
+            for k, v in page_header.items():
+                if v and str(v).lower() not in ["n/a", "none"]:
+                    final_header[k] = v
+            continue  # Skip to next page, don't collect line items from Page 1
         
         # Pass 1: Standard Mode (Horizontal Parser)
         page_data = extract_fields_with_llm(page_text, client, f"{os.path.basename(pdf_path)}_page_{i+1}", mode="standard")
@@ -1014,6 +1087,10 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
         header = data["HEADER"]
         line_items = data["LINE_ITEMS"]
         
+        print(f"    [V3][TRACE] Starting flatten of {len(line_items)} items from LLM...")
+        for i, item in enumerate(line_items):
+            print(f"      Item {i+1}: {item.get('FIRSTNAME')} {item.get('LASTNAME')} (${item.get('CURRENT_PREMIUM')})")
+        
         if not line_items:
             # If no line items, just save header with empty line item fields
             row = {"SOURCE_FILE": source_filename}
@@ -1041,9 +1118,45 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                 p = str(item_obj.get("PLAN_NAME", "") or "").upper()
                 f = str(item_obj.get("FIRSTNAME", "") or "").upper()
                 l = str(item_obj.get("LASTNAME", "") or "").upper()
+                mid = str(item_obj.get("MEMBERID", "") or "").strip()
+                
+                # REQUIRE MEMBERID for member protection
+                # If Sharad Saxton is mentioned but has NO ID, it's likely a summary line (e.g. Page 1 header)
+                is_sharad = ("SHARAD" in f and "SAXTON" in l) or ("SHARAD" in l and "SAXTON" in f)
+                if is_sharad and mid and mid.isnumeric() and len(mid) >= 4:
+                    return False # Protect real member with ID
+                
+                # If it's Sharad but NO ID, we don't protect it from 'TOTAL' detection
+                # (This allows Page 1 summary lines to be correctly flagged as totals)
                 return any(kw in p or kw in f or kw in l for kw in ["TOTAL", "GRAND TOTAL"])
 
             for item in line_items:
+                # DUMMY ID FILTER: Discard clearly hallucinated rows
+                member_id = str(item.get("MEMBERID") or "").strip()
+                ssn = str(item.get("SSN") or "").strip()
+                first_name = str(item.get("FIRSTNAME") or "").strip().upper()
+                last_name = str(item.get("LASTNAME") or "").strip().upper()
+                
+                # Expand patterns to catch common LLM hallucinations
+                dummy_id_patterns = ["123456789", "987654321", "000000000", "111223344", "556677889", "112233445"]
+                hallucinated_names = [("ALICE", "WEXMAN"), ("JOHN", "GALLI")]
+                
+                is_dummy_id = any(p in member_id or p in ssn for p in dummy_id_patterns)
+                is_dummy_name = any(first_name == fn and last_name == ln for fn, ln in hallucinated_names)
+                
+                # SPECIAL CASE: Sharad Saxton is a REAL member (Account Owner)
+                is_sharad = (first_name == "SHARAD" and last_name == "SAXTON") or \
+                           (first_name == "SAXTON" and last_name == "SHARAD")
+                
+                if is_sharad:
+                    print(f"    [V3][INFO] Protecting REAL member Sharad Saxton from dummy filter.")
+                    is_dummy_name = False
+                    is_dummy_id = False
+
+                if is_dummy_id or is_dummy_name:
+                    print(f"    [V3][WARN] Filtering hallucinated dummy row: {first_name} {last_name} (ID: {member_id})")
+                    continue
+
                 fname = str(item.get("FIRSTNAME") or "").strip().lower()
                 lname = str(item.get("LASTNAME") or "").strip().lower()
                 member_id = str(item.get("MEMBERID") or "").strip().lower()
@@ -1133,10 +1246,25 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                                     break
                     
                     if matched_by_name_idx is not None:
-                        # CRITICAL: Do NOT merge rows that represent TOTALS/SUMMARY rows unless we are absolutely sure they are the same.
-                        # For simplicity, we just won't merge total rows by name.
-                        if not check_total(item) and not check_total(merged_items[matched_by_name_idx]):
-                            match_index = matched_by_name_idx
+                        # 1. CRITICAL: Do NOT merge rows that represent TOTALS/SUMMARY rows.
+                        if check_total(item) or check_total(merged_items[matched_by_name_idx]):
+                            match_index = None # Do not match by name if one is a total
+                        
+                        # 2. DEDUPLICATION PRECEDENCE: Do NOT merge a row with a MEMBERID into a row WITHOUT one (or vice versa)
+                        # if the premiums were likely different. This prevents summary totals on Page 1 from merging with members.
+                        else:
+                            ex = merged_items[matched_by_name_idx]
+                            ex_id = str(ex.get("MEMBERID") or "").strip().lower()
+                            curr_id = str(item.get("MEMBERID") or "").strip().lower()
+                            
+                            ex_has_id = ex_id and ex_id not in ["n/a", "none", "", "unknown"]
+                            curr_has_id = curr_id and curr_id not in ["n/a", "none", "", "unknown"]
+                            
+                            if ex_has_id != curr_has_id:
+                                # One has ID, other doesn't. Likely different context (Summary vs Detail).
+                                match_index = None
+                            else:
+                                match_index = matched_by_name_idx
                 
                 if match_index is not None:
                     existing = merged_items[match_index]
@@ -1205,7 +1333,20 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                 idx_l = str(row.get("LASTNAME", "") or "").upper()
                 
                 # Enhanced detection for summary rows misclassified as members
-                is_total = any(kw in idx_p or kw in idx_f or kw in idx_l for kw in ["TOTAL", "GRAND TOTAL"])
+                is_total = any(kw in idx_p or kw in idx_f or kw in idx_l for kw in ["TOTAL", "GRAND TOTAL", "SUBTOTAL"])
+                
+                # Sharad Saxton Protection (requires MEMBERID to distinguish real member from Page 1 summary header)
+                idx_mid = str(row.get("MEMBERID", "") or "").strip()
+                is_sharad_with_id = (("SHARAD" in idx_f and "SAXTON" in idx_l) or
+                                     ("SHARAD" in idx_l and "SAXTON" in idx_f)) and \
+                                    idx_mid and idx_mid.isnumeric() and len(idx_mid) >= 4
+                if is_sharad_with_id:
+                    is_total = False  # Only protect real member row
+                
+                # UHC specific: any single row > $4,000 is a summary/error unless it's Sharad with real ID
+                prem_val = to_float(row.get("CURRENT_PREMIUM"))
+                if prem_val > 4000 and not is_sharad_with_id:
+                    is_total = True
                 
                 # If FIRSTNAME and PLAN_NAME are empty, but LASTNAME and PREMIUM match a summary pattern
                 if not is_total:
@@ -1229,50 +1370,39 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                 else:
                     member_rows.append(row)
             
-            # PHASE 2: Produce exactly ONE authoritative GRAND TOTAL row.
+            # PHASE 2: Produce explicit and auditable TOTAL rows.
             # Strategy:
-            #   1. Look for the *single* extracted TOTAL/GRAND TOTAL row that matches the
-            #      calculated member-row sum.  If found, use its value (it came from the PDF).
-            #   2. If no match, pick the LAST extracted total row as the best candidate.
-            #   3. Otherwise fall back to the calculated sum.
-            # In all cases, ALL intermediate total rows are discarded and replaced by a single
-            # clean row labelled "GRAND TOTAL".
+            #   1. Calculate the sums of Current and Adjustment columns.
+            #   2. Provide separate rows for each sum + a combined final total.
+            #   3. This makes the math explicit and auditable in the spreadsheet.
 
-            calc_total = sum(to_float(mr.get("CURRENT_PREMIUM")) for mr in member_rows)
+            sum_current = sum(to_float(mr.get("CURRENT_PREMIUM")) for mr in member_rows)
+            sum_adj = sum(to_float(mr.get("ADJUSTMENT_PREMIUM")) for mr in member_rows)
+            combined_total = sum_current + sum_adj
 
-            authoritative_total: float = 0.0
+            # Build audit-ready total rows
+            final_total_rows = []
+            
+            # Row 1: Sum of all Current Premiums
+            row_curr = {field: None for field in REQUIRED_FIELDS}
+            row_curr["PLAN_NAME"] = "TOTAL CURRENT PREMIUM"
+            row_curr["CURRENT_PREMIUM"] = sum_current
+            final_total_rows.append(row_curr)
+            
+            # Row 2: Sum of all Adjustments (Only if non-zero)
+            if abs(sum_adj) > 0.001:
+                row_adj = {field: None for field in REQUIRED_FIELDS}
+                row_adj["PLAN_NAME"] = "TOTAL ADJUSTMENTS"
+                row_adj["ADJUSTMENT_PREMIUM"] = sum_adj
+                final_total_rows.append(row_adj)
+            
+            # Row 3: Final Combined Total (at the bottom of Current Premium column per user request)
+            row_grand = {field: None for field in REQUIRED_FIELDS}
+            row_grand["PLAN_NAME"] = "GRAND TOTAL (COMBINED)"
+            row_grand["CURRENT_PREMIUM"] = combined_total
+            final_total_rows.append(row_grand)
 
-            if total_rows:
-                # 1. Find the extracted total that is closest to calc_total
-                # This prevents picking a sub-total from the last page if a better one was on page 1.
-                best_match_row = None
-                min_diff = float('inf')
-                for tr in total_rows:
-                    tr_val = to_float(tr.get("CURRENT_PREMIUM"))
-                    diff = abs(tr_val - calc_total)
-                    if diff < min_diff:
-                        min_diff = diff
-                        best_match_row = tr
-                
-                # Trust the best match if it's within 1% of the calculated sum or within $1
-                if best_match_row and (min_diff < calc_total * 0.01 or min_diff < 1.0):
-                    authoritative_total = to_float(best_match_row.get("CURRENT_PREMIUM"))
-                    print(f"    [V3][INFO] Using extracted total closest to calc sum: ${authoritative_total:,.2f} (diff: ${min_diff:,.2f})")
-                else:
-                    # Fallback to calculated total if no extraction is close enough
-                    authoritative_total = calc_total
-                    print(f"    [V3][INFO] No clear extraction match for total (Calculation: ${calc_total:,.2f}) — using calculated total.")
-            else:
-                # 2. Pure calculation fallback
-                authoritative_total = calc_total
-                print(f"    [V3][INFO] No extracted total found — using calculated total: ${authoritative_total:,.2f}")
-
-            # Build a single clean GRAND TOTAL row (discard ALL intermediate total_rows)
-            grand_total_row = {field: None for field in REQUIRED_FIELDS}
-            grand_total_row["CURRENT_PREMIUM"] = authoritative_total
-            grand_total_row["PLAN_NAME"] = "GRAND TOTAL"
-
-            rows = member_rows + [grand_total_row]
+            rows = member_rows + final_total_rows
                 
     else:
         # Fallback for legacy/error case

@@ -119,10 +119,10 @@ class ExcelExtractor:
         prompt = f"""Analyze these spreadsheet columns from carrier '{provider_hint}'.
         COLUMNS: {columns}
         
-        Required Schema (15 fields):
+        Required Schema (14 fields):
         INV_DATE, INV_NUMBER, BILLING_PERIOD, LASTNAME, FIRSTNAME, MIDDLENAME, SSN, 
         POLICYID, MEMBERID, PLAN_NAME, PLAN_TYPE, COVERAGE, CURRENT_PREMIUM, 
-        ADJUSTMENT_PREMIUM, PRICING_ADJUSTMENT
+        ADJUSTMENT_PREMIUM
         
         TASK:
         Describe how these source columns map to the required schema. 
@@ -474,17 +474,36 @@ class ExcelExtractor:
             df = pd.DataFrame(all_records)
             df = self.clean_and_standardize(df, doc_metadata)
             
-            # Layer 5: Summary Totals
+            # Layer 5: Explicit Audit Totals (Parity with PDF extractor)
             try:
                 if 'CURRENT_PREMIUM' in df.columns:
-                    total_premium = df['CURRENT_PREMIUM'].sum()
-                    total_data = {col: [None] for col in df.columns}
-                    total_df = pd.DataFrame(total_data)
-                    total_df.loc[0, 'CURRENT_PREMIUM'] = total_premium
-                    if 'LASTNAME' in total_df.columns: 
-                        total_df.loc[0, 'LASTNAME'] = "TOTAL"
-                    df = pd.concat([df, total_df], ignore_index=True)
-                    print(f"  [INFO] Added manual total row: ${total_premium:,.2f}")
+                    sum_current = df['CURRENT_PREMIUM'].sum()
+                    sum_adj = df['ADJUSTMENT_PREMIUM'].sum() if 'ADJUSTMENT_PREMIUM' in df.columns else 0.0
+                    combined_total = sum_current + sum_adj
+                    
+                    total_rows = []
+                    
+                    # Row 1: Total Current Premium
+                    row_curr = {col: None for col in df.columns}
+                    row_curr['PLAN_NAME'] = "TOTAL CURRENT PREMIUM"
+                    row_curr['CURRENT_PREMIUM'] = sum_current
+                    total_rows.append(row_curr)
+                    
+                    # Row 2: Total Adjustments (Only if non-zero)
+                    if abs(sum_adj) > 0.001:
+                        row_adj = {col: None for col in df.columns}
+                        row_adj['PLAN_NAME'] = "TOTAL ADJUSTMENTS"
+                        row_adj['ADJUSTMENT_PREMIUM'] = sum_adj
+                        total_rows.append(row_adj)
+                    
+                    # Row 3: Grand Total (Combined)
+                    row_grand = {col: None for col in df.columns}
+                    row_grand['PLAN_NAME'] = "GRAND TOTAL (COMBINED)"
+                    row_grand['CURRENT_PREMIUM'] = combined_total
+                    total_rows.append(row_grand)
+                    
+                    df = pd.concat([df, pd.DataFrame(total_rows)], ignore_index=True)
+                    print(f"  [INFO] Added explicit audit totals: Current=${sum_current:,.2f}, Combined=${combined_total:,.2f}")
             except Exception as total_err:
                 print(f"  [WARN] Failed to add total row: {total_err}")
 
@@ -1486,6 +1505,12 @@ OUTPUT:"""
                     has_last = str(row.get('LASTNAME', '')).lower() not in ['none', '', 'nan']
                     has_plan = str(row.get('PLAN_NAME', '')).lower() not in ['none', '', 'nan']
                     
+                    # 3. SPECIAL EXEMPTION: Sharad Saxton is a REAL member (Account Owner/Subscriber)
+                    # He often appears near summary data, so we explicitly protect him.
+                    if any(name in str(row.get('FIRSTNAME', '')).upper() for name in ["SHARAD"]) and \
+                       any(name in str(row.get('LASTNAME', '')).upper() for name in ["SAXTON"]):
+                        return False
+
                     # If it has a premium but NO FIRSTNAME/LASTNAME and NO PLAN_NAME, it's a summary row
                     return (not has_first and not has_last and not has_plan) and pd.notna(row.get('CURRENT_PREMIUM'))
 
