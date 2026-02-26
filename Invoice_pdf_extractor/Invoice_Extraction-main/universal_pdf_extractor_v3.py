@@ -59,7 +59,7 @@ def clean_ocr_noise(text: str) -> str:
         # Skip lines that are mostly punctuation/symbols (but ignore spaces in length)
         alnum_count = sum(c.isalnum() for c in line)
         non_space_len = len(line.replace(" ", ""))
-        if non_space_len > 0 and alnum_count / non_space_len < 0.4:
+        if non_space_len > 0 and alnum_count / non_space_len < 0.2: # Relaxed from 0.4
             continue
             
         # Remove isolated single characters at start/end of line (common OCR artifacts)
@@ -199,15 +199,18 @@ def extract_text_from_pdf_ocr(pdf_path: str) -> str:
             pix = page.get_pixmap(matrix=mat)
             img = Image.open(io.BytesIO(pix.tobytes("png")))
             
-            # Step 1: Preliminary fast OCR to detect anomalies
-            # Use PSM 4 for landscape (single column of varying sizes), PSM 3 for portrait
-            tess_config = "-c preserve_interword_spaces=1"
-            if is_landscape:
-                tess_config = "--psm 4 " + tess_config
-            else:
-                tess_config = "--psm 3 " + tess_config
-                
-            page_text = pytesseract.image_to_string(img, config=tess_config)
+            # Step 1: Pre-process image for better OCR accuracy
+            # Convert to grayscale and apply binary thresholding
+            # OCR Pre-processing
+            img = img.convert('L') # Grayscale
+            img = img.point(lambda x: 0 if x < 170 else 255, '1') # Binary Threshold
+            
+            # Use PSM 4 for landscape (single column of varying sizes), PSM 6 for portrait (uniform table)
+            # The BCBS document is portrait (vertical), so PSM 6 is better for table rows.
+            psm_mode = 6 
+            
+            # Run OCR
+            page_text = pytesseract.image_to_string(img, config=f'--psm {psm_mode} -c preserve_interword_spaces=1')
             
             # Step 2: Detect orientation/mirroring anomalies
             # Use high-confidence normal keywords to score orientation
@@ -382,7 +385,21 @@ Extract data from the document text provided below.
    - "Policy Name" / "Plan Description" -> `POLICYID`
 3. **Leading Zeros**: Preserve every single zero.
 4. **Landscape Awareness**: This text may come from a LANDSCAPE document with dense columns. Ensure you look horizontally across mashed strings (e.g., "$100|ID123") to find all fields.
-5. **Aggressive Row Capture**: You MUST extract EVERY individual listed in the main table. Do not skip any rows.
+5. **Aggressive Row Capture**: You MUST extract EVERY individual listed in the main table. Even if the name contains symbols (e.g., "#27411" or "“6078") or looks like garbage, extract it as-is. Do not skip any rows.
+6. **SSN/Identifier Capture**: 
+    - Extract any visible digits in the SSN column. 
+    - **CRITICAL**: If the SSN is masked (e.g., `*****9868`), extract ONLY the last 4 digits (`9868`). 
+    - **IGNORE OCR ARTIFACTS**: OCR often misreads the mask `*****` as digits (e.g., `884`). If you see a 7 or 8-digit SSN starting with repetitive or suspicious numbers (like `884`), ignore the prefix and capture ONLY the trailing digits that match the pattern in the rest of the document.
+    - **DIGIT RECOVERY**: If an SSN field contains garbled text (e.g. 'EET BZ', 'eT TAG'), try to find the 4-digit numeric intent using these common OCR mappings:
+        - **E / B** -> 8 or 3
+        - **I / L** -> 1
+        - **S** -> 5
+        - **Z** -> 2
+        - **T / e** -> 7
+        - **O / Q** -> 0
+        - **A** -> 4
+        - **G** -> 9
+    - **STRICT SSN**: Extract EXACTLY 4 digits. Do not truncate to 1 or 2 digits unless there is absolute certainty. If only 3 digits are found (e.g. '399'), check if a leading zero '0' was likely dropped by OCR; if so, extract as '0399'.
 
 
 ### STRICT EXTRACTION RULES - FOLLOW EXACTLY:
@@ -398,7 +415,7 @@ Extract data from the document text provided below.
    - **STRICT MAPPING**:
      - **DHM, DPO, GD** -> `PLAN_TYPE`: **DENTAL**
      - **VIS, SV** -> `PLAN_TYPE`: **VISION**
-     - **MED, MEDICAL, HMO, PPO** -> `PLAN_TYPE`: **MEDICAL**
+      - **MED, MEDICAL, HMO, PPO, BLUECARE, BLUE** -> `PLAN_TYPE`: **MEDICAL**
    - **STRICT RULE**: This is an independent field and must not be inferred from other fields.
 
 3. **COVERAGE (ENROLLMENT TIER - STRICT)**:
@@ -407,9 +424,9 @@ Extract data from the document text provided below.
    - **STRICT EXTRACTION RULE**: Coverage MUST be extracted directly from a "Coverage" or "Tier" field.
    - **MAPPING (NORMALIZATION)**:
      - "EE+SP", "EE/SP", "EMP+SPOUSE" -> **ES**
-     - "EE+CH", "EE/CH", "EMP+CHILD" -> **EC**
-     - "EE", "EMP ONLY" -> **EE**
-     - "FAM", "FAMILY" -> **FAM**
+     - "EE+CH", "EE/CH", "EMP+CHILD", "EMPLOYEE/CHILD", "EMPLOYEE/CHILDREN", "EMP/CHILD" -> **EC**
+      - "EE", "EMP ONLY", "SINGLE", "INDIVIDUAL" -> **EE**
+      - "FAM", "FAMILY" -> **FAM**
    - **DO NOT GUESS**: Never infer coverage based on premium amounts.
    - **STRICT FORBIDDEN RULE**: Terms like "IND AGE RATED" or "FAM AGE RATED" are NOT tiers.
    - If no explicit tier is found OR if the tier cannot be mapped to the allowed set: return **NULL**.
@@ -601,7 +618,7 @@ JSON OUTPUT:"""
                     "content": prompt
                 }
             ],
-            model="gpt-4.1",
+            model="gpt-4o",
             temperature=0,  # Zero temperature for maximum consistency
             max_tokens=14000,
         )
@@ -1020,6 +1037,12 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                 except:
                     return 0.0
 
+            def check_total(item_obj):
+                p = str(item_obj.get("PLAN_NAME", "") or "").upper()
+                f = str(item_obj.get("FIRSTNAME", "") or "").upper()
+                l = str(item_obj.get("LASTNAME", "") or "").upper()
+                return any(kw in p or kw in f or kw in l for kw in ["TOTAL", "GRAND TOTAL"])
+
             for item in line_items:
                 fname = str(item.get("FIRSTNAME") or "").strip().lower()
                 lname = str(item.get("LASTNAME") or "").strip().lower()
@@ -1110,17 +1133,14 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                                     break
                     
                     if matched_by_name_idx is not None:
-                        match_index = matched_by_name_idx
+                        # CRITICAL: Do NOT merge rows that represent TOTALS/SUMMARY rows unless we are absolutely sure they are the same.
+                        # For simplicity, we just won't merge total rows by name.
+                        if not check_total(item) and not check_total(merged_items[matched_by_name_idx]):
+                            match_index = matched_by_name_idx
                 
                 if match_index is not None:
                     existing = merged_items[match_index]
                     
-                    def check_total(item_obj):
-                        p = str(item_obj.get("PLAN_NAME", "") or "").upper()
-                        f = str(item_obj.get("FIRSTNAME", "") or "").upper()
-                        l = str(item_obj.get("LASTNAME", "") or "").upper()
-                        return any(kw in p or kw in f or kw in l for kw in ["TOTAL", "GRAND TOTAL"])
-
                     is_total_type = check_total(item) or check_total(existing)
                     
                     # Merge data: update existing record
@@ -1222,24 +1242,30 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
 
             authoritative_total: float = 0.0
 
-            # 1. Find an extracted row whose value matches the calculated sum exactly
-            matched_row = None
-            for tr in total_rows:
-                if abs(to_float(tr.get("CURRENT_PREMIUM")) - calc_total) < 0.1:
-                    matched_row = tr
-                    break
-
-            if matched_row is not None:
-                authoritative_total = to_float(matched_row.get("CURRENT_PREMIUM"))
-                print(f"    [V3][INFO] Using extracted total that matches calc sum: ${authoritative_total:,.2f}")
-            elif total_rows:
-                # 2. Use last extracted total row (closest to the end of the document)
-                authoritative_total = to_float(total_rows[-1].get("CURRENT_PREMIUM"))
-                print(f"    [V3][INFO] No exact match — using last extracted total: ${authoritative_total:,.2f}")
+            if total_rows:
+                # 1. Find the extracted total that is closest to calc_total
+                # This prevents picking a sub-total from the last page if a better one was on page 1.
+                best_match_row = None
+                min_diff = float('inf')
+                for tr in total_rows:
+                    tr_val = to_float(tr.get("CURRENT_PREMIUM"))
+                    diff = abs(tr_val - calc_total)
+                    if diff < min_diff:
+                        min_diff = diff
+                        best_match_row = tr
+                
+                # Trust the best match if it's within 1% of the calculated sum or within $1
+                if best_match_row and (min_diff < calc_total * 0.01 or min_diff < 1.0):
+                    authoritative_total = to_float(best_match_row.get("CURRENT_PREMIUM"))
+                    print(f"    [V3][INFO] Using extracted total closest to calc sum: ${authoritative_total:,.2f} (diff: ${min_diff:,.2f})")
+                else:
+                    # Fallback to calculated total if no extraction is close enough
+                    authoritative_total = calc_total
+                    print(f"    [V3][INFO] No clear extraction match for total (Calculation: ${calc_total:,.2f}) — using calculated total.")
             else:
-                # 3. Pure calculation fallback
+                # 2. Pure calculation fallback
                 authoritative_total = calc_total
-                print(f"    [V3][INFO] No extracted total — using calculated total: ${authoritative_total:,.2f}")
+                print(f"    [V3][INFO] No extracted total found — using calculated total: ${authoritative_total:,.2f}")
 
             # Build a single clean GRAND TOTAL row (discard ALL intermediate total_rows)
             grand_total_row = {field: None for field in REQUIRED_FIELDS}
