@@ -136,13 +136,15 @@ export function useDocumentProcessor() {
                 }
 
                 // Build display label for insurer/applicant field
-                let insurerLabel = "Unknown Document";
-                if (documentType === "INSURANCE" || documentType === "INSURANCE_CLAIMS") {
-                    insurerLabel = "Insurance Document";
-                } else if (documentType === "INVOICE") {
-                    insurerLabel = "Invoice Document";
-                } else if (documentType === "WORK_COMPENSATION") {
-                    insurerLabel = json.work_comp_metadata?.form_type || "Workers Comp Application";
+                let insurerLabel = json.insurer || "Unknown Document";
+                if (!json.insurer) {
+                    if (documentType === "INSURANCE" || documentType === "INSURANCE_CLAIMS") {
+                        insurerLabel = "Insurance Document";
+                    } else if (documentType === "INVOICE" || documentType === "VENDOR_INVOICE") {
+                        insurerLabel = "Invoice Document";
+                    } else if (documentType === "WORK_COMPENSATION") {
+                        insurerLabel = json.work_comp_metadata?.form_type || "Workers Comp Application";
+                    }
                 }
 
                 const metadata = {
@@ -150,7 +152,7 @@ export function useDocumentProcessor() {
                     format: documentType.toLowerCase(),
                     confidence: 95,
                     claims_count: claimsCount,
-                    total_value: totalValue,
+                    total_value: json.total_value || totalValue,
                     documentType: documentType as any,
                     work_comp_metadata: json.work_comp_metadata || null,
                 };

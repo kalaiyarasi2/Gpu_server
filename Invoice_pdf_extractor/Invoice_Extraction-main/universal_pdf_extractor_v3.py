@@ -1243,6 +1243,7 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
 
             # Build a single clean GRAND TOTAL row (discard ALL intermediate total_rows)
             grand_total_row = {field: None for field in REQUIRED_FIELDS}
+            grand_total_row["SOURCE_FILE"] = source_filename
             grand_total_row["CURRENT_PREMIUM"] = authoritative_total
             grand_total_row["PLAN_NAME"] = "GRAND TOTAL"
 
