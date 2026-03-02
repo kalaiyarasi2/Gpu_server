@@ -1,0 +1,44 @@
+{
+  "CARRIER_KEYWORDS": [
+    "EPO Account ID",
+    "GO EAT LLC DBA AMARI",
+    "Current Month Premium",
+    "Plan/Rider Tier"
+  ],
+  "EXAMPLES": [
+    {
+      "RAW_TEXT": "Kuhlman, Angeline C. Self 09/23/1992 1018680701 MEDICAL 02/01/2026 $457.36",
+      "MAPPING": {
+        "LASTNAME": "Kuhlman",
+        "FIRSTNAME": "Angeline",
+        "MIDDLENAME": "C.",
+        "SSN": null,
+        "POLICYID": null,
+        "MEMBERID": "1018680701",
+        "PLAN_NAME": "HTH SG HOMETOWN GOLD EPO PLAN",
+        "PLAN_TYPE": "MEDICAL",
+        "COVERAGE": "EE",
+        "CURRENT_PREMIUM": 457.36,
+        "ADJUSTMENT_PREMIUM": null,
+        "PRICING_ADJUSTMENT": null
+      }
+    },
+    {
+      "RAW_TEXT": "Kuhlman, Isaac Spouse 11/29/1981 1018680702 MEDICAL 02/01/2026 $524.63",
+      "MAPPING": {
+        "LASTNAME": "Kuhlman",
+        "FIRSTNAME": "Isaac",
+        "MIDDLENAME": null,
+        "SSN": null,
+        "POLICYID": null,
+        "MEMBERID": "1018680702",
+        "PLAN_NAME": "HTH SG HOMETOWN GOLD EPO PLAN",
+        "PLAN_TYPE": "MEDICAL",
+        "COVERAGE": "ES",
+        "CURRENT_PREMIUM": 524.63,
+        "ADJUSTMENT_PREMIUM": null,
+        "PRICING_ADJUSTMENT": null
+      }
+    }
+  ]
+}

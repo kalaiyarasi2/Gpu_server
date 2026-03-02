@@ -1,0 +1,27 @@
+{
+  "CARRIER_KEYWORDS": [
+    "Group Number",
+    "Kansas City Life",
+    "Monthly Premium Statement Summary",
+    "EAP Fee"
+  ],
+  "EXAMPLES": [
+    {
+      "RAW_TEXT": "BLANCO PlaRicardo WagnerRobert",
+      "MAPPING": {
+        "LASTNAME": "BLANCO",
+        "FIRSTNAME": "Ricardo",
+        "MIDDLENAME": null,
+        "SSN": null,
+        "POLICYID": null,
+        "MEMBERID": null,
+        "PLAN_NAME": "TGLife",
+        "PLAN_TYPE": "LIFE",
+        "COVERAGE": "EE",
+        "CURRENT_PREMIUM": 2.9,
+        "ADJUSTMENT_PREMIUM": null,
+        "PRICING_ADJUSTMENT": null
+      }
+    }
+  ]
+}

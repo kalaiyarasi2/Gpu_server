@@ -26,6 +26,7 @@ from PIL import Image
 import io
 import re
 from typing import Dict, List, Optional
+import learning_engine
 
 
 def clean_ocr_noise(text: str) -> str:
@@ -265,12 +266,7 @@ def extract_text_from_pdf_ocr(pdf_path: str) -> str:
 def extract_text_from_pdf_improved(pdf_path: str) -> str:
     """
     Extract text content from a PDF file using pdfplumber (better quality)
-    
-    Args:
-        pdf_path: Path to the PDF file
-        
-    Returns:
-        Extracted text as string
+    with a fallback to PyMuPDF if pdfplumber yields insufficient results.
     """
     try:
         text: str = ""
@@ -283,6 +279,23 @@ def extract_text_from_pdf_improved(pdf_path: str) -> str:
                 if page_text:
                     text = text + page_text + "\n"
         
+        # If pdfplumber extracted very little for a non-empty file, try PyMuPDF
+        # (Humana files often have weird encodings that pdfplumber misses but fitz captures)
+        if len(text.strip()) < 500 and len(text.strip()) > 0:
+            print(f"  [INFO] pdfplumber yielded low character count ({len(text)}). Trying PyMuPDF fallback...")
+            fitz_text = ""
+            try:
+                doc = fitz.open(pdf_path)
+                for i in range(len(doc)):
+                    fitz_text += f"\n[[PAGE_{i+1}]]\n"
+                    fitz_text += doc[i].get_text() or ""
+                doc.close()
+                if len(fitz_text) > len(text):
+                    print(f"  [OK] PyMuPDF successful: {len(fitz_text)} chars extracted.")
+                    text = fitz_text
+            except Exception as fe:
+                print(f"  [WARN] PyMuPDF fallback also failed: {fe}")
+
         # Show preview of extracted text
         if text.strip():
             print(f"  [OK] Extracted {len(text)} characters")
@@ -301,10 +314,10 @@ def detect_reversed_text(text: str) -> bool:
     """
     # Use very high-confidence mirrored OCR patterns
     reversed_patterns = [
-        "sdioani", "s0iovui", "adiovui", # INVOICE
+        "sdioani", "s0iovui", "adiovui", "eciovni", "eciovnu", # INVOICE
         "esos", "szoz", "scoz", "ezos",  # 2025/2026
-        "voitaat2", "240ivaa2",         # ADMINISTRATION / SERVICES
-        "sssal9", "anig", "auie",        # CROSS / BLUE
+        "voitaat2", "240ivaa2", "evitatneserpeR",        # ADMINISTRATION / SERVICES / Representative
+        "sssal9", "anig", "auie", "anigruoc", "anamuh",   # CROSS / BLUE / Insurance / Humana
         "fih2@",                          # MEMBERSHIP
         "ytnuoc"                         # COUNTRY
     ]
@@ -348,6 +361,9 @@ def extract_fields_with_llm(text: str, client: OpenAI, pdf_filename: str = "", m
         print(f"  [WARNING] No text to process for {pdf_filename}")
         return {field: None for field in REQUIRED_FIELDS}
     
+    # [LEARNING] Discover relevant patterns for this carrier
+    learned_patterns = learning_engine.discover_examples(text)
+    
     # Check for mirroring
     is_mirrored = detect_reversed_text(text)
     if is_mirrored:
@@ -373,6 +389,8 @@ Extract data from the document text provided below.
 
 ### EXTRACTION MODE: {mode.upper()}
 {mode_instructions}
+
+{learned_patterns}
 
 ### CARRIER-SPECIFIC IDENTIFIER PROFILES (PRIORITY):
 - **UHC (UnitedHealthcare)**: 
@@ -408,6 +426,11 @@ Extract data from the document text provided below.
         - Contains "Long Term Disability" (no Employee/Spouse suffix) → **EE**
     - **PLAN_NAME**: Use the full product name from Page 2 (e.g., "Voluntary STD", "Long Term Disability", "Voluntary Life & AD&D - Employee").
     - **BILLING_PERIOD**: From the "Coverage Date" column (e.g., `2/1/2026`).
+- **Humana**:
+    - **INDIVIDUAL LINE ITEMS**: Extract members EXCLUSIVELY from the "Employee Detail" section (Page 4).
+    - **SUMMARIES TO IGNORE**: Do NOT extract data from the "Group Summary" or "Premiums by Product/Plan Type" tables.
+    - **MEMBER CONSOLIDATION**: If a member has multiple lines (e.g., Dental and Vision), extract them as separate objects; the system will programmaticly consolidate them by name.
+    - **MEMBERID**: Extract the "Member ID Number" (9-digit numeric).
 - **GENERAL MAPPING (IF CARRIER UNKNOWN)**:
     - "Invoice Date" / "Date" -> `INV_DATE`
     - "Invoice #" / "Inv #" -> `INV_NUMBER`
@@ -420,6 +443,17 @@ Extract data from the document text provided below.
    - **CRITICAL**: Some columns (especially 'Product', 'Plan', or 'Address') span multiple lines vertically.
    - You MUST look at the lines immediately following a member row. If they contain hanging text (e.g., "LG GRP PLAN 49-" and "RC" below "BLUECARE NFQ"), AGGREGATE them into the appropriate field (e.g., `PLAN_NAME`) with a space.
    - Do not stop at the first line of the table row; ensure the entire block of data for that member is captured.
+### NUMERICAL FAITHFULNESS (ZERO TOLERANCE FOR HALLUCINATION):
+- Extract ALL premiums, IDs, and quantities EXACTLY as they appear in the text.
+- **DO NOT** assume 'standard' rates for a carrier. 
+- Some members may have different premiums than others; capture the specific dollar amount for each row.
+- If the text says `$1.31`, return `1.31`. Do **NOT** return `$2.90` even if that is the common rate for that carrier.
+
+### TOTALS AND SUMMARY ROWS:
+- **IGNORE** all rows that are grand totals, invoice summaries, or sub-totals.
+- ONLY extract individual member/employee line-items.
+- If a row contains "Total", "Amount Due", or "Balance Due", skip it completely.
+
 4. **Leading Zeros**: Preserve every single zero.
 5. **Landscape Awareness**: This text may come from a LANDSCAPE document with dense columns. Ensure you look horizontally across mashed strings (e.g., "$100|ID123") to find all fields.
 6. **Aggressive Row Capture**: You MUST extract EVERY individual listed in the main table. Even if the name contains symbols (e.g., "#27411" or "“6078") or looks like garbage, extract it as-is. Do not skip any rows.
@@ -851,6 +885,13 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
     # Extract text from PDF
     text = extract_text_from_pdf_improved(pdf_path)
     
+    # [V3][MIRROR] Early Mirror Detection & Correction
+    # If the text is mirrored, we fix it before any chunking or quality checks
+    if detect_reversed_text(text):
+        print(f"  [V3][INFO] Detected likely MIRRORED (reversed) text in whole document. Applying early un-mirroring...")
+        text = unmirror_text(text)
+        print(f"  [V3][OK] Early Un-mirrored text preview (first 200 chars):\n{text[:200]}\n")
+
     # Perform quality check and OCR fallback
     quality_score = check_text_quality(text)
     if not text.strip() or quality_score < 0.2:
@@ -915,12 +956,21 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
     if is_gis_invoice:
         print(f"  [V3][GIS] GIS Benefits invoice detected. Page 1 summary will be skipped for line items to prevent double-counting.")
     
+    # Humana Detection: Skip summary pages (1, 2, 3, 5)
+    is_humana_invoice = any("403638-001" in p for p in pages) or any("LOST BOY AND COMPANY LLC" in p for p in pages)
+    if is_humana_invoice:
+        print(f"  [V3][HUMANA] Humana invoice detected. Pages 1, 2, 3, 5 will be skipped for line items.")
+
     for i, page_text in enumerate(pages):
         print(f"  [V3] Processing chunk {i+1}/{len(pages)}...")
         
-        # GIS: Skip Page 1 entirely for member line items — only read its header fields
-        if is_gis_invoice and i == 0:
-            print(f"    -> [GIS] Skipping Page 1 (summary) for line items. Extracting only header fields...")
+        # Skip specific pages for member line items
+        is_skip_page = (is_gis_invoice and i == 0) or \
+                       (is_humana_invoice and (i == 0 or i == 1 or i == 2 or i == 4))
+        
+        if is_skip_page:
+            reason = "GIS" if is_gis_invoice else "Humana"
+            print(f"    -> [{reason}] Skipping Page {i+1} for line items. Extracting only header fields...")
             # Extract ONLY header info from Page 1 (Invoice Number, Date, etc.)
             header_only_data = extract_fields_with_llm(page_text, client, f"{os.path.basename(pdf_path)}_page_{i+1}_header", mode="standard")
             page_header = header_only_data.get("HEADER", {})
@@ -955,13 +1005,36 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
             if v and str(v).lower() not in ["n/a", "none"]:
                 final_header[k] = v
         
-        # Collect line items from the successful pass
-        items = page_data.get("LINE_ITEMS", [])
-        if items:
-            print(f"    -> Extracted {len(items)} items from chunk {i+1}")
-            all_line_items.extend(items)
         else:
             print(f"    -> No items found in chunk {i+1}")
+
+        # [LEARNING] Auto-Correction Refinement Loop
+        should_refine, target_total, current_sum = learning_engine.should_trigger_refinement(page_data, page_text)
+        if should_refine:
+            print(f"    -> [LEARNING] Refinement triggered for chunk {i+1}...")
+            refinement_prompt = learning_engine.generate_refinement_prompt(page_data, page_text, target_total, current_sum)
+            
+            # Re-call LLM with refinement instructions
+            page_data = extract_fields_with_llm(refinement_prompt, client, f"{os.path.basename(pdf_path)}_page_{i+1}_refinement", mode=mode)
+            
+            # Merge header data from the refined pass too
+            refined_header = page_data.get("HEADER", {})
+            for k, v in refined_header.items():
+                if v and str(v).lower() not in ["n/a", "none"]:
+                    final_header[k] = v
+
+            refined_items = page_data.get("LINE_ITEMS", [])
+            if refined_items:
+                print(f"    -> [LEARNING][OK] Refinement successful: Found {len(refined_items)} items.")
+                all_line_items.extend(refined_items)
+            else:
+                print(f"    -> [LEARNING][FAIL] Refinement did not find any items.")
+        else:
+            # Collect line items from the standard pass (if not already handled by skip or refinement)
+            items = page_data.get("LINE_ITEMS", [])
+            if items:
+                print(f"    -> Extracted {len(items)} items from chunk {i+1}")
+                all_line_items.extend(items)
 
     # Final combined data
     data = {
@@ -969,6 +1042,12 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
         "LINE_ITEMS": all_line_items
     }
     
+    # [LEARNING] Continuous Learning: Save successful extraction as a training profile
+    if all_line_items:
+        # We pass the full text and result to the learning engine
+        # It handles the logic of whether it's worth saving
+        learning_engine.save_successful_extraction(text, data, client)
+        
     return data
 
 
@@ -1128,7 +1207,8 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                 
                 # If it's Sharad but NO ID, we don't protect it from 'TOTAL' detection
                 # (This allows Page 1 summary lines to be correctly flagged as totals)
-                return any(kw in p or kw in f or kw in l for kw in ["TOTAL", "GRAND TOTAL"])
+                total_keywords = ["TOTAL", "GRAND TOTAL", "AMOUNT DUE", "BALANCE DUE", "TOTAL CURRENT PREMIUM", "TOTAL PREMIUM"]
+                return any(kw in p or kw in f or kw in l for kw in total_keywords)
 
             for item in line_items:
                 # DUMMY ID FILTER: Discard clearly hallucinated rows
@@ -1333,7 +1413,20 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                 idx_l = str(row.get("LASTNAME", "") or "").upper()
                 
                 # Enhanced detection for summary rows misclassified as members
-                is_total = any(kw in idx_p or kw in idx_f or kw in idx_l for kw in ["TOTAL", "GRAND TOTAL", "SUBTOTAL"])
+                # Refined keyword list: Use word boundaries or whole string checks to avoid "Total Pet" becoming "TOTAL"
+                def is_keyword_match(text, keywords):
+                    t = str(text or "").upper()
+                    # Check for exact matches of total keywords as standalone words
+                    return any(re.search(fr'\b{kw}\b', t) for kw in keywords)
+
+                total_keywords = ["TOTAL", "GRAND TOTAL", "SUBTOTAL", "SUB TOTAL", "INVOICE TOTAL"]
+                is_total = is_keyword_match(idx_p, total_keywords) or \
+                           is_keyword_match(idx_f, total_keywords) or \
+                           is_keyword_match(idx_l, total_keywords)
+                
+                # If "TOTAL" is part of a plan name like "TOTAL PET", it's NOT a total row
+                if "TOTAL PET" in idx_p:
+                    is_total = False
                 
                 # Sharad Saxton Protection (requires MEMBERID to distinguish real member from Page 1 summary header)
                 idx_mid = str(row.get("MEMBERID", "") or "").strip()

@@ -1,0 +1,31 @@
+{
+    "CARRIER_KEYWORDS": [
+        "Pet Benefits",
+        "PBS ID",
+        "Total Pet"
+    ],
+    "EXAMPLES": [
+        {
+            "RAW_TEXT": "A JORDAN JOSE 5205804 11/1/2025 Total Pet - Family Unlimited $18.50",
+            "MAPPING": {
+                "LASTNAME": "JORDAN",
+                "FIRSTNAME": "JOSE",
+                "MEMBERID": "5205804",
+                "PLAN_NAME": "Total Pet - Family Unlimited",
+                "COVERAGE": "FAM",
+                "CURRENT_PREMIUM": 18.50
+            }
+        },
+        {
+            "RAW_TEXT": "ALEXANDER TESS 5177393 7/1/2025 Total Pet - Single Pet $11.75",
+            "MAPPING": {
+                "LASTNAME": "ALEXANDER",
+                "FIRSTNAME": "TESS",
+                "MEMBERID": "5177393",
+                "PLAN_NAME": "Total Pet - Single Pet",
+                "COVERAGE": "EE",
+                "CURRENT_PREMIUM": 11.75
+            }
+        }
+    ]
+}

@@ -1,0 +1,44 @@
+{
+  "CARRIER_KEYWORDS": [
+    "PlanholderReference",
+    "TotalPaymentDue",
+    "GroupID",
+    "DivisionID"
+  ],
+  "EXAMPLES": [
+    {
+      "RAW_TEXT": "Feld,StephonL 01/01/26 BasicTermLife 25,000 1.75 1.75",
+      "MAPPING": {
+        "LASTNAME": "Feld",
+        "FIRSTNAME": "Stephon",
+        "MIDDLENAME": "L",
+        "SSN": null,
+        "POLICYID": null,
+        "MEMBERID": null,
+        "PLAN_NAME": "BasicTermLife",
+        "PLAN_TYPE": "LIFE",
+        "COVERAGE": "EE",
+        "CURRENT_PREMIUM": 27.229999999999997,
+        "ADJUSTMENT_PREMIUM": 36.73,
+        "PRICING_ADJUSTMENT": null
+      }
+    },
+    {
+      "RAW_TEXT": "Hetzel,Zacharyzachary 01/01/26 BasicTermLife 25,000 1.75 1.75",
+      "MAPPING": {
+        "LASTNAME": "Hetzel",
+        "FIRSTNAME": "Zacharyzachary",
+        "MIDDLENAME": null,
+        "SSN": null,
+        "POLICYID": null,
+        "MEMBERID": null,
+        "PLAN_NAME": "BasicTermLife",
+        "PLAN_TYPE": "LIFE",
+        "COVERAGE": "EE",
+        "CURRENT_PREMIUM": 19.81,
+        "ADJUSTMENT_PREMIUM": 26.409999999999997,
+        "PRICING_ADJUSTMENT": null
+      }
+    }
+  ]
+}
