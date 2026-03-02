@@ -1876,9 +1876,17 @@ Return ONLY the company name or UNKNOWN:"""
                 # A total row has CURRENT_PREMIUM but no identity info, OR specific keywords like 'TOTAL'
                 def is_summary_row(row):
                     # 1. Check for 'TOTAL' keyword in any identity column
+                    # But exclude specific phrases like "Total Pet"
                     for col in existing_cols:
                         val = str(row.get(col, '')).upper()
-                        if any(kw in val for kw in ["TOTAL", "SUMMARY", "SUBTOTAL", "BALANCE DUE"]):
+                        
+                        # Use word boundaries to catch "TOTAL" but not "TOTAL PET" easily
+                        # Or just explicitly exclude "TOTAL PET"
+                        if "TOTAL PET" in val:
+                            continue
+                            
+                        total_keywords = ["TOTAL", "SUMMARY", "SUBTOTAL", "BALANCE DUE", "GRAND TOTAL", "INVOICE TOTAL"]
+                        if any(re.search(fr'\b{kw}\b', val) for kw in total_keywords):
                             return True
                     
                     # 2. Check for empty/None identity columns with a premium value

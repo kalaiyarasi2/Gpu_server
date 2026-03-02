@@ -1,0 +1,44 @@
+{
+  "CARRIER_KEYWORDS": [
+    "EasyPay",
+    "EmployerAccess",
+    "Anthem Blue Cross",
+    "Blue Cross Blue Shield"
+  ],
+  "EXAMPLES": [
+    {
+      "RAW_TEXT": "227W17126 JENNIFER AZZARELLI | SV 9B1X | FAM 05 | $570.29 | $1,594.40 | $2,164.69",
+      "MAPPING": {
+        "LASTNAME": "AZZARELLI",
+        "FIRSTNAME": "JENNIFER",
+        "MIDDLENAME": null,
+        "SSN": null,
+        "POLICYID": null,
+        "MEMBERID": "227W17126",
+        "PLAN_NAME": "SV 9B1X",
+        "PLAN_TYPE": "VISION",
+        "COVERAGE": "FAM",
+        "CURRENT_PREMIUM": 2164.69,
+        "ADJUSTMENT_PREMIUM": null,
+        "PRICING_ADJUSTMENT": null
+      }
+    },
+    {
+      "RAW_TEXT": "750M95328 BUSTER BARRAS | GD 9B3D | EE | o1 | $661.25 | $0.00 | $661.25",
+      "MAPPING": {
+        "LASTNAME": "BARRAS",
+        "FIRSTNAME": "BUSTER",
+        "MIDDLENAME": null,
+        "SSN": null,
+        "POLICYID": null,
+        "MEMBERID": "750M95328",
+        "PLAN_NAME": "GD 9B3D",
+        "PLAN_TYPE": "DENTAL",
+        "COVERAGE": "EE",
+        "CURRENT_PREMIUM": 661.25,
+        "ADJUSTMENT_PREMIUM": null,
+        "PRICING_ADJUSTMENT": null
+      }
+    }
+  ]
+}
