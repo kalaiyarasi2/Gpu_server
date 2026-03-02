@@ -14,11 +14,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
+# Fix for "Decompression Bomb" error in PIL
+from PIL import Image
+Image.MAX_IMAGE_PIXELS = None
+
 
 # Import shared resources
 from shared_configs import router_engine, file_path_cache, _perform_extraction, BASE_DIR, UPLOAD_DIR
-# Import summary functions
-from summary_api import get_claim_summary, cognethro_trigger, cognethro_trigger_docs, work_comp_trigger, work_comp_trigger_docs
+# Import summary router
+from summary_api import router as summary_router
 
 # Import documentation constants
 from swagger_docs import (
@@ -50,20 +54,8 @@ app.add_middleware(
 )
 
 # BASE_DIR and UPLOAD_DIR are now defined at the top
-# Explicitly map summary_api routes to avoid 405 mapping issues
-app.get("/cognethro", include_in_schema=False)(cognethro_trigger_docs)
-app.post("/cognethro", 
-    summary=COGNETHRO_SUMMARY,
-    include_in_schema=True)(cognethro_trigger)
-app.post("/api/claim-summary", 
-    summary="Generate AI Summary")(get_claim_summary)
-
-# Work Compensation dedicated endpoint
-app.get("/work-comp", include_in_schema=False)(work_comp_trigger_docs)
-app.post("/work-comp",
-    summary=WORK_COMP_SUMMARY,
-    tags=["Workers Compensation"],
-    include_in_schema=True)(work_comp_trigger)
+# Include summary_api router
+app.include_router(summary_router)
 
 # Mount static and templates for the new React frontend
 frontend_dist_path = BASE_DIR / "frontend" / "dist"
@@ -80,6 +72,20 @@ else:
 @app.post("/api/extract", include_in_schema=False)
 async def extract_document(request: Request, file: UploadFile = File(...)):
     return await _perform_extraction(file, request)
+
+@app.get("/api/health")
+async def health_check():
+    """Quick connectivity test for external developers.
+    Returns server status and the base URL they connected to.
+    """
+    return {
+        "status": "ok",
+        "message": "Cognethro Unified PDF Platform is running",
+        "version": API_VERSION,
+        "supported_types": ["PDF", "XLSX", "XLS", "CSV"],
+        "extract_endpoint": "POST /api/extract  (multipart/form-data, field name: 'file')",
+        "example_curl": 'curl -X POST http://<host>:8007/api/extract -F "file=@yourfile.pdf"'
+    }
 
 @app.get("/docs", include_in_schema=False)
 async def custom_swagger_ui_html():

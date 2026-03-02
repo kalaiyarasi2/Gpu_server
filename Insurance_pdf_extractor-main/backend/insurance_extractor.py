@@ -24,10 +24,11 @@ try:
     import fitz  # PyMuPDF
     from PIL import Image
     import pytesseract
+    from pdf2image import convert_from_path
     from openai import OpenAI
 except ImportError:
     print("Installing required packages...")
-    packages = ["pymupdf", "pytesseract", "Pillow", "openai"]
+    packages = ["pymupdf", "pytesseract", "Pillow", "openai", "pdf2image"]
     for pkg in packages:
         subprocess.check_call([sys.executable, "-m", "pip", "install", pkg])
     import fitz
@@ -35,9 +36,9 @@ except ImportError:
     import pytesseract
     from openai import OpenAI
     from pdf2image import convert_from_path
-    # New validation modules
-    from financial_data_validation import FinancialValidator
-    from data_validation import GeneralDataValidator
+
+# Fix for "Decompression Bomb" error in PIL
+Image.MAX_IMAGE_PIXELS = None
 
 
 @dataclass
@@ -293,7 +294,7 @@ After detecting claim numbers, perform these checks:
 3. **Context Validation**:
    - Check what label appears before each number
    - "Policy #", "Policy Number" → EXCLUDE
-   - "Claim #", "Claim Number", "Converted #" → INCLUDE
+   - "Claim #", "Claim Number", "Converted #", "Department Number", "Dept #" → INCLUDE
    
 4. **Cross-Reference Check**:
    - Compare detected numbers against employee names
@@ -969,7 +970,7 @@ Return JSON:
    - Identify a SINGLE claim/incident (one employee's injury)
    - Each claim number is UNIQUE - appears only ONCE in the document
    - Examples: [UNIQUE_CLAIM_ID]
-   - Found in fields labeled: "Claim #", "Claim No", "Claim Number", "Converted #"
+   - Found in fields labeled: "Claim #", "Claim No", "Claim Number", "Converted #", "Department Number", "Dept #"
    
    **FORMAT-SPECIFIC GUIDANCE:**
    

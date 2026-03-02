@@ -265,3 +265,4 @@ class OCRPDFExtractor:
         
         self.output_text = "".join(full_text)
         return self.output_text, metadata
+

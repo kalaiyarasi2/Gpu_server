@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse, FileResponse, RedirectResponse
 # Import shared resources
 from shared_configs import _perform_extraction, file_path_cache
 
-from summary_for_json import ClaimsAnalyzer
+from summary_for_json import UniversalDocumentAnalyzer as ClaimsAnalyzer
 
 # Import documentation constants
 from swagger_docs import COGNETHRO_SUMMARY, COGNETHRO_DESCRIPTION, WORK_COMP_SUMMARY, WORK_COMP_DESCRIPTION

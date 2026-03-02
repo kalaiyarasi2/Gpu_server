@@ -21,7 +21,7 @@ const MergeJsonButton = ({
   isAnalyzing
 }: MergeJsonButtonProps) => {
 
-  if (completedDocsCount < 2) return null;
+  if (completedDocsCount < 2 || !isMergeable) return null;
 
   const typeLabel = sharedType === "WORK_COMPENSATION" ? "Rating Data" : (sharedType === "INSURANCE" ? "Insurance" : "JSON");
   const mergeLabel = `Merge ${completedDocsCount} ${typeLabel}${completedDocsCount > 1 && sharedType !== "WORK_COMPENSATION" ? '' : ''}`;

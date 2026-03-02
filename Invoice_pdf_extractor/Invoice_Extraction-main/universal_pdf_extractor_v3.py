@@ -23,9 +23,11 @@ import pdfplumber
 import fitz  # PyMuPDF
 import pytesseract
 from PIL import Image
+Image.MAX_IMAGE_PIXELS = None
 import io
 import re
 from typing import Dict, List, Optional
+
 
 
 def clean_ocr_noise(text: str) -> str:
@@ -348,6 +350,8 @@ def extract_fields_with_llm(text: str, client: OpenAI, pdf_filename: str = "", m
         print(f"  [WARNING] No text to process for {pdf_filename}")
         return {field: None for field in REQUIRED_FIELDS}
     
+
+    
     # Check for mirroring
     is_mirrored = detect_reversed_text(text)
     if is_mirrored:
@@ -373,6 +377,8 @@ Extract data from the document text provided below.
 
 ### EXTRACTION MODE: {mode.upper()}
 {mode_instructions}
+
+
 
 ### CARRIER-SPECIFIC IDENTIFIER PROFILES (PRIORITY):
 - **UHC (UnitedHealthcare)**: 
@@ -955,13 +961,12 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
             if v and str(v).lower() not in ["n/a", "none"]:
                 final_header[k] = v
         
-        # Collect line items from the successful pass
-        items = page_data.get("LINE_ITEMS", [])
-        if items:
-            print(f"    -> Extracted {len(items)} items from chunk {i+1}")
-            all_line_items.extend(items)
         else:
-            print(f"    -> No items found in chunk {i+1}")
+            # Collect line items from the standard pass
+            items = page_data.get("LINE_ITEMS", [])
+            if items:
+                print(f"    -> Extracted {len(items)} items from chunk {i+1}")
+                all_line_items.extend(items)
 
     # Final combined data
     data = {
@@ -969,6 +974,8 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
         "LINE_ITEMS": all_line_items
     }
     
+
+        
     return data
 
 
@@ -1333,7 +1340,20 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                 idx_l = str(row.get("LASTNAME", "") or "").upper()
                 
                 # Enhanced detection for summary rows misclassified as members
-                is_total = any(kw in idx_p or kw in idx_f or kw in idx_l for kw in ["TOTAL", "GRAND TOTAL", "SUBTOTAL"])
+                # Refined keyword list: Use word boundaries or whole string checks to avoid "Total Pet" becoming "TOTAL"
+                def is_keyword_match(text, keywords):
+                    t = str(text or "").upper()
+                    # Check for exact matches of total keywords as standalone words
+                    return any(re.search(fr'\b{kw}\b', t) for kw in keywords)
+
+                total_keywords = ["TOTAL", "GRAND TOTAL", "SUBTOTAL", "SUB TOTAL", "INVOICE TOTAL"]
+                is_total = is_keyword_match(idx_p, total_keywords) or \
+                           is_keyword_match(idx_f, total_keywords) or \
+                           is_keyword_match(idx_l, total_keywords)
+                
+                # If "TOTAL" is part of a plan name like "TOTAL PET", it's NOT a total row
+                if "TOTAL PET" in idx_p:
+                    is_total = False
                 
                 # Sharad Saxton Protection (requires MEMBERID to distinguish real member from Page 1 summary header)
                 idx_mid = str(row.get("MEMBERID", "") or "").strip()

@@ -196,9 +196,25 @@ class EnhancedInsuranceExtractor:
         Extract text from PDF using page-level hybrid strategy (Digital + OCR + Form Fields).
         Covers: Scanned, Digital, Combined, and Editable PDFs.
         """
-        from pdf_detector import PDFDetector
-        from pdf_plumber import extract_pdf_with_pdfplumber, extract_form_data
-        from ocr_text import OCRPDFExtractor
+        # Use importlib for explicit path-based import to avoid sys.modules collision
+        # with the Insurance backend's pdf_detector (which lacks is_page_scanned)
+        import importlib.util as _ilu
+        import pathlib as _pl
+        _wc_dir = _pl.Path(__file__).parent
+        def _load_wc_module(name):
+            spec = _ilu.spec_from_file_location(
+                f"_wc_{name}", _wc_dir / f"{name}.py"
+            )
+            mod = _ilu.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            return mod
+        _pdf_detector_mod = _load_wc_module("pdf_detector")
+        PDFDetector = _pdf_detector_mod.PDFDetector
+        _pdf_plumber_mod = _load_wc_module("pdf_plumber")
+        extract_pdf_with_pdfplumber = _pdf_plumber_mod.extract_pdf_with_pdfplumber
+        extract_form_data = _pdf_plumber_mod.extract_form_data
+        _ocr_text_mod = _load_wc_module("ocr_text")
+        OCRPDFExtractor = _ocr_text_mod.OCRPDFExtractor
         
         try:
             print(f"🔍 Analyzing PDF structure for 100% coverage...")

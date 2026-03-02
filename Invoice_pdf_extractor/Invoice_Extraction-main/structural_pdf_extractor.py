@@ -254,6 +254,10 @@ def process_with_structural_layer(pdf_path, output_excel=None):
         for field in v3.REQUIRED_FIELDS:
             if field not in df.columns: df[field] = None
         
+        # [V4][FIX] Ensure SOURCE_FILE exists before reordering
+        if 'SOURCE_FILE' not in df.columns:
+            df['SOURCE_FILE'] = os.path.basename(pdf_path)
+
         # Sort or filter columns if needed (Layer 5/7 alignment)
         cols = ['SOURCE_FILE'] + [f for f in v3.REQUIRED_FIELDS if f in df.columns]
         # Ensure all 15 fields are present
