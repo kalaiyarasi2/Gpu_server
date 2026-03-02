@@ -1,0 +1,74 @@
+
+================================================================================
+PAGE 1
+================================================================================
+
+State Fund
+ONLINE
+
+Loss Analysis Report
+
+9322650-2022
+O & L MAINTENANCE SERVICE, INC
+14521 ARMINITA ST, PANORAMA CITY, CA 91402
+
+Inception Date  08-11-2022    District Office  SC - LOS ANGELES
+Expiration Date 08-11-2023    Cancellation Code Active
+A.R.D ---                      Quote ID 802168451
+                               Quote Type PAS -
+
+Ad hoc report produced on 07-29-2025
+
+Brokerage
+
+Name Interwest Ins Svcs Llc
+Address 8950 Cal Center Dr Bldg 3 2nd Fl Sacramento, CA 95826
+Phone Number (916) 488-3100
+
+Totals
+
+Both Open and Closed Claims, Both Disability and Non-disability Claims for year 2022
+
+Claims
+Open 1
+Closed 2
+Total 3
+
+Costs
+Paid Compensation $34,156
+Paid Medical $152,692
+Total Paid $186,848
+
+Disability 3
+Non-Disability 0
+Litigated 3
+
+Estimated Compensation $34,156
+Estimated Medical $155,492
+Total Estimated/Incurred $189,648
+
+Policy Year 2022
+Estimated Annual $59,019
+Current Experience Mod 344.0%
+Governing Class 9008 ( 1 )
+
+Claims
+
+Claim ID  Claimant         Status                  Injury Date  Paid Comp  Paid Medical  Est. Comp  Est. Medical  Accident Description
+06882022  Minero Diaz      reclosed                05-18-2023   $0         $91,243      $0         $91,243      the employee was using the scr; sprain;
+SA        Manuel           disability                                                                 shoulder(s); struck by fall/fly object
+                          litig case has
+                          been finalized
+
+06900294  Cantu            reopen                  02-23-2023   $0         $29,100      $0         $31,900      after experiencing a hostile w; job stress;
+SK        Sergio           disability                                                                 ment stress; cumulative (all other)
+                          litig case has
+                          been finalized
+
+0686842   Casillas Salas   reclosed                01-10-2023   $34,156    $32,349      $34,156    $32,349      employee was using a buffer ma; specific
+SK        Josefina         disability                                                                 noc; buttocks; fall/slip on misc.
+                          litig case has
+                          been finalized
+
+Copyright (c) 2000-2025 State Compensation Insurance Fund.
+

@@ -132,3 +132,46 @@ async def get_claim_summary(request: Request):
             'error': str(e),
             'success': False
         }, status_code=500)
+
+@router.post("/api/merge-json")
+async def merge_json_endpoint(request: Request):
+    """
+    Merge multiple JSON files by their filenames (cached paths).
+    Expected JSON: { "filenames": ["file1.json", "file2.json"] }
+    """
+    try:
+        data = await request.json()
+        filenames = data.get("filenames", [])
+        
+        if not filenames:
+            return JSONResponse({"error": "No filenames provided"}, status_code=400)
+        
+        # Resolve full paths from cache
+        full_paths = []
+        for fn in filenames:
+            path = file_path_cache.get(fn)
+            if path:
+                full_paths.append(path)
+            else:
+                # Fallback: check if it's already an absolute path
+                if os.path.isabs(fn) and os.path.exists(fn):
+                    full_paths.append(fn)
+                else:
+                    print(f"[Merge-API][WARN] Filename not found in cache: {fn}")
+
+        if not full_paths:
+            return JSONResponse({"error": "None of the provided files could be resolved"}, status_code=404)
+
+        from merge_logic import DocumentMerger
+        merger = DocumentMerger()
+        merged_list = merger.merge_json_files(full_paths)
+        
+        return {
+            "success": True,
+            "count": len(merged_list),
+            "merged_data": merged_list
+        }
+
+    except Exception as e:
+        print(f"❌ Error merging JSON: {e}")
+        return JSONResponse({"error": str(e), "success": False}, status_code=500)

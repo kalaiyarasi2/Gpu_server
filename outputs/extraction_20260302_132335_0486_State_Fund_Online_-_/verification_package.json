@@ -1,0 +1,107 @@
+{
+  "session_id": "20260302_132335_0486_State_Fund_Online_-_",
+  "session_dir": "outputs\\extraction_20260302_132335_0486_State_Fund_Online_-_",
+  "source_pdf": "Unified_PDF_Platform/uploads/State Fund Online - 22-23 (1).pdf",
+  "pages": [
+    {
+      "page_number": 1,
+      "text": "\n================================================================================\nPAGE 1\n================================================================================\n\nState Fund\nONLINE\n\nLoss Analysis Report\n\n9322650-2022\nO & L MAINTENANCE SERVICE, INC\n14521 ARMINITA ST, PANORAMA CITY, CA 91402\n\nInception Date  08-11-2022    District Office  SC - LOS ANGELES\nExpiration Date 08-11-2023    Cancellation Code Active\nA.R.D ---                      Quote ID        802168451\n                               Quote Type      PAS -\n\nAd hoc report produced on 07-29-2025\n\nBrokerage\n\nName      Interwest Ins Svcs Llc\nAddress   8950 Cal Center Dr Bldg 3 2nd Fl Sacramento, CA 95826\nPhone Number (916) 488-3100\n\nTotals\n\nBoth Open and Closed Claims, Both Disability and Non-disability Claims for year 2022\n\nClaims\nOpen    1\nClosed  2\nTotal   3\n\nCosts\nPaid Compensation  $34,156\nPaid Medical       $152,692\nTotal Paid         $186,848\n\nDisability\n3\nNon-Disability\n0\nLitigated\n3\n\nEstimated Compensation  $34,156\nEstimated Medical       $155,492\nTotal Estimated/Incurred $189,648\n\nPolicy Year 2022\n\nEstimated Annual $59,019\nCurrent Experience Mod 344.0%\nGoverning Class 9008 ( 1 )\n\nClaims\n\nClaim ID   Claimant       Status   Injury Date  Paid Comp  Paid Medical  Est. Comp  Est. Medical  Accident Description\n06882022   Minero Diaz    reclosed 05-18-2023  $0         $91,243       $0         $91,243       the employee was using the scr; sprain;\nSA         Manuel         disability                                                          shoulder(s); struck by fall/fly object\n                         litig case has\n                         been finalized\n\n06900294   Cantu          reopen   02-23-2023  $0         $29,100       $0         $31,900       after experiencing a hostile w; job stress;\nSK         Sergio         disability                                                          ment stress; cumulative (all other)\n                         litig case has\n                         been finalized\n\n0686842    Casillas Salas reclosed 01-10-2023  $34,156    $32,349       $34,156    $32,349       employee was using a buffer ma; specific\nSK         Josefina       disability                                                          noc; buttocks; fall/slip on misc.\n                         litig case has\n                         been finalized\n\nCopyright (c) 2000-2025 State Compensation Insurance Fund.",
+      "is_scanned": false,
+      "extraction_method": "gpt-4o-vision",
+      "confidence": 0.95
+    }
+  ],
+  "combined_text": "\n================================================================================\nPAGE 1\n================================================================================\n\nState Fund\nONLINE\n\nLoss Analysis Report\n\n9322650-2022\nO & L MAINTENANCE SERVICE, INC\n14521 ARMINITA ST, PANORAMA CITY, CA 91402\n\nInception Date  08-11-2022    District Office  SC - LOS ANGELES\nExpiration Date 08-11-2023    Cancellation Code Active\nA.R.D ---                      Quote ID        802168451\n                               Quote Type      PAS -\n\nAd hoc report produced on 07-29-2025\n\nBrokerage\n\nName      Interwest Ins Svcs Llc\nAddress   8950 Cal Center Dr Bldg 3 2nd Fl Sacramento, CA 95826\nPhone Number (916) 488-3100\n\nTotals\n\nBoth Open and Closed Claims, Both Disability and Non-disability Claims for year 2022\n\nClaims\nOpen    1\nClosed  2\nTotal   3\n\nCosts\nPaid Compensation  $34,156\nPaid Medical       $152,692\nTotal Paid         $186,848\n\nDisability\n3\nNon-Disability\n0\nLitigated\n3\n\nEstimated Compensation  $34,156\nEstimated Medical       $155,492\nTotal Estimated/Incurred $189,648\n\nPolicy Year 2022\n\nEstimated Annual $59,019\nCurrent Experience Mod 344.0%\nGoverning Class 9008 ( 1 )\n\nClaims\n\nClaim ID   Claimant       Status   Injury Date  Paid Comp  Paid Medical  Est. Comp  Est. Medical  Accident Description\n06882022   Minero Diaz    reclosed 05-18-2023  $0         $91,243       $0         $91,243       the employee was using the scr; sprain;\nSA         Manuel         disability                                                          shoulder(s); struck by fall/fly object\n                         litig case has\n                         been finalized\n\n06900294   Cantu          reopen   02-23-2023  $0         $29,100       $0         $31,900       after experiencing a hostile w; job stress;\nSK         Sergio         disability                                                          ment stress; cumulative (all other)\n                         litig case has\n                         been finalized\n\n0686842    Casillas Salas reclosed 01-10-2023  $34,156    $32,349       $34,156    $32,349       employee was using a buffer ma; specific\nSK         Josefina       disability                                                          noc; buttocks; fall/slip on misc.\n                         litig case has\n                         been finalized\n\nCopyright (c) 2000-2025 State Compensation Insurance Fund.\n\n",
+  "combined_text_file": "outputs\\extraction_20260302_132335_0486_State_Fund_Online_-_\\extracted_text.txt",
+  "extracted_schema": {
+    "claims": [
+      {
+        "employee_name": "Diaz, Minero",
+        "carrier_name": "State Compensation Insurance Fund",
+        "policy_number": "9322650-2022",
+        "claim_number": "06882022",
+        "injury_date_time": "2023-05-18",
+        "claim_year": 2023,
+        "status": "Closed",
+        "reopen": "False",
+        "injury_description": "the employee was using the scr; sprain; shoulder(s); struck by fall/fly object",
+        "body_part": "shoulder(s)",
+        "injury_type": "Indemnity",
+        "claim_class": null,
+        "medical_paid": 91243.0,
+        "medical_reserve": 0.0,
+        "indemnity_paid": 0.0,
+        "indemnity_reserve": 0.0,
+        "expense_paid": 0.0,
+        "expense_reserve": 0.0,
+        "total_paid": 91243.0,
+        "total_reserve": 0.0,
+        "total_incurred": 91243.0,
+        "litigation": "Yes"
+      },
+      {
+        "employee_name": "Sergio, Cantu",
+        "carrier_name": "State Compensation Insurance Fund",
+        "policy_number": "9322650-2022",
+        "claim_number": "06900294",
+        "injury_date_time": "2023-02-23",
+        "claim_year": 2023,
+        "status": "Reopened",
+        "reopen": "True",
+        "injury_description": "after experiencing a hostile w; job stress; ment stress; cumulative (all other)",
+        "body_part": null,
+        "injury_type": "Indemnity",
+        "claim_class": null,
+        "medical_paid": 29100.0,
+        "medical_reserve": 2800.0,
+        "indemnity_paid": 0.0,
+        "indemnity_reserve": 0.0,
+        "expense_paid": 0.0,
+        "expense_reserve": 0.0,
+        "total_paid": 29100.0,
+        "total_reserve": 2800.0,
+        "total_incurred": 31900.0,
+        "litigation": "Yes"
+      },
+      {
+        "employee_name": "Josefina, Casillas Salas",
+        "carrier_name": "State Compensation Insurance Fund",
+        "policy_number": "9322650-2022",
+        "claim_number": "0686842",
+        "injury_date_time": "2023-01-10",
+        "claim_year": 2023,
+        "status": "Closed",
+        "reopen": "False",
+        "injury_description": "employee was using a buffer ma; specific noc; buttocks; fall/slip on misc.",
+        "body_part": "buttocks",
+        "injury_type": "Indemnity",
+        "claim_class": null,
+        "medical_paid": 32349.0,
+        "medical_reserve": 0.0,
+        "indemnity_paid": 34156.0,
+        "indemnity_reserve": 0.0,
+        "expense_paid": 0.0,
+        "expense_reserve": 0.0,
+        "total_paid": 66505.0,
+        "total_reserve": 0.0,
+        "total_incurred": 66505.0,
+        "litigation": "Yes"
+      }
+    ],
+    "SummaryLevel": {
+      "estimated_annual": 59019.0,
+      "years": 2023,
+      "policy_numbers": "9322650-2022",
+      "carrier_names": "State Compensation Insurance Fund"
+    }
+  },
+  "schema_file": "outputs\\extraction_20260302_132335_0486_State_Fund_Online_-_\\extracted_schema.json",
+  "summary": {
+    "total_pages": 1,
+    "scanned_pages": 0,
+    "avg_confidence": 0.95,
+    "extraction_methods": [
+      "gpt-4o-vision"
+    ]
+  }
+}

@@ -183,3 +183,42 @@ class TextQualityVerifier:
             return 'full_vision'
         # Moderate quality issues: try DPI 300 Vision first
         return 'dpi_fallback'
+
+    def analyze_pages(self, pages_text: Dict[int, str]) -> Dict[int, Dict]:
+        """
+        Per-page quality analysis.
+
+        Returns a mapping:
+            {
+              page_number: {
+                "analysis": <analyze_quality result>,
+                "score": <0.0-1.0>,
+                "recommendation": "ok" | "dpi_fallback" | "full_vision"
+              },
+              ...
+            }
+        """
+        results: Dict[int, Dict] = {}
+        for page_num, text in pages_text.items():
+            analysis = self.analyze_quality(text, num_pages=1)
+            score = self.quality_score(text, num_pages=1)
+            recommendation = self.fallback_recommendation(text, num_pages=1)
+            results[page_num] = {
+                "analysis": analysis,
+                "score": score,
+                "recommendation": recommendation,
+            }
+        return results
+
+    def page_quality(self, page_text: str) -> Dict:
+        """
+        Convenience helper: run quality analysis for a single page.
+        """
+        analysis = self.analyze_quality(page_text, num_pages=1)
+        score = self.quality_score(page_text, num_pages=1)
+        recommendation = self.fallback_recommendation(page_text, num_pages=1)
+        return {
+            "analysis": analysis,
+            "score": score,
+            "recommendation": recommendation,
+        }

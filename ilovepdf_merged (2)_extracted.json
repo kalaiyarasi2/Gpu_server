@@ -1,0 +1,98 @@
+{
+  "MERGED": true,
+  "SOURCE_FILE": "ilovepdf_merged (2).pdf",
+  "INVOICE_COUNT": 3,
+  "INVOICES": [
+    {
+      "invoice_index": 1,
+      "page_range_0_based": [
+        0,
+        2
+      ],
+      "pdf_path": "C:\\Users\\Intern\\pdf_extractor\\Unified_PDF_Platform\\unified_outputs\\merged_invoice_splits\\ilovepdf_merged (2)_split\\invoice_01.pdf",
+      "data": {
+        "HEADER": {
+          "VENDOR_NAME": "Bharti Airtel Ltd",
+          "INVOICE_NUMBER": "BBL332602B088932",
+          "DATE": "16-FEB-2026",
+          "TERMS": null,
+          "DUE_DATE": "09-MAR-2026",
+          "PO_NUMBER": "SCUILLKTN0901250",
+          "TOTAL_AMOUNT": 57033.33
+        },
+        "LINE_ITEMS": [
+          {
+            "ITEM_DESCRIPTION": "200 Mbps / 200 Mbps Unmanaged ILL",
+            "QUANTITY": 1,
+            "RATE": 48333.33,
+            "TAX_AMOUNT": 8700,
+            "TOTAL_AMOUNT": 57033.33
+          }
+        ]
+      }
+    },
+    {
+      "invoice_index": 2,
+      "page_range_0_based": [
+        3,
+        7
+      ],
+      "pdf_path": "C:\\Users\\Intern\\pdf_extractor\\Unified_PDF_Platform\\unified_outputs\\merged_invoice_splits\\ilovepdf_merged (2)_split\\invoice_02.pdf",
+      "data": {
+        "HEADER": {
+          "VENDOR_NAME": "Shyam Spectra Pvt. Ltd.",
+          "INVOICE_NUMBER": "BTNI002214/25-26",
+          "DATE": "16 February, 2026",
+          "TERMS": "Quarterly Advance",
+          "DUE_DATE": "3 March, 2026",
+          "PO_NUMBER": "9508",
+          "TOTAL_AMOUNT": 135700
+        },
+        "LINE_ITEMS": [
+          {
+            "ITEM_DESCRIPTION": "Additional IP 1",
+            "QUANTITY": null,
+            "RATE": 0,
+            "TAX_AMOUNT": 0,
+            "TOTAL_AMOUNT": 0
+          },
+          {
+            "ITEM_DESCRIPTION": "Business Internet Access 200Mbps",
+            "QUANTITY": null,
+            "RATE": 115000,
+            "TAX_AMOUNT": 20700,
+            "TOTAL_AMOUNT": 135700
+          }
+        ]
+      }
+    },
+    {
+      "invoice_index": 3,
+      "page_range_0_based": [
+        8,
+        9
+      ],
+      "pdf_path": "C:\\Users\\Intern\\pdf_extractor\\Unified_PDF_Platform\\unified_outputs\\merged_invoice_splits\\ilovepdf_merged (2)_split\\invoice_03.pdf",
+      "data": {
+        "HEADER": {
+          "VENDOR_NAME": "ZOHO Corporation Private Limited",
+          "INVOICE_NUMBER": "1025260549840",
+          "DATE": "23 Feb 2026",
+          "TERMS": "Due On Receipt",
+          "DUE_DATE": "23 Feb 2026",
+          "PO_NUMBER": "277000609483150",
+          "TOTAL_AMOUNT": 7080
+        },
+        "LINE_ITEMS": [
+          {
+            "ITEM_DESCRIPTION": "39503SM\nService : Zoho Vault\nPlan : Standard\nUSERS : 100\nPayment Duration : Monthly\nStart 23 February 2026 End 22 March 2026\nSAC: 997331",
+            "QUANTITY": 1,
+            "RATE": 6000,
+            "TAX_AMOUNT": 1080,
+            "TOTAL_AMOUNT": 6000
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -219,7 +219,7 @@ const ResultsPanel = ({
       {isWorkComp ? (
         /* Work Comp: only Form Type + Confidence */
         <div className="grid grid-cols-2 gap-3">
-          <div className="p-3 rounded-lg bg-muted/50 border border-border">
+            <div className="p-3 rounded-lg bg-muted/50 border border-border">
             <div className="flex items-center gap-2 mb-1">
               <HardHat className="w-3.5 h-3.5 text-primary" />
               <span className="text-[11px] text-muted-foreground font-medium">Form Type</span>
@@ -258,7 +258,18 @@ const ResultsPanel = ({
             <p className="text-sm font-semibold text-foreground">
               {isInvoice
                 ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(metadata?.total_value || 0)
-                : (metadata?.claims_count ?? (Array.isArray(result) ? result.length : (result?.claims?.length || 0)))
+                : (() => {
+                    if (typeof metadata?.claims_count === "number") {
+                      return metadata.claims_count;
+                    }
+                    const raw: any = result ?? [];
+                    const arr: any[] = Array.isArray(raw)
+                      ? raw
+                      : Array.isArray(raw.claims)
+                        ? raw.claims
+                        : [];
+                    return arr.filter((item) => item && item.claim_number).length;
+                  })()
               }
             </p>
           </div>
