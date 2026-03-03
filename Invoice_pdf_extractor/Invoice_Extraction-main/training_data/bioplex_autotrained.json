@@ -1,0 +1,44 @@
+{
+  "CARRIER_KEYWORDS": [
+    "BPXINV",
+    "Dextromethorphan",
+    "Metoclopramide",
+    "Cavia porcellus"
+  ],
+  "EXAMPLES": [
+    {
+      "RAW_TEXT": "None",
+      "MAPPING": {
+        "LASTNAME": null,
+        "FIRSTNAME": null,
+        "MIDDLENAME": null,
+        "SSN": null,
+        "POLICYID": null,
+        "MEMBERID": "BPXPN-00057",
+        "PLAN_NAME": "Dextromethorphan polistirex",
+        "PLAN_TYPE": null,
+        "COVERAGE": null,
+        "CURRENT_PREMIUM": 124.5,
+        "ADJUSTMENT_PREMIUM": null,
+        "PRICING_ADJUSTMENT": null
+      }
+    },
+    {
+      "RAW_TEXT": "None",
+      "MAPPING": {
+        "LASTNAME": null,
+        "FIRSTNAME": null,
+        "MIDDLENAME": null,
+        "SSN": null,
+        "POLICYID": null,
+        "MEMBERID": "BPXPN-00012",
+        "PLAN_NAME": "Venlafaxine Hydrochloride",
+        "PLAN_TYPE": null,
+        "COVERAGE": null,
+        "CURRENT_PREMIUM": 400.0,
+        "ADJUSTMENT_PREMIUM": null,
+        "PRICING_ADJUSTMENT": null
+      }
+    }
+  ]
+}

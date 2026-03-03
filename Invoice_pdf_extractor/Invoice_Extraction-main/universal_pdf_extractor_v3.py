@@ -318,7 +318,7 @@ def detect_reversed_text(text: str) -> bool:
         "esos", "szoz", "scoz", "ezos",  # 2025/2026
         "voitaat2", "240ivaa2", "evitatneserpeR",        # ADMINISTRATION / SERVICES / Representative
         "sssal9", "anig", "auie", "anigruoc", "anamuh",   # CROSS / BLUE / Insurance / Humana
-        "fih2@",                          # MEMBERSHIP
+        "fih2@", "muimerp", "tnemetats", "gnillib", "rebmun", "etad", "egap", # MEMBERSHIP / UNUM keywords
         "ytnuoc"                         # COUNTRY
     ]
     
@@ -1494,6 +1494,20 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
             row_grand["PLAN_NAME"] = "GRAND TOTAL (COMBINED)"
             row_grand["CURRENT_PREMIUM"] = combined_total
             final_total_rows.append(row_grand)
+
+            # Audit Check: If the LLM explicitly extracted a "TOTAL" line item that differs from our sum
+            llm_total_val = 0.0
+            for item in line_items:
+                if "TOTAL" in str(item.get("PLAN_NAME", "")).upper() or "TOTAL" in str(item.get("FIRSTNAME", "")).upper():
+                    llm_total_val = to_float(item.get("CURRENT_PREMIUM"))
+                    break
+            
+            if llm_total_val > 0 and abs(llm_total_val - combined_total) > 0.05:
+                row_report = {field: None for field in REQUIRED_FIELDS}
+                row_report["PLAN_NAME"] = "REPORTED INVOICE TOTAL (FOR AUDIT)"
+                row_report["CURRENT_PREMIUM"] = llm_total_val
+                final_total_rows.append(row_report)
+                print(f"    [V3][AUDIT] Total mismatch detected! Calculated: {combined_total}, Reported: {llm_total_val}")
 
             rows = member_rows + final_total_rows
                 
