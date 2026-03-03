@@ -1498,9 +1498,19 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
             # Audit Check: If the LLM explicitly extracted a "TOTAL" line item that differs from our sum
             llm_total_val = 0.0
             for item in line_items:
-                if "TOTAL" in str(item.get("PLAN_NAME", "")).upper() or "TOTAL" in str(item.get("FIRSTNAME", "")).upper():
-                    llm_total_val = to_float(item.get("CURRENT_PREMIUM"))
-                    break
+                plan_name = str(item.get("PLAN_NAME", "")).upper()
+                first_name = str(item.get("FIRSTNAME", "")).upper()
+                
+                # Heuristic: A true summary row usually has "TOTAL" but NO last name or empty plan name
+                # Avoid triggering on "Total Pet" or "Total Dental"
+                excluded_summaries = ["TOTAL PET", "TOTAL DENTAL", "TOTAL VISION", "TOTAL LIFE"]
+                is_excluded = any(ex in plan_name for ex in excluded_summaries)
+                
+                if not is_excluded and ("TOTAL" in plan_name or "TOTAL" in first_name):
+                    # One more check: a summary row usually doesn't have a First Name
+                    if not item.get("LASTNAME"):
+                        llm_total_val = to_float(item.get("CURRENT_PREMIUM"))
+                        break
             
             if llm_total_val > 0 and abs(llm_total_val - combined_total) > 0.05:
                 row_report = {field: None for field in REQUIRED_FIELDS}

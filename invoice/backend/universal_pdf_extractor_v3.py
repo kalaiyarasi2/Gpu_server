@@ -299,11 +299,11 @@ def detect_reversed_text(text: str) -> bool:
     """
     # Use very high-confidence mirrored OCR patterns
     reversed_patterns = [
-        "sdioani", "s0iovui", "adiovui", # INVOICE
+        "sdioani", "s0iovui", "adiovui", "eciovni", "eciovnu", # INVOICE
         "esos", "szoz", "scoz", "ezos",  # 2025/2026
-        "voitaat2", "240ivaa2",         # ADMINISTRATION / SERVICES
-        "sssal9", "anig", "auie",        # CROSS / BLUE
-        "fih2@",                          # MEMBERSHIP
+        "voitaat2", "240ivaa2", "evitatneserpeR",        # ADMINISTRATION / SERVICES / Representative
+        "sssal9", "anig", "auie", "anigruoc", "anamuh",   # CROSS / BLUE / Insurance / Humana
+        "fih2@", "muimerp", "tnemetats", "gnillib", "rebmun", "etad", "egap", # MEMBERSHIP / UNUM keywords
         "ytnuoc"                         # COUNTRY
     ]
     
@@ -1209,44 +1209,63 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                 else:
                     member_rows.append(row)
             
-            # PHASE 2: Produce exactly ONE authoritative GRAND TOTAL row.
+            # PHASE 2: Produce explicit and auditable TOTAL rows.
             # Strategy:
-            #   1. Look for the *single* extracted TOTAL/GRAND TOTAL row that matches the
-            #      calculated member-row sum.  If found, use its value (it came from the PDF).
-            #   2. If no match, pick the LAST extracted total row as the best candidate.
-            #   3. Otherwise fall back to the calculated sum.
-            # In all cases, ALL intermediate total rows are discarded and replaced by a single
-            # clean row labelled "GRAND TOTAL".
+            #   1. Calculate the sums of Current and Adjustment columns.
+            #   2. Provide separate rows for each sum + a combined final total.
+            #   3. This makes the math explicit and auditable in the spreadsheet.
 
-            calc_total = sum(to_float(mr.get("CURRENT_PREMIUM")) for mr in member_rows)
+            sum_current = sum(to_float(mr.get("CURRENT_PREMIUM")) for mr in member_rows)
+            sum_adj = sum(to_float(mr.get("ADJUSTMENT_PREMIUM")) for mr in member_rows)
+            combined_total = sum_current + sum_adj
 
-            authoritative_total: float = 0.0
+            # Build audit-ready total rows
+            final_total_rows = []
+            
+            # Row 1: Sum of all Current Premiums
+            row_curr = {field: None for field in REQUIRED_FIELDS}
+            row_curr["PLAN_NAME"] = "TOTAL CURRENT PREMIUM"
+            row_curr["CURRENT_PREMIUM"] = sum_current
+            final_total_rows.append(row_curr)
+            
+            # Row 2: Sum of all Adjustments (Only if non-zero)
+            if abs(sum_adj) > 0.001:
+                row_adj = {field: None for field in REQUIRED_FIELDS}
+                row_adj["PLAN_NAME"] = "TOTAL ADJUSTMENTS"
+                row_adj["ADJUSTMENT_PREMIUM"] = sum_adj
+                final_total_rows.append(row_adj)
+            
+            # Row 3: Final Combined Total (at the bottom of Current Premium column per user request)
+            row_grand = {field: None for field in REQUIRED_FIELDS}
+            row_grand["PLAN_NAME"] = "GRAND TOTAL (COMBINED)"
+            row_grand["CURRENT_PREMIUM"] = combined_total
+            final_total_rows.append(row_grand)
 
-            # 1. Find an extracted row whose value matches the calculated sum exactly
-            matched_row = None
-            for tr in total_rows:
-                if abs(to_float(tr.get("CURRENT_PREMIUM")) - calc_total) < 0.1:
-                    matched_row = tr
-                    break
+            # Audit Check: If the LLM explicitly extracted a "TOTAL" line item that differs from our sum
+            llm_total_val = 0.0
+            for item in line_items:
+                plan_name = str(item.get("PLAN_NAME", "")).upper()
+                first_name = str(item.get("FIRSTNAME", "")).upper()
+                
+                # Heuristic: A true summary row usually has "TOTAL" but NO last name or empty plan name
+                # Avoid triggering on "Total Pet" or "Total Dental"
+                excluded_summaries = ["TOTAL PET", "TOTAL DENTAL", "TOTAL VISION", "TOTAL LIFE"]
+                is_excluded = any(ex in plan_name for ex in excluded_summaries)
+                
+                if not is_excluded and ("TOTAL" in plan_name or "TOTAL" in first_name):
+                    # One more check: a summary row usually doesn't have a First Name
+                    if not item.get("LASTNAME"):
+                        llm_total_val = to_float(item.get("CURRENT_PREMIUM"))
+                        break
+            
+            if llm_total_val > 0 and abs(llm_total_val - combined_total) > 0.05:
+                row_report = {field: None for field in REQUIRED_FIELDS}
+                row_report["PLAN_NAME"] = "REPORTED INVOICE TOTAL (FOR AUDIT)"
+                row_report["CURRENT_PREMIUM"] = llm_total_val
+                final_total_rows.append(row_report)
+                print(f"    [V3][AUDIT] Total mismatch detected! Calculated: {combined_total}, Reported: {llm_total_val}")
 
-            if matched_row is not None:
-                authoritative_total = to_float(matched_row.get("CURRENT_PREMIUM"))
-                print(f"    [V3][INFO] Using extracted total that matches calc sum: ${authoritative_total:,.2f}")
-            elif total_rows:
-                # 2. Use last extracted total row (closest to the end of the document)
-                authoritative_total = to_float(total_rows[-1].get("CURRENT_PREMIUM"))
-                print(f"    [V3][INFO] No exact match — using last extracted total: ${authoritative_total:,.2f}")
-            else:
-                # 3. Pure calculation fallback
-                authoritative_total = calc_total
-                print(f"    [V3][INFO] No extracted total — using calculated total: ${authoritative_total:,.2f}")
-
-            # Build a single clean GRAND TOTAL row (discard ALL intermediate total_rows)
-            grand_total_row = {field: None for field in REQUIRED_FIELDS}
-            grand_total_row["CURRENT_PREMIUM"] = authoritative_total
-            grand_total_row["PLAN_NAME"] = "GRAND TOTAL"
-
-            rows = member_rows + [grand_total_row]
+            rows = member_rows + final_total_rows
                 
     else:
         # Fallback for legacy/error case
