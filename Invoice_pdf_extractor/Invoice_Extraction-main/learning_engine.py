@@ -63,18 +63,38 @@ def should_trigger_refinement(extracted_data: Dict, raw_text: str) -> tuple:
         
     # Heuristic 2: Financial Reconciliation (Sum of items vs Total in Text)
     # Find total in text - using expanded list of common labels
-    total_labels = r'(?:AMOUNT DUE|AMOUNTDUE|BALANCEDUE|BALANCE DUE|TOTAL DUE|INVOICE TOTAL|GRAND TOTAL|GRANDTOTAL)'
+    total_labels = r'(?:AMOUNT DUE|AMOUNTDUE|BALANCEDUE|BALANCE DUE|TOTAL DUE|INVOICE TOTAL|GRAND TOTAL|GRANDTOTAL|TOTAL PREMIUM)'
     total_matches = re.findall(fr'{total_labels}\s*[:$]*\s*([0-9,]+\.[0-9]{2})', raw_text.upper())
     
-    if not total_matches:
+    # [UNUM] Mirrored Total Check
+    # "TOTAL AMOUNT DUE" mirrored is "EUD TNUOMA LATOT"
+    # we check for "LATOT" or "EUD LATOT" or "EUD TNUOMA"
+    mirrored_labels = r'(?:LATOT|EUD LATOT|EUD TNUOMA|EUD TNUOMA LATOT|LAERNEM LATOT)'
+    # Example mirrored value: "45.498$" -> needs re-reverse
+    mirrored_matches = re.findall(fr'{mirrored_labels}\s*[:\$]*\s*([0-9]{2}\.[0-9,]+)\$', raw_text.upper())
+    
+    if not total_matches and not mirrored_matches:
         # Fallback to generic TOTAL if specific ones aren't found
         total_matches = re.findall(r'TOTAL\s*[:$]*\s*([0-9,]+\.[0-9]{2})', raw_text.upper())
 
+    combined_targets = []
     if total_matches:
+        combined_targets.extend([float(m.replace(',', '')) for m in total_matches])
+    
+    if mirrored_matches:
+        # Reverse the mirrored numbers (e.g. "45.498" -> "894.54")
+        for m in mirrored_matches:
+            try:
+                fixed_val = m[::-1].replace(',', '')
+                combined_targets.append(float(fixed_val))
+                print(f"  [LEARNING][MIRROR] Detected mirrored total: {m} -> {fixed_val}")
+            except:
+                pass
+
+    if combined_targets:
         try:
             # We look for a total that is likely the 'Grand Total'.
-            all_vals = [float(m.replace(',', '')) for m in total_matches]
-            target_total = max(all_vals)
+            target_total = max(combined_targets)
             
             extracted_sum = sum(float(item.get("CURRENT_PREMIUM", 0) or 0) for item in line_items)
             
