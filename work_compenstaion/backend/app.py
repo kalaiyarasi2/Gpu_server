@@ -3,6 +3,15 @@ Enhanced Flask API Server for Insurance Form Extraction
 Supports: Image display, text verification, schema extraction
 """
 
+import sys
+# Fix Windows console encoding for Unicode (e.g. checkmarks, emoji)
+if sys.platform == 'win32':
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+        sys.stderr.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
+
 from flask import Flask, request, jsonify, send_file, send_from_directory
 from flask_cors import CORS
 import os

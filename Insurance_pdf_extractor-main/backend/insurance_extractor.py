@@ -196,6 +196,63 @@ class EnhancedInsuranceExtractor:
             from pdf_plumber import extract_pdf_with_pdfplumber as external_extract
             return external_extract(pdf_path)
 
+    def _infer_carrier_from_text(self, text: str) -> Optional[str]:
+        """
+        Heuristically infer the carrier/insurer name from the raw text.
+        This is a dynamic, format-agnostic fallback that:
+        - First looks for explicit 'Insurance ...' style names in the header region
+        - Otherwise, falls back to using a website/domain found near the top
+        """
+        if not text:
+            return None
+
+        # Focus on the first page/header region where branding typically lives
+        lines = text.splitlines()
+        header_slice = "\n".join(lines[:120])
+
+        # 1) Try to find explicit insurance-company style names
+        # Examples this can catch:
+        #  - State Compensation Insurance Fund
+        #  - Stonetrust Commercial Insurance Company
+        #  - AmTrust North America Insurance
+        insurance_pattern = re.compile(
+            r"([A-Z][A-Za-z&,\.\s]+?Insurance(?:\s+(?:Company|Co\.?|Fund|Group|Services?))?)",
+            re.IGNORECASE,
+        )
+        matches = insurance_pattern.findall(header_slice)
+        if matches:
+            # Prefer the longest match (most specific branding)
+            best = max(matches, key=lambda m: len(m or ""))
+            best_clean = best.strip()
+            if best_clean:
+                return best_clean
+
+        # 2) Fallback: infer from website / domain in header
+        url_pattern = re.compile(r"(https?://[^\s]+|www\.[^\s]+)", re.IGNORECASE)
+        url_match = url_pattern.search(header_slice)
+        if url_match:
+            url = url_match.group(1)
+            # Strip protocol
+            url = re.sub(r"^https?://", "", url, flags=re.IGNORECASE)
+            # Remove path/query fragments
+            domain = url.split("/")[0]
+            # Strip trailing punctuation
+            domain = domain.rstrip(".,);")
+            # Normalize "www."
+            domain = re.sub(r"^www\.", "", domain, flags=re.IGNORECASE)
+            if domain:
+                # Optionally prettify: turn "fcbifund.com" -> "FCBI Fund"
+                name_part = domain.split(".")[0]
+                tokens = re.split(r"[_\-]+", name_part)
+                pretty = " ".join(
+                    t.upper() if len(t) <= 4 else t.capitalize()
+                    for t in tokens
+                    if t
+                )
+                return pretty or domain
+
+        return None
+
     def _extract_full_pdf_via_vision(self, pdf_path: str, dpi: int = 300) -> Tuple[str, List[Dict]]:
         """
         Process entire PDF using GPT-4 Vision for layout preservation.
@@ -794,6 +851,9 @@ Return ONLY the JSON. Ensure the dynamic_rules is extremely precise."""
             detected_claims_info = self._detect_claim_numbers_ai(all_text)
             master_claim_list = [c["claim_number"] for c in detected_claims_info.get("claim_numbers", [])]
 
+        # Dynamic fallback carrier that we will propagate if the model doesn't set one
+        fallback_carrier: Optional[str] = None
+
         if not master_claim_list:
             print("   ⚠️ No unique claim numbers discovered. Falling back to layout-only extraction.")
             master_list_str = "No pre-detected list available. Detect claims dynamically."
@@ -803,6 +863,20 @@ Return ONLY the JSON. Ensure the dynamic_rules is extremely precise."""
             
         # STAGE 1: Analyze document format
         format_info = self._analyze_document_format(all_text)
+
+        # Prefer model-detected insurer/carrier; if missing, infer dynamically from text
+        if isinstance(format_info, dict):
+            fallback_carrier = (
+                format_info.get("insurer")
+                or format_info.get("carrier_name")
+                or None
+            )
+        if not fallback_carrier:
+            inferred = self._infer_carrier_from_text(all_text)
+            if inferred:
+                fallback_carrier = inferred
+                if isinstance(format_info, dict):
+                    format_info.setdefault("insurer", inferred)
         
         # Merge vision pattern into format_info if available
         if vision_pattern:
@@ -839,10 +913,13 @@ Return ONLY the JSON. Ensure the dynamic_rules is extremely precise."""
    - If there is NO mention of litigation, you MUST return null. 
    - NEVER assume 'No' if the field is missing.
 6. 🛑 MULTIPLE EXPENSES: If a document has multiple expense columns/rows (e.g., Legal, Other, Admin, LAE), you MUST SUM THEM into the 'expense_paid' or 'expense_reserve' fields. Do NOT ignore any expense row.
-7. 🛑 POLICY NUMBER: Extract ONLY a real alphanumeric policy identifier (e.g., W610628, SWC1364773).
+7. 🛑 POLICY NUMBER: Extract ONLY a real alphanumeric policy identifier (e.g., W610628, SWC1364773, 64536).
    - A policy number is a short code assigned by the insurer to identify the policy.
    - NEVER use the insured/company name (e.g., 'A TOTAL SOLUTION INC') as a policy number.
    - If no explicit policy number is visible in the document, set policy_number to null.
+8. 🛑 POLICY NUMBER FORMAT: A valid policy_number MUST contain at least one digit.
+   - Allowed formats: purely numeric (e.g., "64536") or mixed alphanumeric (e.g., "SWC1364773").
+   - If a candidate policy value contains NO digits (letters/spaces only), treat it as invalid and use null instead.
 """
         
         if format_type == 'complex_multi_row':
@@ -1179,7 +1256,11 @@ Follow the format-specific instructions above. Validate your extractions."""
             detected_claims_info = self._detect_claim_numbers_ai(all_text)
             claims_in_text = detected_claims_info.get('total_unique_claims', 0)
             claims_extracted = len(data.get("claims", []))
-            
+
+            # If header-level carrier_name is still missing, apply dynamic fallback
+            if fallback_carrier and not data.get("carrier_name"):
+                data["carrier_name"] = fallback_carrier
+
             # Pass the master claim list to post-processing for strict filtering
             master_claim_list = [c["claim_number"] for c in detected_claims_info.get("claim_numbers", [])]
             data = self._post_process_claims(data, master_claim_list=master_claim_list)
@@ -1259,6 +1340,12 @@ Follow the format-specific instructions above. Validate your extractions."""
         if master_claim_list:
              print(f"   🔍 Post-processing with master list: {', '.join(master_claim_list)}")
 
+        # Helper: policy_number must contain at least one digit; otherwise treat as invalid
+        def _is_valid_policy_number(value: Optional[str]) -> bool:
+            if not value:
+                return False
+            return bool(re.search(r"\d", str(value)))
+
         # Status Mapping
         status_map = {
             'C': 'Closed', 'CL': 'Closed', 'CLOSED': 'Closed', 'RECLOSED': 'Closed',
@@ -1276,6 +1363,10 @@ Follow the format-specific instructions above. Validate your extractions."""
         
         # Extract top-level default metadata
         default_policy = data.get("policy_number")
+        # Enforce format rule at header level
+        if default_policy and not _is_valid_policy_number(default_policy):
+            default_policy = None
+            data["policy_number"] = None
         default_carrier = data.get("carrier_name")
         
         for claim in data["claims"]:
@@ -1294,6 +1385,10 @@ Follow the format-specific instructions above. Validate your extractions."""
             if current_carrier in ["insurance company name", "the insurance company for this claim or report"]:
                 claim["carrier_name"] = default_carrier if default_carrier else None
                 
+            # Enforce policy_number format rule at claim level
+            if claim.get("policy_number") and not _is_valid_policy_number(claim.get("policy_number")):
+                claim["policy_number"] = None
+
             # 1. Normalize Status
             raw_status = str(claim.get("status", "")).upper().strip()
             claim["status"] = status_map.get(raw_status, raw_status)

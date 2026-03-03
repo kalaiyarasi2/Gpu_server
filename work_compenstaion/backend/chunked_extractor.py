@@ -1,10 +1,13 @@
 import json
 import re
 from typing import Dict, List, Optional, Tuple
-from work_compensation import EnhancedInsuranceExtractor
+from work_compensation import EnhancedInsuranceExtractor, parse_p3_gio_from_text
 from pdf_rotation import auto_rotate_pdf_content
 import tempfile
 import shutil
+
+MAX_CHUNK_CHARS = 15000  # Cap chunk size to avoid token limit issues
+
 
 class PolicyChunker:
     """Helper class to split text into chunks based on Policy Number headers."""
@@ -92,33 +95,83 @@ DOCUMENT TEXT:
             print(f"⚠️ Policy boundary detection failed: {e}")
             return []
 
+    def _split_oversized_chunk(self, chunk: Dict) -> List[Dict]:
+        """Split a chunk that exceeds MAX_CHUNK_CHARS by page boundaries."""
+        text = chunk["text"]
+        policy_num = chunk["policy_number"]
+        if len(text) <= MAX_CHUNK_CHARS:
+            return [chunk]
+        # Split by PAGE N or ==== PAGE N ==== patterns
+        page_pat = re.compile(r"\n={5,}\s*\n\s*PAGE\s+(\d+)\s*\n\s*={5,}", re.IGNORECASE)
+        matches = list(page_pat.finditer(text))
+        if not matches:
+            # Fallback: fixed-size split with overlap
+            sub_chunks = []
+            start = 0
+            part = 0
+            while start < len(text):
+                end = min(start + MAX_CHUNK_CHARS, len(text))
+                sub_chunks.append({
+                    "policy_number": f"{policy_num} (part {part + 1})",
+                    "text": text[start:end]
+                })
+                start = end
+                part += 1
+            return sub_chunks
+        result = []
+        for i, m in enumerate(matches):
+            chunk_start = matches[i - 1].start() if i > 0 else 0
+            chunk_end = m.start()
+            sub_text = text[chunk_start:chunk_end].strip()
+            if sub_text:
+                result.append({
+                    "policy_number": f"{policy_num} (page {m.group(1)})",
+                    "text": sub_text
+                })
+        # Last segment: from last match to end
+        if matches:
+            last_start = matches[-1].start()
+            sub_text = text[last_start:].strip()
+            if sub_text:
+                result.append({
+                    "policy_number": f"{policy_num} (page {matches[-1].group(1)}+)",
+                    "text": sub_text
+                })
+        return result if result else [chunk]
+
     def split_into_chunks(self, text: str, boundaries: List[Dict]) -> List[Dict]:
-        """Splits the text into chunks based on detected boundaries."""
+        """Splits the text into chunks based on detected boundaries. Caps chunk size."""
         if not boundaries:
-            return [{"policy_number": "Unknown", "text": text}]
+            base = [{"policy_number": "Unknown", "text": text}]
+            return self._split_oversized_chunk(base[0]) if len(text) > MAX_CHUNK_CHARS else base
             
         chunks = []
         
         # Add content BEFORE the first boundary if it exists
-        if boundaries[0]["start_index"] > 10: # Threshold for meaningful start content
+        if boundaries[0]["start_index"] > 10:
             first_idx = boundaries[0]["start_index"]
             pre_chunk = text[:first_idx].strip()
             if pre_chunk:
-                chunks.append({
-                    "policy_number": "Initial Section",
-                    "text": pre_chunk
-                })
+                raw = {"policy_number": "Initial Section", "text": pre_chunk}
+                if len(pre_chunk) > MAX_CHUNK_CHARS:
+                    chunks.extend(self._split_oversized_chunk(raw))
+                else:
+                    chunks.append(raw)
         
         for i in range(len(boundaries)):
             start_idx = boundaries[i]["start_index"]
             end_idx = boundaries[i+1]["start_index"] if i+1 < len(boundaries) else len(text)
             
             chunk_text = text[start_idx:end_idx].strip()
-            chunks.append({
+            raw_chunk = {
                 "policy_number": boundaries[i]["policy_number"],
                 "text": chunk_text
-            })
-            
+            }
+            if len(chunk_text) > MAX_CHUNK_CHARS:
+                chunks.extend(self._split_oversized_chunk(raw_chunk))
+            else:
+                chunks.append(raw_chunk)
+        
         return chunks
 
 class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
@@ -243,12 +296,28 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
 
         return verification_data
 
+    def _is_acord_130_single_policy(self, text: str) -> bool:
+        """
+        Detect ACORD 130 or similar single-policy application forms.
+        These have form field data (P3_GIO) and prior carrier policy numbers that
+        are NOT separate policy sections. Policy chunking would incorrectly split them.
+        """
+        text_snip = text[:8000] if len(text) > 8000 else text
+        has_form_fields = "FORM FIELD DATA" in text_snip and "P3_GIO_" in text_snip
+        has_acord_130 = "ACORD 130" in text_snip or "ACORD130" in text_snip
+        return bool(has_form_fields or has_acord_130)
+
     def extract_schema_from_text(self, all_text: str, target_claim_number: Optional[str] = None) -> Dict:
         """
         OVERRIDE: Implements chunking before calling extraction.
         """
         if target_claim_number:
             return super().extract_schema_from_text(all_text, target_claim_number)
+        
+        # Skip policy chunking for ACORD 130 single-policy application forms
+        if self._is_acord_130_single_policy(all_text):
+            print("   ℹ️ ACORD 130 / single-policy application detected. Skipping policy chunking.")
+            return super()._extract_all_claims(all_text)
             
         print(f"\n⭐ NEW STEP: POLICY DETECTION & CHUNKING ⭐")
         
@@ -300,7 +369,28 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
                 print(f"   ⚠️ No structured data found in chunk {i+1}")
                 
         merged_result = self._merge_chunks(all_results)
+        # Merge form field P3_GIO data from full text (authoritative for generalQuestions)
+        p3_gio = parse_p3_gio_from_text(all_text)
+        if p3_gio:
+            merged_result.setdefault("data", {})["generalQuestions"] = p3_gio
+            print("   ✓ Merged P3_GIO form field data into generalQuestions")
         return merged_result
+
+    def _merge_general_questions(self, results_list: List[Dict]) -> Dict:
+        """
+        Merge generalQuestions from all chunks, preferring non-default values.
+        When a question has "Y" in any chunk, use "Y"; otherwise use "N".
+        """
+        merged_gq = {}
+        for i in range(1, 25):
+            key = f"q{i}"
+            merged_gq[key] = "N"
+        for res in results_list:
+            gq = res.get("data", {}).get("generalQuestions", {})
+            for key, val in (gq or {}).items():
+                if val and str(val).strip().upper() == "Y":
+                    merged_gq[key] = "Y"
+        return merged_gq
 
     def _merge_chunks(self, results_list: List[Dict]) -> Dict:
         """Merges multiple extraction results into a single report."""
@@ -314,7 +404,7 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
             "data": {
                 "demographics": results_list[0].get("data", {}).get("demographics", {}),
                 "ratingByState": [],
-                "generalQuestions": results_list[0].get("data", {}).get("generalQuestions", {}),
+                "generalQuestions": self._merge_general_questions(results_list),
                 "priorCarriers": [],
                 "individuals": [],
                 "premiumCalculation": results_list[0].get("data", {}).get("premiumCalculation", {})

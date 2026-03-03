@@ -1,7 +1,16 @@
 import os
+import sys
 import argparse
 import json
 from dotenv import load_dotenv
+
+# Fix Windows console encoding for Unicode (e.g. checkmarks, emoji)
+if sys.platform == 'win32':
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+        sys.stderr.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
 from chunked_extractor import ChunkedInsuranceExtractor
 
 def process_files(extractor, pdf_paths, target_claim):

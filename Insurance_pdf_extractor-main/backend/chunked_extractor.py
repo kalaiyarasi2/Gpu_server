@@ -550,6 +550,14 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
             merged["policy_number"] = list(policy_numbers)[0]
         elif policy_numbers:
             merged["policy_number"] = ", ".join(sorted(list(policy_numbers)))
+
+        # Infer a global carrier_name once from the full document text, then
+        # let _post_process_claims propagate it down to each claim.
+        if not merged.get("carrier_name") and all_text:
+            inferred_carrier = self._infer_carrier_from_text(all_text)
+            if inferred_carrier:
+                merged["carrier_name"] = inferred_carrier
+                print(f"   ✓ Inferred global carrier_name: {inferred_carrier}")
             
         # Global post-processing + deduplication (RC4 tie-breaker is in _post_process_claims)
         print(f"   🔍 Performing global post-extraction audit...")
