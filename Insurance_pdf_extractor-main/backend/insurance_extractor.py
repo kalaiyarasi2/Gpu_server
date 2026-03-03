@@ -24,10 +24,11 @@ try:
     import fitz  # PyMuPDF
     from PIL import Image
     import pytesseract
+    from pdf2image import convert_from_path
     from openai import OpenAI
 except ImportError:
     print("Installing required packages...")
-    packages = ["pymupdf", "pytesseract", "Pillow", "openai"]
+    packages = ["pymupdf", "pytesseract", "Pillow", "openai", "pdf2image"]
     for pkg in packages:
         subprocess.check_call([sys.executable, "-m", "pip", "install", pkg])
     import fitz
@@ -35,9 +36,9 @@ except ImportError:
     import pytesseract
     from openai import OpenAI
     from pdf2image import convert_from_path
-    # New validation modules
-    from financial_data_validation import FinancialValidator
-    from data_validation import GeneralDataValidator
+
+# Fix for "Decompression Bomb" error in PIL
+Image.MAX_IMAGE_PIXELS = None
 
 
 @dataclass
@@ -154,17 +155,35 @@ class EnhancedInsuranceExtractor:
                 # Hybrid extraction returns (text, metadata, info)
                 text, metadata, info = extract_pdf_hybrid(pdf_path)
                 
-                # Check for "digital garbage" (CID issue)
-                cid_count = text.count("(cid:")
-                if cid_count > 50 and use_vision:
-                    print(f"   ⚠️ detected unreadable digital text ({cid_count} CID codes). Falling back to GPT-4 Vision.")
+                # STAGE 1: Text Quality Verification (only for small/simple PDFs)
+                # For merged or multi-page PDFs, CID codes on one page get diluted by many clean pages.
+                # We only use full-Vision fallback if the ENTIRE document looks like garbage.
+                # For mixed docs, we rely on targeted per-page Vision patching (STAGE 1.5 below).
+                from text_quality_verifier import TextQualityVerifier
+                verifier = TextQualityVerifier()
+                num_pages = info.get('num_pages', len(metadata)) or len(metadata)
+                quality = verifier.analyze_quality(text, num_pages)
+                recommendation = verifier.fallback_recommendation(text, num_pages)
+                
+                # Full-Vision fallback only if: small doc (≤2 pages) AND very bad quality
+                is_small_doc = num_pages <= 2
+                if recommendation == 'full_vision' and is_small_doc and use_vision:
+                    reason = quality['reason']
+                    print(f"   ⚠️ Text quality issues detected: {reason}")
+                    print(f"   🚀 Small document with extremely low quality. Falling back to Full Vision Pipeline.")
                     return self._extract_full_pdf_via_vision(pdf_path)
+                elif recommendation != 'ok':
+                    reason = quality['reason']
+                    cid_count = quality['metrics'].get('cid_count', 0)
+                    print(f"   ℹ️ Text quality flags detected ({reason}). CID codes: {cid_count}")
+                    print(f"   🔍 Using targeted per-page Vision patching instead of full re-extraction.")
                 
                 if info.get('fallback_used'):
                     print(f"   ℹ️ Hybrid Extraction recovered {len(info.get('recovered_claims', []))} claims using Smart Append")
                 
-                # STAGE 1.5: Vision Recovery (Targeted Patching)
-                # Check for missing data (like names) and patch via Vision only where needed
+                # STAGE 1.5: Vision Recovery (Targeted Per-Page Patching)
+                # Handles CID-garbage pages individually without re-doing the whole document.
+                # Works for both: merged docs (some pages clean, some garbage) and pure scanned docs.
                 from vision_recovery import VisionRecoveryHandler
                 recovery_handler = VisionRecoveryHandler(self.client)
                 text = recovery_handler.patch_text_with_vision(pdf_path, metadata)
@@ -293,7 +312,7 @@ After detecting claim numbers, perform these checks:
 3. **Context Validation**:
    - Check what label appears before each number
    - "Policy #", "Policy Number" → EXCLUDE
-   - "Claim #", "Claim Number", "Converted #" → INCLUDE
+   - "Claim #", "Claim Number", "Converted #", "Department Number", "Dept #" → INCLUDE
    
 4. **Cross-Reference Check**:
    - Compare detected numbers against employee names
@@ -944,7 +963,8 @@ Return JSON:
       "total_paid": "string",
       "total_reserve": "string",
       "total_incurred": "string",
-      "litigation": "Yes if explicitly Yes/Y, else No"
+      "litigation": "Yes if explicitly Yes/Y, else No",
+      "confidence_score": "0.0 to 1.0 (float)"
     }}
   ]
 }}
@@ -969,7 +989,7 @@ Return JSON:
    - Identify a SINGLE claim/incident (one employee's injury)
    - Each claim number is UNIQUE - appears only ONCE in the document
    - Examples: [UNIQUE_CLAIM_ID]
-   - Found in fields labeled: "Claim #", "Claim No", "Claim Number", "Converted #"
+   - Found in fields labeled: "Claim #", "Claim No", "Claim Number", "Converted #", "Department Number", "Dept #"
    
    **FORMAT-SPECIFIC GUIDANCE:**
    
@@ -1299,6 +1319,17 @@ Follow the format-specific instructions above. Validate your extractions."""
             claim.pop('recovery', None)
             claim.pop('deductible', None)
             
+            # 1d. Normalize Confidence Score
+            conf = claim.get("confidence_score")
+            try:
+                if conf is not None:
+                    claim["confidence_score"] = float(conf)
+                else:
+                    # Heuristic fallback if AI missed it
+                    claim["confidence_score"] = 0.9 if claim.get("math_valid") else 0.7
+            except:
+                claim["confidence_score"] = 0.8
+            
             # 2. Normalize Injury Type (Indemnity, Medical Only, Expense)
             raw_type = str(claim.get("injury_type", "")).upper()
             if any(x in raw_type for x in ["COMP", "TTD", "TPD", "PPD", "INDEMNITY", "INDEM"]):
@@ -1570,7 +1601,8 @@ Return a JSON object with this structure:
   "total_paid": "string",
   "total_reserve": "string",
   "total_incurred": "string",
-  "litigation": "Yes if explicitly Yes/Y, else No"
+  "litigation": "Yes if explicitly Yes/Y, else No",
+  "confidence_score": "0.0 to 1.0 (float)"
 }}
   ]
 }}
@@ -1635,7 +1667,8 @@ Return a JSON object with this structure:
   "total_paid": 0.0,
   "total_reserve": 0.0,
   "total_incurred": 0.0,
-  "litigation": "Y if explicitly Yes/Y, else N"
+  "litigation": "Y if explicitly Yes/Y, else N",
+  "confidence_score": 0.0
 }}
 
 RULES:
@@ -1842,11 +1875,71 @@ Return ONLY the JSON object for claim {target_claim_number}."""
             json.dump(analysis_data, f, indent=2, ensure_ascii=False)
         print(f"✓ Analysis saved: {analysis_file}")
         
-        # Save schema (direct claims array - no wrapper)
-        claims_only = schema_data.get("claims", [])
+        # Prepare claims array for schema output (strip internal validation fields)
+        raw_claims = schema_data.get("claims", []) or []
+        claims_only = []
+        for claim in raw_claims:
+            if isinstance(claim, dict):
+                cleaned = {
+                    k: v
+                    for k, v in claim.items()
+                    if k not in ("confidence_score", "math_valid", "math_diff")
+                }
+                claims_only.append(cleaned)
+            else:
+                claims_only.append(claim)
+        
+        # Compute summary fields from claims and header data
+        years_set = set()
+        for claim in claims_only:
+            year = claim.get("claim_year")
+            if year:
+                years_set.add(year)
+        years_sorted = sorted(years_set)
+        # Join all unique years as comma-separated string, e.g. "2020, 2022"
+        year_scalar = ", ".join(str(y) for y in years_sorted) if years_sorted else None
+        
+        policy_numbers_set = set()
+        header_policy_number = schema_data.get("policy_number")
+        if header_policy_number:
+            policy_numbers_set.add(header_policy_number)
+        for claim in claims_only:
+            policy_number = claim.get("policy_number")
+            if policy_number:
+                policy_numbers_set.add(policy_number)
+        policy_numbers_sorted = sorted(policy_numbers_set)
+        # Join all unique policy numbers as comma-separated string
+        policy_number_scalar = ", ".join(policy_numbers_sorted) if policy_numbers_sorted else None
+        
+        carrier_names_set = set()
+        header_carrier_name = schema_data.get("carrier_name")
+        if header_carrier_name:
+            carrier_names_set.add(header_carrier_name)
+        for claim in claims_only:
+            carrier_name = claim.get("carrier_name")
+            if carrier_name:
+                carrier_names_set.add(carrier_name)
+        carrier_names_sorted = sorted(carrier_names_set)
+        # Join all unique carrier names as comma-separated string
+        carrier_name_scalar = ", ".join(carrier_names_sorted) if carrier_names_sorted else None
+        
+        # Parse Estimated Annual amount from combined text
+        estimated_annual_value, _ = self._parse_estimated_annual(all_text)
+        
+        # Build final schema object with claims array and SummaryLevel
+        summary_level = {
+            "estimated_annual": estimated_annual_value,
+            "years": year_scalar,
+            "policy_numbers": policy_number_scalar,
+            "carrier_names": carrier_name_scalar,
+        }
+        schema_output = {
+            "claims": claims_only,
+            "SummaryLevel": summary_level,
+        }
         schema_file = session_dir / "extracted_schema.json"
         with open(schema_file, 'w', encoding='utf-8') as f:
-            json.dump(claims_only, f, indent=2, ensure_ascii=False)
+            json.dump(schema_output, f, indent=2, ensure_ascii=False)
         print(f"✓ Schema saved: {schema_file}")
         
         # Step 3: Prepare verification package (for internal use only)
@@ -1859,7 +1952,7 @@ Return ONLY the JSON object for claim {target_claim_number}."""
             "pages": pages_data,
             "combined_text": all_text,
             "combined_text_file": str(text_file),
-            "extracted_schema": claims_only,  # Use claims_only (no extra metadata)
+            "extracted_schema": schema_output,
             "schema_file": str(schema_file),
             "summary": {
                 "total_pages": len(pages_metadata),
@@ -1889,6 +1982,37 @@ Return ONLY the JSON object for claim {target_claim_number}."""
         print(f"  - Avg confidence: {verification_data['summary']['avg_confidence']:.2%}")
         
         return verification_data
+    
+    def _parse_estimated_annual(self, text: str) -> Tuple[Optional[float], Optional[str]]:
+        """
+        Parse the 'Estimated Annual' dollar amount from the combined text.
+        Returns (numeric_value, display_string). If not found or unparsable,
+        numeric_value defaults to 0.0.
+        """
+        if not text:
+            return 0.0, None
+        
+        # Look for patterns like 'Estimated Annual $59,019'
+        match = re.search(
+            r"Estimated\s+Annual\s*([$\\s]*[0-9][0-9,]*(?:\.[0-9]{1,2})?)",
+            text,
+            re.IGNORECASE,
+        )
+        if not match:
+            return 0.0, None
+        
+        display_value = match.group(1).strip()
+        # Normalize to digits and decimal point for numeric value
+        numeric_str = re.sub(r"[^0-9.]", "", display_value)
+        if not numeric_str:
+            return 0.0, display_value or None
+        
+        try:
+            numeric_value: Optional[float] = float(numeric_str)
+        except ValueError:
+            numeric_value = 0.0
+        
+        return numeric_value, display_value or None
 
 
 def main():

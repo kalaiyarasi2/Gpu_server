@@ -1,0 +1,15 @@
+{
+  "extraction_metadata": {
+    "extraction_date": "2026-03-02T12:02:14.910299",
+    "method": "gpt-4o-vision",
+    "num_pages": 1,
+    "source_file": "State Fund Online - 22-23 (1).pdf",
+    "session_id": "20260302_120137_9813_State_Fund_Online_-_",
+    "target_claim": null
+  },
+  "report_date": "2025-07-29",
+  "policy_number": "9322650-2022",
+  "insured_name": "O & L MAINTENANCE SERVICE, INC",
+  "policy_period": "08-11-2022 to 08-11-2023",
+  "total_claims": 3
+}

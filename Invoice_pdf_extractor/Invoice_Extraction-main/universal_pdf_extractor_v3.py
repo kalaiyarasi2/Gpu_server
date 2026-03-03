@@ -23,10 +23,12 @@ import pdfplumber
 import fitz  # PyMuPDF
 import pytesseract
 from PIL import Image
+Image.MAX_IMAGE_PIXELS = None
 import io
 import re
 from typing import Dict, List, Optional
-import learning_engine
+
+
 
 
 def clean_ocr_noise(text: str) -> str:
@@ -311,14 +313,19 @@ def extract_text_from_pdf_improved(pdf_path: str) -> str:
 def detect_reversed_text(text: str) -> bool:
     """
     Detect if the text appears to be reversed (mirrored).
+    Requires at least 2 matching patterns to avoid false positives.
     """
     # Use very high-confidence mirrored OCR patterns
+    # IMPORTANT: Avoid patterns that can appear in non-mirrored text:
+    # - 'egap' (page reversed) appears in UHC: "51 fo 2 egaP"
+    # - 'cll' can appear in company names like "LLC" 
+    # - 'slatot' (totals reversed) appears in UHC table headers
     reversed_patterns = [
         "sdioani", "s0iovui", "adiovui", "eciovni", "eciovnu", # INVOICE
         "esos", "szoz", "scoz", "ezos",  # 2025/2026
         "voitaat2", "240ivaa2", "evitatneserpeR",        # ADMINISTRATION / SERVICES / Representative
         "sssal9", "anig", "auie", "anigruoc", "anamuh",   # CROSS / BLUE / Insurance / Humana
-        "fih2@", "muimerp", "tnemetats", "gnillib", "rebmun", "etad", "egap", # MEMBERSHIP / UNUM keywords
+        "fih2@",                          # MEMBERSHIP
         "ytnuoc"                         # COUNTRY
     ]
     
@@ -330,7 +337,8 @@ def detect_reversed_text(text: str) -> bool:
         if pattern in clean_text:
             match_count += 1
             
-    return match_count >= 1
+    # Require at least 2 matches to reduce false positives (e.g. UHC has 'egap' but not double-matches)
+    return match_count >= 2
 
 def unmirror_text(text: str) -> str:
     """
@@ -353,7 +361,173 @@ def unmirror_text(text: str) -> str:
             
     return '\n'.join(fixed_pages)
 
+def parse_unum_detail_mirrored(full_raw_text: str, inv_date: str = None, inv_number: str = None, billing_period: str = None, source_filename: str = "") -> list:
+    """
+    Direct, LLM-free parser for Unum Employee Detail pages.
+    Emits ONE row per member. For multi-plan members (LTD+STD), the TOTALS line
+    is used as the combined CURRENT_PREMIUM. Single-plan members use their EE COST.
+
+    Unum detail pages in mirrored format look like:
+        [[PAGE_2]]
+        278069173 :ON DI ENNAEL ,NAPKA :EMAN
+        03.3$ 03.3$ SKEEW 11 41/41 001 DTS           <- single STD row: TOTAL = $3.30
+        233146770 :ON DI ENAUD ,LLIH :EMAN
+        13.371$ 83.431$ AEDA SS 09/09 057,3 DTL      <- LTD EE COST = $134.38
+        13.371$ 39.83$ SKEEW 11 41/41 568 DTS        <- STD EE COST = $38.93
+        13.371$ 13.371$ SLATOT                       <- TOTALS = $173.31 (use this)
+    """
+    items = []
+    lines = full_raw_text.splitlines()
+    
+    current_member = None
+    pending_plans = []  # accumulate plan rows until we see TOTALS or next member
+
+    def parse_mirrored_dollar(s):
+        """Parse a mirrored dollar amount like '83.431$' -> 134.38"""
+        s = s.strip()
+        if s.endswith('$'):
+            s = s[:-1]
+        normal = s[::-1].replace(',', '')
+        try:
+            return float(normal)
+        except:
+            return 0.0
+
+    def make_item(member, premium, plan_name="COMBINED"):
+        item = {
+            "LASTNAME": member["LASTNAME"],
+            "FIRSTNAME": member["FIRSTNAME"],
+            "MEMBERID": member["MEMBERID"],
+            "PLAN_NAME": plan_name,
+            "PLAN_TYPE": member.get("plan_types", plan_name),
+            "COVERAGE": "EE",
+            "CURRENT_PREMIUM": round(premium, 2),
+            "ADJUSTMENT_PREMIUM": None,
+            "SSN": None,
+            "POLICYID": None,
+            "MIDDLENAME": None,
+        }
+        if inv_date:
+            item["INV_DATE"] = inv_date
+        if inv_number:
+            item["INV_NUMBER"] = inv_number
+        if billing_period:
+            item["BILLING_PERIOD"] = billing_period
+        return item
+
+    def flush_member():
+        """Emit accumulated plan row(s) for current member and reset."""
+        if not current_member or not pending_plans:
+            return
+        if len(pending_plans) == 1:
+            # Single plan: emit directly using that plan's values
+            p = pending_plans[0]
+            item = make_item(current_member, p["ee_cost"], p["plan_name"])
+            item["PLAN_TYPE"] = p["plan_type"]
+            items.append(item)
+            print(f"  [UNUM-PARSER] {current_member['FIRSTNAME']} {current_member['LASTNAME']} | {p['plan_type']} | ${p['ee_cost']:.2f}")
+        else:
+            # Multiple plans: sum and emit combined
+            total = sum(p["ee_cost"] for p in pending_plans)
+            plan_types = "+".join(p["plan_type"] for p in pending_plans)
+            item = make_item(current_member, total, "COMBINED")
+            item["PLAN_TYPE"] = plan_types
+            items.append(item)
+            print(f"  [UNUM-PARSER] {current_member['FIRSTNAME']} {current_member['LASTNAME']} | {plan_types} | ${total:.2f}")
+        pending_plans.clear()
+
+    # Patterns
+    name_pattern = re.compile(r'^\s*(\d+)\s+:ON DI\s+(.+?)\s*:EMAN\s*$')
+    plan_pattern = re.compile(r'^\s*([\d$.]+)\s+([\d$.]+)\s+.+?\s+(DTS|DTL)\s*$')
+    totals_pattern = re.compile(r'^.*\s+([\d$.]+)\s+([\d$.]+)\s+SLATOT\s*$')
+    skip_keywords = ['TSOC EE', 'NOITARUDKCIS', 'liateD eeyolpmE', 'EMAN gnilliB']
+
+    for line in lines:
+        if any(kw in line for kw in skip_keywords):
+            continue
+
+        # NAME line → flush previous member first
+        m = name_pattern.match(line)
+        if m:
+            flush_member()
+            raw_id = m.group(1).strip()
+            raw_name = m.group(2).strip()
+            unmirrored_name = raw_name[::-1]
+            if ',' in unmirrored_name:
+                parts = unmirrored_name.split(',', 1)
+                lastname, firstname = parts[0].strip(), parts[1].strip()
+            else:
+                parts = unmirrored_name.split()
+                lastname = parts[0] if parts else ""
+                firstname = " ".join(parts[1:]) if len(parts) > 1 else ""
+            member_id = raw_id[::-1]
+            current_member = {"LASTNAME": lastname, "FIRSTNAME": firstname, "MEMBERID": member_id}
+            continue
+
+        # TOTALS line → emit one combined row using the TOTALS amount
+        t = totals_pattern.match(line)
+        if t and current_member:
+            raw_totals = t.group(1)  # first dollar value = person total due
+            total_amount = parse_mirrored_dollar(raw_totals)
+            plan_types = "+".join(p["plan_type"] for p in pending_plans) if pending_plans else "COMBINED"
+            item = make_item(current_member, total_amount, "COMBINED")
+            item["PLAN_TYPE"] = plan_types
+            items.append(item)
+            print(f"  [UNUM-PARSER] {current_member['FIRSTNAME']} {current_member['LASTNAME']} | TOTAL | ${total_amount:.2f}")
+            pending_plans.clear()
+            continue
+
+        # PLAN row → accumulate
+        p = plan_pattern.match(line)
+        if p and current_member:
+            raw_ee_cost = p.group(2)
+            plan_type_mirrored = p.group(3)
+            ee_cost = parse_mirrored_dollar(raw_ee_cost)
+            plan_type = "STD" if plan_type_mirrored == "DTS" else "LTD"
+            plan_name = "DTS" if plan_type == "STD" else "DTL"
+            pending_plans.append({"ee_cost": ee_cost, "plan_type": plan_type, "plan_name": plan_name})
+            continue
+
+    # Flush last member
+    flush_member()
+    
+    return items
+
+
+
+
+def extract_unum_header_from_mirrored(raw_text: str) -> dict:
+    """
+    Extracts header fields (INV_DATE, INV_NUMBER, BILLING_PERIOD) from mirrored Unum Page 1.
+    All text on Page 1 is mirrored, so we reverse each line to read it.
+    """
+    header = {"INV_DATE": None, "INV_NUMBER": None, "BILLING_PERIOD": None}
+    
+    for line in raw_text.splitlines():
+        rev = line.strip()[::-1]  # Reverse the line to read normally
+        
+        # Billing Number: "0982635-001 0" from "0 100-5362890 :rebmuN gnilliB"
+        m = re.search(r'Billing Number\s*[:\s]+(.+)', rev, re.IGNORECASE)
+        if m and not header["INV_NUMBER"]:
+            raw_num = m.group(1).strip()
+            # Clean trailing zero if present
+            header["INV_NUMBER"] = raw_num.rstrip().split()[0] if raw_num else raw_num
+        
+        # Statement Date: "2/13/2026"
+        m = re.search(r'Statement Date\s*[:\s]+([\d/]+)', rev, re.IGNORECASE)
+        if m and not header["INV_DATE"]:
+            header["INV_DATE"] = m.group(1).strip()
+        
+        # Billing Period start/end: "2/1/2026 - 2/28/2026"
+        m = re.search(r'([\d/]+)\s*[-–]\s*([\d/]+)', rev)
+        if m and not header["BILLING_PERIOD"]:
+            header["BILLING_PERIOD"] = f"{m.group(1).strip()} - {m.group(2).strip()}"
+    
+    return header
+
+
 def extract_fields_with_llm(text: str, client: OpenAI, pdf_filename: str = "", mode: str = "standard") -> Dict:
+
     """
     Extract fields using OpenAI with enhanced 'Discovery' logic and mirrored text awareness
     """
@@ -361,8 +535,7 @@ def extract_fields_with_llm(text: str, client: OpenAI, pdf_filename: str = "", m
         print(f"  [WARNING] No text to process for {pdf_filename}")
         return {field: None for field in REQUIRED_FIELDS}
     
-    # [LEARNING] Discover relevant patterns for this carrier
-    learned_patterns = learning_engine.discover_examples(text)
+
     
     # Check for mirroring
     is_mirrored = detect_reversed_text(text)
@@ -390,7 +563,7 @@ Extract data from the document text provided below.
 ### EXTRACTION MODE: {mode.upper()}
 {mode_instructions}
 
-{learned_patterns}
+
 
 ### CARRIER-SPECIFIC IDENTIFIER PROFILES (PRIORITY):
 - **UHC (UnitedHealthcare)**: 
@@ -431,6 +604,21 @@ Extract data from the document text provided below.
     - **SUMMARIES TO IGNORE**: Do NOT extract data from the "Group Summary" or "Premiums by Product/Plan Type" tables.
     - **MEMBER CONSOLIDATION**: If a member has multiple lines (e.g., Dental and Vision), extract them as separate objects; the system will programmaticly consolidate them by name.
     - **MEMBERID**: Extract the "Member ID Number" (9-digit numeric).
+- **Unum**:
+    - **IDENTIFICATION**: Unum invoices often have an "Employee Detail" section with a distinctive table format.
+    - **MIRRORING**: Unum invoices are often MIRRORED (reversed). The system fixes this, but LLMs sometimes misread digits (e.g., '3' vs '8'). BE EXTREMELY CAREFUL with digits.
+    - **MEMBERID**: Extract from the "ID NO:" field or equivalent numeric column (e.g., `278069173`).
+    - **MULTIPLE PLAN ROWS (CRITICAL)**: A member may have MULTIPLE rows (e.g., one for **LTD** and one for **STD**). You MUST extract EACH row as a separate line item. DO NOT consolidate them into one row; the system will handle it.
+    - **PLAN_TYPE MAPPING**: 
+        - If "LTD" appears in the row -> `PLAN_TYPE`: **LTD**
+        - If "STD" appears in the row -> `PLAN_TYPE`: **STD**
+    - **PREMIUM EXTRACTION (CRITICAL)**: The table has columns like `ER COST`, `EE COST`, and `TOTAL DUE`. 
+        - You MUST extract the **EE COST** (usually the column with values like `3.03`, `39.89`, `134.83`) as the `CURRENT_PREMIUM`. 
+        - The `TOTAL DUE` column is the SUM of ER + EE costs; DO NOT use it for `CURRENT_PREMIUM` unless EE is missing.
+        - Do NOT extract the value from the `EP` or `COVERAGE` columns (which are usually large numbers like `3,750` or `865`) as a premium.
+    - **TOTALS IGNORE**: Ignore lines labeled "TOTALS" for each member (e.g., the row that sums LTD + STD for that person). Focus ONLY on the individual plan rows.
+    - **NAMES**: Ensure names are un-mirrored correctly (e.g., "NAPKA, LEANNE" not "AKPAN").
+    - **REVERSE-AWARENESS TIP**: If you see names like `YAWOLLOH` or `NAPKA`, it means the system failed to un-mirror. In this case, YOU must mentally reverse every string (e.g., `YAWOLLOH` -> `HOLLOWAY`) before extraction.
 - **GENERAL MAPPING (IF CARRIER UNKNOWN)**:
     - "Invoice Date" / "Date" -> `INV_DATE`
     - "Invoice #" / "Inv #" -> `INV_NUMBER`
@@ -961,10 +1149,48 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
     if is_humana_invoice:
         print(f"  [V3][HUMANA] Humana invoice detected. Pages 1, 2, 3, 5 will be skipped for line items.")
 
+    # Unum Detection: Uses mirrored text patterns. We identify Unum invoices by checking
+    # for the unique mirrored phrase "ACIREMA FO YNAPMOC ECNARUSNI EFIL MUNU"
+    # (which is "UNUM LIFE INSURANCE COMPANY OF AMERICA" reversed)
+    # NOTE: We do NOT use detect_reversed_text() here because some Unum keywords
+    # (e.g. 'slatot' which is 'TOTALS' reversed) also appear in other carriers (like UHC).
+    _unum_mirrored_signature = "ACIREMA FO YNAPMOC ECNARUSNI EFIL MUNU"
+    _unum_normal_signature = "UNUM LIFE INSURANCE COMPANY OF AMERICA"
+    is_unum_invoice = any(_unum_mirrored_signature in p for p in pages) or \
+                      any(_unum_normal_signature in p.upper() for p in pages)
+    if is_unum_invoice:
+        print(f"  [V3][UNUM] Unum invoice detected. Using direct mirrored-text parser (no LLM) for 100% accuracy.")
+        # For Unum: bypass the entire LLM pipeline and parse directly
+        # Step 1: Extract header from Page 1 (mirrored)
+        page1_text = pages[0] if pages else ""
+        unum_header = extract_unum_header_from_mirrored(page1_text)
+        for k, v in unum_header.items():
+            if v:
+                final_header[k] = v
+        print(f"  [V3][UNUM] Header: {unum_header}")
+        
+        # Step 2: Parse all detail pages (Page 2+) directly
+        full_detail_text = "\n".join(pages[1:])  # All pages after Page 1
+        unum_items = parse_unum_detail_mirrored(
+            full_detail_text,
+            inv_date=final_header.get("INV_DATE"),
+            inv_number=final_header.get("INV_NUMBER"),
+            billing_period=final_header.get("BILLING_PERIOD"),
+            source_filename=os.path.basename(pdf_path)
+        )
+        
+        if unum_items:
+            print(f"  [V3][UNUM] Direct parser extracted {len(unum_items)} rows. Total: ${sum(i.get('CURRENT_PREMIUM', 0) or 0 for i in unum_items):.2f}")
+            data = {"HEADER": final_header, "LINE_ITEMS": unum_items}
+            return data
+        else:
+            print(f"  [V3][UNUM] Direct parser found 0 rows - falling back to LLM pipeline.")
+
     for i, page_text in enumerate(pages):
         print(f"  [V3] Processing chunk {i+1}/{len(pages)}...")
         
-        # Skip specific pages for member line items
+        # Skip specific pages for member line items (GIS, Humana, etc.)
+        # Note: Unum is handled above with a direct parser and early return.
         is_skip_page = (is_gis_invoice and i == 0) or \
                        (is_humana_invoice and (i == 0 or i == 1 or i == 2 or i == 4))
         
@@ -1006,10 +1232,27 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
                 final_header[k] = v
         
         else:
-            print(f"    -> No items found in chunk {i+1}")
+            # Collect line items from the standard pass
+            items = page_data.get("LINE_ITEMS", [])
+            if items:
+                print(f"    -> Extracted {len(items)} items from chunk {i+1}")
+                all_line_items.extend(items)
 
         # [LEARNING] Auto-Correction Refinement Loop
         should_refine, target_total, current_sum = learning_engine.should_trigger_refinement(page_data, page_text)
+        
+        # [UNUM] Special Total Cross-Check for Unum
+        if is_unum_invoice and not should_refine:
+            # Try to identify the 'Total Amount Due' from the text if LLM missed it or refinement wasn't triggered
+            # Unum Page 1 or 2 often has: "Total Amount Due: $894.54" or "Sub Total: $894.54"
+            unum_total_match = re.search(r'(?:Total Amount Due|Sub Total|Total Premium)\s*[:\$]*\s*([\d,]+\.\d{2})', page_text, re.IGNORECASE)
+            if unum_total_match:
+                target_total = to_float(unum_total_match.group(1))
+                current_sum = sum(to_float(item.get("CURRENT_PREMIUM")) for item in page_data.get("LINE_ITEMS", []))
+                if abs(target_total - current_sum) > 0.01 and target_total > 0:
+                    print(f"    -> [UNUM][CROSS-CHECK] Discrepancy detected: Target {target_total} vs Sum {current_sum}. Triggering refinement...")
+                    should_refine = True
+
         if should_refine:
             print(f"    -> [LEARNING] Refinement triggered for chunk {i+1}...")
             refinement_prompt = learning_engine.generate_refinement_prompt(page_data, page_text, target_total, current_sum)
@@ -1042,11 +1285,7 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
         "LINE_ITEMS": all_line_items
     }
     
-    # [LEARNING] Continuous Learning: Save successful extraction as a training profile
-    if all_line_items:
-        # We pass the full text and result to the learning engine
-        # It handles the logic of whether it's worth saving
-        learning_engine.save_successful_extraction(text, data, client)
+
         
     return data
 

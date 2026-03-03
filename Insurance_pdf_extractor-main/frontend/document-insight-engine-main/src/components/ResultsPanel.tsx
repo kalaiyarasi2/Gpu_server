@@ -79,6 +79,21 @@ const ResultsPanel = ({ document }: ResultsPanelProps) => {
     URL.revokeObjectURL(url);
   };
 
+  const claimsCount = React.useMemo(() => {
+    // Prefer explicit claims_count from metadata when provided
+    if (typeof metadata?.claims_count === "number") {
+      return metadata.claims_count;
+    }
+    // Otherwise, derive from result but ignore summary rows (no claim_number)
+    const raw = (result as any) || [];
+    const arr = Array.isArray(raw)
+      ? raw
+      : Array.isArray((raw as any).claims)
+        ? (raw as any).claims
+        : [];
+    return arr.filter((item: any) => item && item.claim_number).length;
+  }, [metadata?.claims_count, result]);
+
   return (
     <div className="space-y-4 animate-slide-up">
       {/* Summary cards */}
@@ -95,7 +110,7 @@ const ResultsPanel = ({ document }: ResultsPanelProps) => {
             <BarChart3 className="w-3.5 h-3.5 text-primary" />
             <span className="text-[11px] text-muted-foreground font-medium">Claims Found</span>
           </div>
-          <p className="text-sm font-semibold text-foreground">{metadata?.claims_count || result?.claims?.length || 0}</p>
+          <p className="text-sm font-semibold text-foreground">{claimsCount}</p>
         </div>
         <div className="p-3 rounded-lg bg-muted/50 border border-border">
           <div className="flex items-center gap-2 mb-1">

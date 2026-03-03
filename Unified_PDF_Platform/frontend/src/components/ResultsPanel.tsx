@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Download, FileJson, BarChart3, Building2, RotateCcw, HardHat, FileText, Table as TableIcon, Loader2, Brain, Copy, Merge } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -30,6 +30,12 @@ const ResultsPanel = ({
 }: ResultsPanelProps) => {
   const [summaryText, setSummaryText] = useState<string | null>(null);
   const [isSummarizing, setIsSummarizing] = useState(false);
+  const [activeTab, setActiveTab] = useState("table");
+
+  useEffect(() => {
+    setActiveTab("table");
+    setSummaryText(null);
+  }, [document?.id]);
 
   if (!document) {
     return (
@@ -77,7 +83,7 @@ const ResultsPanel = ({
   const { result, metadata } = document;
   const docType = metadata?.documentType;
   const isWorkComp = docType === "WORK_COMPENSATION";
-  const isInvoice = docType === "INVOICE";
+  const isInvoice = docType === "INVOICE" || docType === "VENDOR_INVOICE";
   const isLossRun = docType === "INSURANCE_CLAIMS";
   const wcMeta = metadata?.work_comp_metadata;
 
@@ -92,6 +98,9 @@ const ResultsPanel = ({
       return Array.isArray(wcData.ratingByState) ? wcData.ratingByState : [];
     }
     if (isInvoice) {
+      if (docType === "VENDOR_INVOICE") {
+        return Array.isArray(result?.LINE_ITEMS) ? result.LINE_ITEMS : [];
+      }
       return Array.isArray(result) ? result : [];
     }
     return Array.isArray(result) ? result : [];
@@ -199,13 +208,18 @@ const ResultsPanel = ({
     });
   };
 
+  // Dynamic tab configuration
+  const showSummary = isLossRun;
+  const showMerge = hasMultipleDocs && isLossRun;
+  const tabCount = 2 + (showSummary ? 1 : 0) + (showMerge ? 1 : 0);
+
   return (
     <div className="space-y-4 animate-slide-up">
       {/* Summary cards */}
       {isWorkComp ? (
         /* Work Comp: only Form Type + Confidence */
         <div className="grid grid-cols-2 gap-3">
-          <div className="p-3 rounded-lg bg-muted/50 border border-border">
+            <div className="p-3 rounded-lg bg-muted/50 border border-border">
             <div className="flex items-center gap-2 mb-1">
               <HardHat className="w-3.5 h-3.5 text-primary" />
               <span className="text-[11px] text-muted-foreground font-medium">Form Type</span>
@@ -244,7 +258,18 @@ const ResultsPanel = ({
             <p className="text-sm font-semibold text-foreground">
               {isInvoice
                 ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(metadata?.total_value || 0)
-                : (metadata?.claims_count ?? (Array.isArray(result) ? result.length : (result?.claims?.length || 0)))
+                : (() => {
+                    if (typeof metadata?.claims_count === "number") {
+                      return metadata.claims_count;
+                    }
+                    const raw: any = result ?? [];
+                    const arr: any[] = Array.isArray(raw)
+                      ? raw
+                      : Array.isArray(raw.claims)
+                        ? raw.claims
+                        : [];
+                    return arr.filter((item) => item && item.claim_number).length;
+                  })()
               }
             </p>
           </div>
@@ -276,45 +301,73 @@ const ResultsPanel = ({
       )}
 
       {/* Actions */}
-      <div className="flex gap-2">
-        <Button size="sm" onClick={handleDownloadJson}>
-          <FileJson className="w-4 h-4 mr-2" />
+      <div className="flex flex-wrap gap-2">
+        <Button size="sm" onClick={handleDownloadJson} className="h-8 text-[11px] font-bold">
+          <FileJson className="w-3.5 h-3.5 mr-1.5" />
           Download JSON
         </Button>
-        <Button size="sm" variant="outline" onClick={handleDownloadExcel} disabled={!document.excelPath}>
-          <Download className="w-4 h-4 mr-2" />
+        <Button size="sm" variant="outline" onClick={handleDownloadExcel} disabled={!document.excelPath} className="h-8 text-[11px] font-bold">
+          <Download className="w-3.5 h-3.5 mr-1.5" />
           Download Excel
         </Button>
+        {isLossRun && (
+          <Button
+            size="sm"
+            variant="secondary"
+            className="h-8 text-[11px] font-bold bg-primary/10 text-primary hover:bg-primary/20 border-primary/20 border"
+            onClick={() => {
+              setActiveTab("summary");
+              if (!summaryText) handleAnalyze();
+            }}
+            disabled={isSummarizing}
+          >
+            {isSummarizing ? (
+              <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+            ) : (
+              <Brain className="w-3.5 h-3.5 mr-1.5" />
+            )}
+            AI Summary
+          </Button>
+        )}
+        {showMerge && (
+          <Button
+            size="sm"
+            variant="secondary"
+            className="h-8 text-[11px] font-bold bg-stage-done/10 text-stage-done hover:bg-stage-done/20 border-stage-done/20 border"
+            onClick={() => setActiveTab("merge")}
+          >
+            <Merge className="w-3.5 h-3.5 mr-1.5" />
+            Merge Actions
+          </Button>
+        )}
         {onReprocess && (
-          <Button size="sm" variant="ghost" className="text-muted-foreground hover:text-primary" onClick={() => onReprocess(document.id)}>
-            <RotateCcw className="w-3.5 h-3.5 mr-2" />
+          <Button size="sm" variant="ghost" className="h-8 text-[11px] font-bold text-muted-foreground hover:text-primary ml-auto" onClick={() => onReprocess(document.id)}>
+            <RotateCcw className="w-3 h-3 mr-1.5" />
             Reprocess
           </Button>
         )}
       </div>
 
       {/* View Switcher */}
-      <Tabs defaultValue="table" className="w-full">
-        <TabsList className={`grid mb-2 ${(isLossRun && hasMultipleDocs) ? "w-[750px] grid-cols-4" :
-          isLossRun ? "w-[600px] grid-cols-3" : "w-[400px] grid-cols-2"
-          }`}>
-          <TabsTrigger value="table" className="text-xs flex items-center gap-2 font-semibold tracking-wide">
-            <TableIcon className="w-3.5 h-3.5" />
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 max-w-[800px] mb-2">
+          <TabsTrigger value="table" className="text-[10px] sm:text-xs flex items-center gap-2 font-semibold tracking-wide py-1.5">
+            <TableIcon className="w-3 h-3" />
             TABLE VIEW
           </TabsTrigger>
-          <TabsTrigger value="json" className="text-xs flex items-center gap-2 font-semibold tracking-wide">
-            <FileJson className="w-3.5 h-3.5" />
+          <TabsTrigger value="json" className="text-[10px] sm:text-xs flex items-center gap-2 font-semibold tracking-wide py-1.5">
+            <FileJson className="w-3 h-3" />
             JSON VIEW
           </TabsTrigger>
-          {isLossRun && (
-            <TabsTrigger value="summary" className="text-xs flex items-center gap-2 font-semibold tracking-wide">
-              <Brain className="w-3.5 h-3.5" />
+          {showSummary && (
+            <TabsTrigger value="summary" className="text-[10px] sm:text-xs flex items-center gap-2 font-semibold tracking-wide py-1.5">
+              <Brain className="w-3 h-3" />
               AI SUMMARY
             </TabsTrigger>
           )}
-          {hasMultipleDocs && (
-            <TabsTrigger value="merge" className="text-xs flex items-center gap-2 font-semibold tracking-wide">
-              <Merge className="w-3.5 h-3.5" />
+          {showMerge && (
+            <TabsTrigger value="merge" className="text-[10px] sm:text-xs flex items-center gap-2 font-semibold tracking-wide py-1.5">
+              <Merge className="w-3 h-3" />
               MERGE SUMMARY
             </TabsTrigger>
           )}

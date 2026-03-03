@@ -95,7 +95,7 @@ window.addEventListener('load', function() {
                     jsBtn.href = data.json;
                     jsBtn.textContent = '{ }  Download JSON';
                     jsBtn.style = 'background: #0c1a33; color: #93c5fd; border: 1px solid #1e40af; padding: 10px 16px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 13px; cursor: pointer;';
-                    jsBtn.setAttibute('download', data.output_json || 'result.json');
+                    jsBtn.setAttribute('download', data.output_json || 'result.json');
                     btnContainer.appendChild(jsBtn);
                     
                     node.parentElement.appendChild(btnContainer);

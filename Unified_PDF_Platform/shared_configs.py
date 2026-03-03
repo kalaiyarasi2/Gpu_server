@@ -17,22 +17,33 @@ router_engine = UnifiedRouter()
 file_path_cache: Dict[str, str] = {}
 
 async def _perform_extraction(file: UploadFile, request: Request):
-    print(f"\n[Unified][API] Received request for: {file.filename}")
-    
-    file_ext = Path(file.filename).suffix.lower()
+    import traceback
+    import re
+
+    # ── Guard: filename must not be None or empty ────────────────────────────
+    raw_filename = file.filename or ""
+    if not raw_filename.strip():
+        raise HTTPException(status_code=400, detail="filename is required. Make sure your request uses 'Content-Disposition: filename=...' in the file part.")
+
+    # Sanitize: strip path separators to prevent path-traversal
+    safe_filename = re.sub(r'[\\/:*?"<>|]', "_", raw_filename)
+    file_ext = Path(safe_filename).suffix.lower()
     if file_ext not in [".pdf", ".xlsx", ".xls", ".csv"]:
-        raise HTTPException(status_code=400, detail="Only PDF, Excel and CSV files are supported")
-    
-    file_path = UPLOAD_DIR / file.filename
+        raise HTTPException(status_code=400, detail=f"Unsupported file type '{file_ext}'. Only PDF, Excel and CSV files are accepted.")
+
+    print(f"\n[Unified][API] Received request for: {safe_filename}")
+
+    file_path = UPLOAD_DIR / safe_filename
     try:
         # Save the uploaded file
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
-            
+        print(f"[Unified][API] Saved to: {file_path}")
+
         # Run the unified router
         print(f"[Unified][API] Routing document...")
         result = router_engine.process(str(file_path))
-        
+
         if "error" in result:
             print(f"[Unified][WARN] Extraction returned error: {result['error']}")
             return {"error": result["error"]}
@@ -54,6 +65,8 @@ async def _perform_extraction(file: UploadFile, request: Request):
         
         # Transform response to match frontend expectations
         doc_type = result.get("type", "UNKNOWN")
+        if doc_type == "invoice_poc_extractor":
+            doc_type = "VENDOR_INVOICE"
         
         # Build base URL for downloads
         base_url = str(request.base_url).rstrip("/")
@@ -67,6 +80,67 @@ async def _perform_extraction(file: UploadFile, request: Request):
             "json": f"{base_url}/api/download/{json_filename}" if json_filename else None
         }
         
+        # Add Vendor Invoice specific metadata (supports both single and merged outputs)
+        if doc_type == "VENDOR_INVOICE" and json_path:
+            try:
+                import json as json_lib
+                with open(json_path, "r", encoding="utf-8") as f:
+                    invoice_data = json_lib.load(f)
+
+                # Merged flat format: [ { "HEADER": {...}, "LINE_ITEMS": [...] }, ... ]
+                if isinstance(invoice_data, list):
+                    invoices = invoice_data or []
+                    vendor_names = []
+                    total_sum = 0.0
+                    for inv in invoices:
+                        data = inv or {}
+                        header = (data or {}).get("HEADER") or {}
+                        vn = header.get("VENDOR_NAME")
+                        if vn:
+                            vendor_names.append(str(vn))
+                        ta = header.get("TOTAL_AMOUNT", 0) or 0
+                        if isinstance(ta, str):
+                            try:
+                                ta = float(ta.replace(",", "").replace("$", ""))
+                            except Exception:
+                                ta = 0.0
+                        try:
+                            total_sum += float(ta)
+                        except Exception:
+                            pass
+
+                    uniq = []
+                    for v in vendor_names:
+                        if v not in uniq:
+                            uniq.append(v)
+
+                    display_vendor = " | ".join(uniq[:3])
+                    if len(uniq) > 3:
+                        display_vendor = f"{display_vendor} (+{len(uniq) - 3} more)"
+
+                    response["insurer"] = f"Merged invoices ({len(invoices)}) - {display_vendor}" if invoices else "Merged invoices"
+                    response["total_value"] = total_sum
+                    response["invoice_count"] = len(invoices)
+                    print(f"[Unified][API] Extracted Vendor Invoice Metadata: merged={len(invoices)} total=${total_sum}")
+                else:
+                    # Single format: {"HEADER": {...}, "LINE_ITEMS": [...]}
+                    header = invoice_data.get("HEADER", {})
+                    vendor_name = header.get("VENDOR_NAME", "N/A")
+                    total_amount = header.get("TOTAL_AMOUNT", 0)
+
+                    # Try to clean total_amount if it's a string
+                    if isinstance(total_amount, str):
+                        try:
+                            total_amount = float(total_amount.replace(",", "").replace("$", ""))
+                        except Exception:
+                            total_amount = 0
+
+                    response["insurer"] = vendor_name
+                    response["total_value"] = total_amount
+                    print(f"[Unified][API] Extracted Vendor Invoice Metadata: {vendor_name}, ${total_amount}")
+            except Exception as meta_err:
+                print(f"[Unified][WARN] Could not extract vendor invoice metadata: {meta_err}")
+
         # Add Work Compensation specific metadata
         if doc_type == "WORK_COMPENSATION" and json_path:
             try:
@@ -113,5 +187,9 @@ async def _perform_extraction(file: UploadFile, request: Request):
         
         return response
     except Exception as e:
-        print(f"[Unified][ERROR] {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        tb = traceback.format_exc()
+        print(f"[Unified][ERROR] {type(e).__name__}: {e}\n{tb}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"{type(e).__name__}: {str(e)}"
+        )
