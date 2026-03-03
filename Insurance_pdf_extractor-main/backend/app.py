@@ -18,7 +18,21 @@ load_dotenv()
 # Import enhanced extractor
 try:
     from chunked_extractor import ChunkedInsuranceExtractor
+    from handle_merge import process_any_pdf_with_merge
+
     extractor = ChunkedInsuranceExtractor(api_key=os.getenv("OPENAI_API_KEY"))
+
+    # Header patterns used to detect invoice-like merged documents.
+    # These are only used when such headers are present; normal WC loss runs
+    # and insurance reports will behave exactly as before.
+    MERGED_INVOICE_HEADER_PATTERNS = (
+        "BHARTI AIRTEL LTD",
+        "SHYAM SPECTRA PVT. LTD.",
+        "SHYAM SPECTRA PRIVATE LIMITED",
+        "ZOHO CORPORATION PRIVATE LIMITED",
+        "TAX INVOICE",
+    )
+
     print("✓ Chunked Insurance Extractor initialized")
 except Exception as e:
     print(f"❌ Error initializing extractor: {e}")
@@ -107,8 +121,16 @@ def extract_full():
         # Process with enhanced extractor
         if not extractor:
             return jsonify({'error': 'Extractor not initialized'}), 500
-        
-        result = extractor.process_pdf_with_verification(filepath, target_claim)
+
+        # Use merged-handler wrapper so merged invoice PDFs are supported.
+        # For normal single-doc insurance PDFs this behaves exactly like the
+        # original process_pdf_with_verification call.
+        result = process_any_pdf_with_merge(
+            extractor,
+            filepath,
+            target_claim_number=target_claim,
+            header_patterns=MERGED_INVOICE_HEADER_PATTERNS,
+        )
         
         # Clean up uploaded file
         try:
@@ -173,7 +195,15 @@ def extract_batch():
             file.save(filepath)
             
             # Process
-            result = extractor.process_pdf_with_verification(filepath, target_claim)
+            if extractor:
+                result = process_any_pdf_with_merge(
+                    extractor,
+                    filepath,
+                    target_claim_number=target_claim,
+                    header_patterns=MERGED_INVOICE_HEADER_PATTERNS,
+                )
+            else:
+                result = {'error': 'Extractor not initialized'}
             
             # Clean up
             try:

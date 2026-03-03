@@ -77,6 +77,21 @@ GENERAL_INVOICE_OUTPUT_DIR = GENERAL_INVOICE_BACKEND_DIR.parent / "outputs"
 OUTPUT_BASE = BASE_DIR / "unified_outputs"
 OUTPUT_BASE.mkdir(exist_ok=True)
 
+# Heuristic patterns to split merged invoice PDFs into sub-documents.
+# Keep this list small and high-signal; callers can expand as new vendors appear.
+MERGED_INVOICE_HEADER_PATTERNS = (
+    "TAX INVOICE",
+    "INVOICE#",
+    "INVOICE #",
+    "INVOICE NUMBER",
+    "INVOICE NO",
+    "INVOICE NO.",
+    "BHARTI AIRTEL LTD",
+    "SHYAM SPECTRA PVT. LTD",
+    "SHYAM SPECTRA PRIVATE LIMITED",
+    "ZOHO CORPORATION PRIVATE LIMITED",
+)
+
 # Helper to load extractor classes from different backends
 def get_extractor_class(backend_dir):
     """Load ChunkedInsuranceExtractor from a specific backend directory.
@@ -1482,42 +1497,194 @@ Return ONLY the company name or UNKNOWN:"""
         print(f"[INFO] Input: {pdf_path}")
         print(f"[INFO] Script: {GENERAL_INVOICE_SCRIPT}")
         
-        output_xlsx = OUTPUT_BASE / f"{Path(pdf_path).stem}_invoice_poc_extractor.xlsx"
-        
+        stem = Path(pdf_path).stem
+        output_xlsx = OUTPUT_BASE / f"{stem}_invoice_poc_extractor.xlsx"
+        output_json = OUTPUT_BASE / f"{stem}_invoice_poc_extractor.json"
+
+        # 1) Detect whether this PDF contains multiple invoices
         try:
-            # General invoice extractor (POC) is simpler, often doesn't need 900s
-            result = subprocess.run(
-                [sys.executable, str(GENERAL_INVOICE_SCRIPT), str(pdf_path)],
-                capture_output=True,
-                text=True,
-                env={"PYTHONIOENCODING": "utf-8", **os.environ},
-                encoding="utf-8"
+            from handle_merge import handle_merged_pdf_with_page_texts  # from Insurance backend (already on sys.path)
+            doc = fitz.open(pdf_path)
+            page_texts = [(doc[i].get_text() or "") for i in range(len(doc))]
+            doc.close()
+            ranges, sub_pdfs = handle_merged_pdf_with_page_texts(
+                pdf_path=pdf_path,
+                page_texts=page_texts,
+                temp_split_root=OUTPUT_BASE / "merged_invoice_splits",
+                header_patterns=MERGED_INVOICE_HEADER_PATTERNS,
             )
-            
-            if result.returncode != 0:
-                print(f"\n[ERR] General Invoice Extraction Failed (Exit Code: {result.returncode})")
-                print(f"Error Details:\n{result.stderr}")
-                return {"error": f"General invoice extraction failed: {result.stderr}"}
-            
-            # The POC script saves Excel next to the PDF by default
-            poc_output = Path(pdf_path).with_suffix(".xlsx")
-            if poc_output.exists():
+        except Exception as e:
+            print(f"[WARN] Merge detection failed, falling back to single-pass invoice extraction: {e}")
+            ranges, sub_pdfs = ([(0, 0)], [Path(pdf_path)])
+
+        # If not actually merged, run the original subprocess path (unchanged behaviour)
+        if not sub_pdfs or len(sub_pdfs) <= 1:
+            try:
+                result = subprocess.run(
+                    [sys.executable, str(GENERAL_INVOICE_SCRIPT), str(pdf_path)],
+                    capture_output=True,
+                    text=True,
+                    env={"PYTHONIOENCODING": "utf-8", **os.environ},
+                    encoding="utf-8"
+                )
+                if result.returncode != 0:
+                    print(f"\n[ERR] General Invoice Extraction Failed (Exit Code: {result.returncode})")
+                    print(f"Error Details:\n{result.stderr}")
+                    return {"error": f"General invoice extraction failed: {result.stderr}"}
+
+                poc_output = Path(pdf_path).with_suffix(".xlsx")
+                if not poc_output.exists():
+                    return {"error": "POC output file not found"}
+
                 import shutil
                 shutil.move(str(poc_output), str(output_xlsx))
-                
-                # Check for JSON as well
+
                 poc_json = Path(pdf_path).with_suffix(".json")
-                output_json = OUTPUT_BASE / f"{Path(pdf_path).stem}_invoice_poc_extractor.json"
                 if poc_json.exists():
                     shutil.move(str(poc_json), str(output_json))
                 else:
-                    output_json = self.xlsx_to_json(output_xlsx)
-                
+                    output_json = Path(self.xlsx_to_json(output_xlsx))
+
+                # Single-invoice analysis.json
+                try:
+                    import json as json_lib
+                    with open(output_json, "r", encoding="utf-8") as f:
+                        data = json_lib.load(f)
+                    header = (data or {}).get("HEADER") or {}
+                    total = header.get("TOTAL_AMOUNT", 0) or 0
+                    if isinstance(total, str):
+                        try:
+                            total = float(total.replace(",", "").replace("$", ""))
+                        except Exception:
+                            total = 0.0
+                    total_f = float(total) if isinstance(total, (int, float)) else 0.0
+                    analysis = {
+                        "source_file": Path(pdf_path).name,
+                        "invoice_count": 1,
+                        "invoices": [
+                            {
+                                "invoice_index": 1,
+                                "vendor_name": header.get("VENDOR_NAME"),
+                                "invoice_number": header.get("INVOICE_NUMBER"),
+                                "invoice_date": header.get("DATE"),
+                                "due_date": header.get("DUE_DATE"),
+                                "po_number": header.get("PO_NUMBER"),
+                                "total_amount": total_f,
+                            }
+                        ],
+                        "total_amount_sum": total_f,
+                    }
+                    analysis_path = OUTPUT_BASE / f"{stem}_analysis.json"
+                    with open(analysis_path, "w", encoding="utf-8") as f:
+                        json_lib.dump(analysis, f, indent=2, ensure_ascii=False)
+                except Exception as e:
+                    print(f"[WARN] Could not write invoice analysis.json: {e}")
+
                 return {"type": "invoice_poc_extractor", "excel": str(output_xlsx), "json": str(output_json)}
+            except Exception as e:
+                print(f"\n[ERR] General Invoice Error: {e}")
+                return {"error": str(e)}
+
+        # 2) Merged PDF: process each split sub-PDF and combine outputs
+        try:
+            from invoice_poc_extractor import process_single_pdf, flatten_data  # type: ignore[import]
+
+            if not OPENAI_API_KEY:
+                return {"error": "OPENAI_API_KEY not set (required for invoice_poc_extractor)"}
+
+            client = OpenAI(api_key=OPENAI_API_KEY)
+
+            combined = {
+                "MERGED": True,
+                "SOURCE_FILE": Path(pdf_path).name,
+                "INVOICE_COUNT": len(sub_pdfs),
+                "INVOICES": [],
+            }
+
+            all_rows: List[Dict] = []
+
+            for idx, sub_pdf in enumerate(sub_pdfs, start=1):
+                inv_data = process_single_pdf(str(sub_pdf), client)
+                start_page, end_page = ranges[idx - 1] if idx - 1 < len(ranges) else (None, None)
+
+                combined["INVOICES"].append({
+                    "invoice_index": idx,
+                    "page_range_0_based": [start_page, end_page],
+                    "pdf_path": str(sub_pdf),
+                    "data": inv_data,
+                })
+
+                # Flatten for Excel
+                rows = flatten_data(inv_data, source_file=Path(pdf_path).name)
+                for r in rows:
+                    r["INVOICE_INDEX"] = idx
+                    r["PAGE_START_0_BASED"] = start_page
+                    r["PAGE_END_0_BASED"] = end_page
+                    all_rows.append(r)
+
+            # Write combined JSON in "flat" format: array of {HEADER, LINE_ITEMS}
+            flat_invoices = [inv.get("data", {}) for inv in combined.get("INVOICES", [])]
+            with open(output_json, "w", encoding="utf-8") as f:
+                json.dump(flat_invoices, f, indent=2, ensure_ascii=False)
+
+            # Write combined Excel
+            if all_rows:
+                df = pd.DataFrame(all_rows)
             else:
-                return {"error": "POC output file not found"}
+                df = pd.DataFrame(
+                    [
+                        {
+                            "SOURCE_FILE": Path(pdf_path).name,
+                            "MERGED": True,
+                            "INVOICE_COUNT": len(sub_pdfs),
+                        }
+                    ]
+                )
+            df.to_excel(output_xlsx, index=False)
+
+            # High-level analysis.json for merged invoices
+            try:
+                analysis_invoices = []
+                total_sum = 0.0
+                for inv in combined.get("INVOICES", []):
+                    data = (inv or {}).get("data") or {}
+                    header = (data or {}).get("HEADER") or {}
+                    ta = header.get("TOTAL_AMOUNT", 0) or 0
+                    if isinstance(ta, str):
+                        try:
+                            ta_clean = float(ta.replace(",", "").replace("$", ""))
+                        except Exception:
+                            ta_clean = 0.0
+                    else:
+                        ta_clean = float(ta or 0)
+                    total_sum += ta_clean
+                    analysis_invoices.append(
+                        {
+                            "invoice_index": inv.get("invoice_index"),
+                            "vendor_name": header.get("VENDOR_NAME"),
+                            "invoice_number": header.get("INVOICE_NUMBER"),
+                            "invoice_date": header.get("DATE"),
+                            "due_date": header.get("DUE_DATE"),
+                            "po_number": header.get("PO_NUMBER"),
+                            "total_amount": ta_clean,
+                        }
+                    )
+
+                analysis = {
+                    "source_file": Path(pdf_path).name,
+                    "invoice_count": len(analysis_invoices),
+                    "invoices": analysis_invoices,
+                    "total_amount_sum": total_sum,
+                }
+                analysis_path = OUTPUT_BASE / f"{stem}_analysis.json"
+                with open(analysis_path, "w", encoding="utf-8") as f:
+                    json.dump(analysis, f, indent=2, ensure_ascii=False)
+            except Exception as e:
+                print(f"[WARN] Could not write merged invoice analysis.json: {e}")
+
+            return {"type": "invoice_poc_extractor", "excel": str(output_xlsx), "json": str(output_json)}
         except Exception as e:
-            print(f"\n[ERR] General Invoice Error: {e}")
+            print(f"\n[ERR] General Invoice (Merged) Error: {e}")
             return {"error": str(e)}
 
     def run_insurance_extractor(self, pdf_path):

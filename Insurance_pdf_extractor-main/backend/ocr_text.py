@@ -14,6 +14,8 @@ from pdf2image import convert_from_path
 from openai import OpenAI
 from dotenv import load_dotenv
 
+from text_quality_verifier import TextQualityVerifier
+
 load_dotenv()
 
 
@@ -69,12 +71,13 @@ class OCRPDFExtractor:
             return self._extract_with_vision(dpi=dpi, verbose=verbose)
         
         extracted_text = []
+        verifier = TextQualityVerifier()
         
         try:
             if verbose:
                 print("Converting PDF to images...")
             
-            # Convert PDF pages to images
+            # Initial high-DPI render (default 600)
             images = convert_from_path(
                 str(self.pdf_path),
                 dpi=dpi,
@@ -85,39 +88,111 @@ class OCRPDFExtractor:
             pages_metadata = []
             
             if verbose:
-                print(f"Processing {total_pages} pages with OCR...\n")
+                print(f"Processing {total_pages} pages with OCR (layered fallback)...\n")
             
             for page_num, image in enumerate(images, 1):
                 if verbose:
-                    print(f"OCR processing page {page_num}/{total_pages}...")
+                    print(f"OCR processing page {page_num}/{total_pages} (DPI {dpi})...")
                 
                 # Add page separator
                 page_header = f"\n{'='*80}\nPAGE {page_num}\n{'='*80}\n\n"
                 extracted_text.append(page_header)
                 
-                # Configure Tesseract OCR
+                # 1) First attempt: high-DPI Tesseract
                 custom_config = f'--oem 3 --psm {psm_mode}'
-                
-                # Perform OCR
-                text = pytesseract.image_to_string(
+                text_hi = pytesseract.image_to_string(
                     image,
                     config=custom_config,
                     lang=language
                 )
+                page_text_hi = text_hi if text_hi.strip() else "[No text detected on this page]\n"
+                quality_hi = verifier.page_quality(page_text_hi)
+                score_hi = quality_hi.get("score", 0.0)
+                rec_hi = quality_hi.get("recommendation", "ok")
                 
-                page_text = text if text.strip() else "[No text detected on this page]\n"
-                extracted_text.append(page_text)
+                final_text = page_text_hi
+                extraction_method = "tesseract-ocr-600dpi"
+                final_score = score_hi
                 
-                # Collect metadata for pipeline
+                # 2) Second attempt: lower-DPI Tesseract if needed
+                if rec_hi in ("dpi_fallback", "full_vision"):
+                    if verbose:
+                        print(
+                            f"   ↪ High-DPI OCR quality low (score {score_hi:.3f}, rec '{rec_hi}'). "
+                            f"Retrying Tesseract at 200 DPI..."
+                        )
+                    try:
+                        low_images = convert_from_path(
+                            str(self.pdf_path),
+                            dpi=200,
+                            fmt='jpeg',
+                            first_page=page_num,
+                            last_page=page_num
+                        )
+                        if low_images:
+                            low_image = low_images[0]
+                            text_lo = pytesseract.image_to_string(
+                                low_image,
+                                config=custom_config,
+                                lang=language
+                            )
+                            page_text_lo = text_lo if text_lo.strip() else "[No text detected on this page]\n"
+                            quality_lo = verifier.page_quality(page_text_lo)
+                            score_lo = quality_lo.get("score", 0.0)
+                            rec_lo = quality_lo.get("recommendation", "ok")
+                            
+                            # Prefer the lower-DPI result if it scores better
+                            if score_lo > final_score or rec_lo == "ok":
+                                if verbose:
+                                    print(
+                                        f"   ✓ 200 DPI OCR improved quality "
+                                        f"(score {score_lo:.3f}, rec '{rec_lo}')."
+                                    )
+                                final_text = page_text_lo
+                                extraction_method = "tesseract-ocr-200dpi"
+                                final_score = score_lo
+                                quality_hi = quality_lo
+                                rec_hi = rec_lo
+                    except Exception as e:
+                        print(f"   ⚠️ 200 DPI fallback failed on page {page_num}: {e}")
+                
+                # 3) Final attempt: Vision OCR if still low quality and Vision is available
+                if rec_hi == "full_vision" and self.client is not None:
+                    if verbose:
+                        print(
+                            f"   ↪ OCR still low quality after retries "
+                            f"(score {final_score:.3f}). Using Vision on page {page_num}..."
+                        )
+                    try:
+                        # Render just this page for Vision at moderate DPI
+                        vis_images = convert_from_path(
+                            str(self.pdf_path),
+                            dpi=300,
+                            fmt='jpeg',
+                            first_page=page_num,
+                            last_page=page_num
+                        )
+                        if vis_images:
+                            vis_image = vis_images[0]
+                            vis_text, vis_conf = self._extract_page_with_vision(vis_image)
+                            if vis_text.strip():
+                                final_text = vis_text
+                                extraction_method = "gpt-4-vision-fallback"
+                                final_score = max(final_score, vis_conf)
+                    except Exception as e:
+                        print(f"   ⚠️ Vision fallback failed on page {page_num}: {e}")
+                
+                extracted_text.append(final_text)
+                
                 pages_metadata.append({
                     "page_number": page_num,
-                    "text": page_header + page_text,
+                    "text": page_header + final_text,
                     "is_scanned": True,
-                    "extraction_method": "tesseract-ocr",
-                    "confidence": 0.85 # Tesseract estimated confidence
+                    "extraction_method": extraction_method,
+                    "confidence": final_score,
+                    "quality_metrics": quality_hi.get("analysis", {}).get("metrics", {})
                 })
                 
-                # Add spacing between pages
                 extracted_text.append("\n\n")
             
             self.output_text = "".join(extracted_text)
@@ -225,44 +300,53 @@ class OCRPDFExtractor:
             if verbose:
                 print(f"Vision processing page {i}/{len(images)}...")
             
-            # Convert to base64
-            buffered = BytesIO()
-            image.save(buffered, format="PNG")
-            img_base64 = base64.b64encode(buffered.getvalue()).decode()
+            page_text, conf = self._extract_page_with_vision(image)
             
-            prompt = """Extract ALL text from this document. 
-            PRESERVE the EXACT layout including columns, tables, and spacing.
-            Return ONLY the extracted text followed by [PAGE_END]."""
+            header = f"\n{'='*80}\nPAGE {i}\n{'='*80}\n\n"
+            full_text.append(header + page_text + "\n\n")
             
-            try:
-                response = self.client.chat.completions.create(
-                    model="gpt-4.1",
-                    messages=[{
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": prompt},
-                            {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{img_base64}"}}
-                        ]
-                    }],
-                    max_tokens=4000
-                )
-                
-                page_text = response.choices[0].message.content
-                
-                header = f"\n{'='*80}\nPAGE {i}\n{'='*80}\n\n"
-                full_text.append(header + page_text + "\n\n")
-                
-                metadata.append({
-                    "page_number": i,
-                    "text": header + page_text,
-                    "is_scanned": True,
-                    "extraction_method": "gpt-4.1-vision",
-                    "confidence": 0.99
-                })
-            except Exception as e:
-                print(f"Error on page {i}: {e}")
-                full_text.append(f"\n[ERROR ON PAGE {i}: {e}]\n")
+            metadata.append({
+                "page_number": i,
+                "text": header + page_text,
+                "is_scanned": True,
+                "extraction_method": "gpt-4-vision",
+                "confidence": conf
+            })
         
         self.output_text = "".join(full_text)
         return self.output_text, metadata
+
+    def _extract_page_with_vision(self, image, verbose=False):
+        """
+        Vision OCR for a single page image. Returns (text, confidence).
+        """
+        if not self.client:
+            raise ValueError("OpenAI API key is required for Vision OCR. Set OPENAI_API_KEY.")
+
+        buffered = BytesIO()
+        image.save(buffered, format="PNG")
+        img_base64 = base64.b64encode(buffered.getvalue()).decode()
+
+        prompt = (
+            "Extract ALL text from this document page.\n"
+            "PRESERVE the EXACT layout including columns, tables, and spacing.\n"
+            "Return ONLY the extracted text."
+        )
+
+        response = self.client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{img_base64}"}}
+                ]
+            }],
+            max_tokens=4000,
+            temperature=0.0
+        )
+
+        page_text = response.choices[0].message.content or ""
+        confidence = 0.99 if page_text.strip() else 0.0
+        return page_text, confidence
 

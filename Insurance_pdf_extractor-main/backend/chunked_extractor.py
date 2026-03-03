@@ -229,13 +229,15 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
             schema_claim = claim.copy()
             math_valid = schema_claim.pop("math_valid", None)
             math_diff = schema_claim.pop("math_diff", None)
+            # Remove confidence_score from schema JSON, but keep it in analysis
+            confidence_score = schema_claim.pop("confidence_score", None)
             clean_claims_for_schema.append(schema_claim)
-
+            
             claims_analysis_data.append({
                 "claim_number": claim.get("claim_number"),
                 "math_valid": math_valid,
                 "math_diff": math_diff,
-                "confidence_score": claim.get("confidence_score")
+                "confidence_score": confidence_score
             })
 
         # Save analysis.json
@@ -252,11 +254,75 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
         with open(analysis_file, 'w', encoding='utf-8') as f:
             json.dump(analysis_data, f, indent=2, ensure_ascii=False)
             
-        # Save schema (direct claims array - no wrapper)
-        claims_only = clean_claims_for_schema
+        # Save schema (claims array + SummaryLevel object)
+        claims_only = clean_claims_for_schema or []
+
+        # Compute summary fields from claims and header data
+        years_set = set()
+        for claim in claims_only:
+            year = claim.get("claim_year")
+            if year:
+                years_set.add(year)
+        years_sorted = sorted(years_set)
+        # Join all unique years as comma-separated string, e.g. "2020, 2023"
+        year_scalar = ", ".join(str(y) for y in years_sorted) if years_sorted else None
+
+        policy_numbers_set = set()
+        header_policy_number = schema_data.get("policy_number")
+        if header_policy_number:
+            policy_numbers_set.add(header_policy_number)
+        for claim in claims_only:
+            policy_number = claim.get("policy_number")
+            if policy_number:
+                policy_numbers_set.add(policy_number)
+        policy_numbers_sorted = sorted(policy_numbers_set)
+        # Join all unique policy numbers as comma-separated string
+        policy_number_scalar = ", ".join(policy_numbers_sorted) if policy_numbers_sorted else None
+
+        carrier_names_set = set()
+        header_carrier_name = schema_data.get("carrier_name")
+        if header_carrier_name:
+            carrier_names_set.add(header_carrier_name)
+        for claim in claims_only:
+            carrier_name = claim.get("carrier_name")
+            if carrier_name:
+                carrier_names_set.add(carrier_name)
+        carrier_names_sorted = sorted(carrier_names_set)
+        # Join all unique carrier names as comma-separated string
+        carrier_name_scalar = ", ".join(carrier_names_sorted) if carrier_names_sorted else None
+
+        # Parse Estimated Annual from combined text (default to 0.0 if missing)
+        estimated_annual_value = 0.0
+        if all_text:
+            m = re.search(
+                r"Estimated\s+Annual\s*([$\\s]*[0-9][0-9,]*(?:\.[0-9]{1,2})?)",
+                all_text,
+                re.IGNORECASE,
+            )
+            if m:
+                display_val = m.group(1).strip()
+                numeric_str = re.sub(r"[^0-9.]", "", display_val)
+                if numeric_str:
+                    try:
+                        estimated_annual_value = float(numeric_str)
+                    except ValueError:
+                        estimated_annual_value = 0.0
+
+        summary_level = {
+            "estimated_annual": estimated_annual_value,
+            "years": year_scalar,
+            "policy_numbers": policy_number_scalar,
+            "carrier_names": carrier_name_scalar,
+        }
+
+        schema_output = {
+            "claims": claims_only,
+            "SummaryLevel": summary_level,
+        }
+
         schema_file = session_dir / "extracted_schema.json"
         with open(schema_file, 'w', encoding='utf-8') as f:
-            json.dump(claims_only, f, indent=2, ensure_ascii=False)
+            json.dump(schema_output, f, indent=2, ensure_ascii=False)
             
         # Verification package
         verification_data = {
@@ -265,7 +331,7 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
             "source_pdf": pdf_path,
             "pages": pages_metadata,
             "combined_text": all_text,
-            "extracted_schema": claims_only,
+            "extracted_schema": schema_output,
             "schema_file": str(schema_file),
             "summary": {
                 "total_pages": len(pages_metadata),
