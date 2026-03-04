@@ -86,10 +86,12 @@ MERGED_INVOICE_HEADER_PATTERNS = (
     "INVOICE NUMBER",
     "INVOICE NO",
     "INVOICE NO.",
+    "ORIGINAL FOR RECIPIENT",
     "BHARTI AIRTEL LTD",
     "SHYAM SPECTRA PVT. LTD",
     "SHYAM SPECTRA PRIVATE LIMITED",
     "ZOHO CORPORATION PRIVATE LIMITED",
+    "ZOHO CORPORATION PVT. LTD.",
 )
 
 # Helper to load extractor classes from different backends
@@ -720,7 +722,10 @@ class UnifiedRouter:
         """
         if not text or len(text) < 50:
             return False
-        reversed_markers = ["tropeR", "mialC", "ycailoP", "ssoL", "diap", "ecnarusnI", "noitazilitu"]
+        reversed_markers = [
+            "tropeR", "mialC", "ycailoP", "ssoL", "diap", "ecnarusnI", "noitazilitu",
+            "eciovni", "arboC", "egarevoC", "namuH", "atneD", "noisiV", "gnilliB"
+        ]
         hits = sum(1 for m in reversed_markers if m in text or m.lower() in text.lower())
         return hits >= 2
 
@@ -1082,8 +1087,9 @@ class UnifiedRouter:
             "benefit billing", "enrollment bill",
             "american public life", "apl",
             "member premium", "subscriber premium",
-            "unitedhealthcare", "uhc", "bluecross", "blueshield", "bcbs",
-            "policy no.", "subscriber id", "member id"
+            "unitedhealthcare", "uhc", "bluecross", "blueshield", "bcbs", "humana", "aetna", "cigna",
+            "policy no.", "subscriber id", "member id",
+            "benefit invoice", "premium statement", "billing summary"
         ]
         premium_hits = sum(1 for kw in premium_billing_signals if kw in text_lower)
         if premium_hits >= 2:
@@ -1114,7 +1120,8 @@ class UnifiedRouter:
         vendor_hits = sum(1 for kw in invoice_poc_extractor_signals if kw in text_lower)
         if vendor_hits >= 3:
             # Shielding: If it looks like an insurance invoice (premium hits > 0), require more vendor signals
-            vendor_threshold = 4 if premium_hits > 0 else 3
+            # Increase threshold to 5 if any premium signals found, to prevent misrouting insurance docs.
+            vendor_threshold = 5 if premium_hits > 0 else 3
             if vendor_hits >= vendor_threshold:
                 print(f"[Pre-Classify] Vendor invoice content signals ({vendor_hits} hits) → invoice_poc_extractor")
                 return "invoice_poc_extractor", f"Vendor invoice content signals ({vendor_hits} matches)"
@@ -1311,7 +1318,9 @@ OUTPUT:"""
             response = self.client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[{"role": "user", "content": prompt}],
-                temperature=0
+                temperature=0,
+                max_tokens=30,
+                timeout=30
             )
             output = response.choices[0].message.content.strip().split("\n")
             classification = output[0].strip().upper()
@@ -1362,7 +1371,7 @@ TEXT SNIPPET:
 
 Return ONLY the company name or UNKNOWN:"""
             prov_response = self.client.chat.completions.create(
-                model="gpt-4.1-mini",
+                model="gpt-4o-mini",
                 messages=[{"role": "user", "content": prov_prompt}],
                 temperature=0
             )
@@ -1500,10 +1509,18 @@ Return ONLY the company name or UNKNOWN:"""
         stem = Path(pdf_path).stem
         output_xlsx = OUTPUT_BASE / f"{stem}_invoice_poc_extractor.xlsx"
         output_json = OUTPUT_BASE / f"{stem}_invoice_poc_extractor.json"
+        
+        # Instantiate client for dynamic identification
+        if not OPENAI_API_KEY:
+            return {"error": "OPENAI_API_KEY not set (required for invoice_poc_extractor)"}
+        client = OpenAI(api_key=OPENAI_API_KEY)
 
         # 1) Detect whether this PDF contains multiple invoices
         try:
-            from handle_merge import handle_merged_pdf_with_page_texts  # from Insurance backend (already on sys.path)
+            # Use the local handle_merge from invoice backend for improved boundary detection
+            if str(GENERAL_INVOICE_BACKEND_DIR) not in sys.path:
+                sys.path.insert(0, str(GENERAL_INVOICE_BACKEND_DIR))
+            from handle_merge import handle_merged_pdf_with_page_texts
             doc = fitz.open(pdf_path)
             page_texts = [(doc[i].get_text() or "") for i in range(len(doc))]
             doc.close()
@@ -1512,6 +1529,7 @@ Return ONLY the company name or UNKNOWN:"""
                 page_texts=page_texts,
                 temp_split_root=OUTPUT_BASE / "merged_invoice_splits",
                 header_patterns=MERGED_INVOICE_HEADER_PATTERNS,
+                client=client,
             )
         except Exception as e:
             print(f"[WARN] Merge detection failed, falling back to single-pass invoice extraction: {e}")
@@ -1591,8 +1609,8 @@ Return ONLY the company name or UNKNOWN:"""
 
             if not OPENAI_API_KEY:
                 return {"error": "OPENAI_API_KEY not set (required for invoice_poc_extractor)"}
-
-            client = OpenAI(api_key=OPENAI_API_KEY)
+            
+            # Use already instantiated client
 
             combined = {
                 "MERGED": True,

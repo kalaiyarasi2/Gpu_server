@@ -24,7 +24,7 @@ async def cognethro_trigger_docs():
     summary=COGNETHRO_SUMMARY,
     description=COGNETHRO_DESCRIPTION)
 async def cognethro_trigger(request: Request, file: UploadFile = File(...), download: bool = False):
-    result = await _perform_extraction(file, request)
+    result = _perform_extraction(file, request)
     if isinstance(result, dict):
         result["trigger_point"] = "cognethro"
         
@@ -80,7 +80,7 @@ async def work_comp_trigger(request: Request, file: UploadFile = File(...)):
             detail=f"Workers Compensation endpoint only accepts PDF files. Received: {file_ext}"
         )
 
-    result = await _perform_extraction(file, request)
+    result = _perform_extraction(file, request)
 
     if isinstance(result, dict) and "error" not in result:
         json_filename = result.get("output_json")

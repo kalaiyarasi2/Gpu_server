@@ -4,7 +4,7 @@ import re
 from pathlib import Path
 
 # Add paths to sys.path
-sys.path.append(r"C:\Users\INTERN\main_project\Main--main\Insurance_pdf_extractor-main\backend")
+sys.path.append(r"C:\Users\INTERN\main_project\Main--main\invoice\backend")
 sys.path.append(r"C:\Users\INTERN\main_project\Main--main\Unified_PDF_Platform")
 
 from handle_merge import find_invoice_page_ranges_from_text_pages

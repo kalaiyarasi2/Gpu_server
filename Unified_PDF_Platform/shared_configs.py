@@ -16,7 +16,7 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 router_engine = UnifiedRouter()
 file_path_cache: Dict[str, str] = {}
 
-async def _perform_extraction(file: UploadFile, request: Request):
+def _perform_extraction(file: UploadFile, request: Request):
     import traceback
     import re
 
@@ -40,7 +40,7 @@ async def _perform_extraction(file: UploadFile, request: Request):
             shutil.copyfileobj(file.file, buffer)
         print(f"[Unified][API] Saved to: {file_path}")
 
-        # Run the unified router
+        # Run the unified router (sync)
         print(f"[Unified][API] Routing document...")
         result = router_engine.process(str(file_path))
 

@@ -38,17 +38,22 @@ NEW REQUIREMENT: This document may repeat policy numbers for different years.
 Identify a new boundary if you see a header line with a Policy Number AND/OR a new year section description like:
 "Claims where Date Of Loss between 1/1/2024 and 12/31/2024"
 
+For each boundary, also identify the Insurance Carrier (the company name) associated with that section. 
+Look for "Carrier:", "Policy Company:", or branding near the policy number.
+
 Return a JSON object with a list of detected boundaries and the EXACT snippet of text that identifies the header.
 
-Example Response (use generic placeholders like these — do NOT assume specific company names):
+Example Response:
 {{
   "boundaries": [
     {{
       "identifier": "[POLICY_NUMBER] - [YEAR]",
+      "carrier": "[INSURANCE_COMPANY_NAME]",
       "header_snippet": "[EXACT TEXT FROM DOCUMENT THAT MARKS A NEW SECTION]"
     }},
     {{
       "identifier": "[POLICY_NUMBER_2] - [YEAR]",
+      "carrier": "[INSURANCE_COMPANY_NAME_2]",
       "header_snippet": "[EXACT TEXT FROM DOCUMENT THAT MARKS NEXT SECTION]"
     }}
   ]
@@ -84,6 +89,7 @@ DOCUMENT TEXT:
                     if idx != -1:
                         boundaries.append({
                             "policy_number": p.get("identifier") or p.get("policy_number"),
+                            "carrier": p.get("carrier"),
                             "start_index": idx,
                             "header_snippet": snippet
                         })
@@ -139,6 +145,7 @@ DOCUMENT TEXT:
             chunk_text = text[overlap_start:end_idx].strip()
             chunks.append({
                 "policy_number": boundaries[i]["policy_number"],
+                "carrier_name": boundaries[i].get("carrier"),
                 "text": chunk_text
             })
             
@@ -498,7 +505,15 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
             )
             
             if "claims" in chunk_result:
+                # RC7: Use carrier detected at the boundary header if present.
+                # This works even if the carrier name is not repeated on every page.
+                chunk_carrier = chunk_result.get("carrier_name") or chunk.get("carrier_name")
+                
                 for c in chunk_result["claims"]:
+                    # Propagate carrier name from chunk header if claim doesn't have one
+                    if not c.get("carrier_name") and chunk_carrier:
+                        c["carrier_name"] = chunk_carrier
+                        
                     if not c.get("policy_number") or c.get("policy_number") == "Multiple":
                         # RC5: Strip (Part X) AND year suffix from policy label
                         clean_policy = re.sub(r' \(Part \d+\)$', '', str(chunk.get("policy_number", "")))
@@ -551,9 +566,30 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
         elif policy_numbers:
             merged["policy_number"] = ", ".join(sorted(list(policy_numbers)))
 
-        # Infer a global carrier_name once from the full document text, then
-        # let _post_process_claims propagate it down to each claim.
-        if not merged.get("carrier_name") and all_text:
+        # Infer a global carrier_name. Prioritize names found in individual chunks.
+        # If multiple carriers found, list them.
+        chunk_carriers = set()
+        for res in results_list:
+            # Check top level
+            if res.get("carrier_name"):
+                chunk_carriers.add(res["carrier_name"])
+            # Check inside SummaryLevel if present
+            if res.get("SummaryLevel") and res["SummaryLevel"].get("carrier_names"):
+                # carrier_names might be a comma-separated string
+                names = [n.strip() for n in str(res["SummaryLevel"]["carrier_names"]).split(",")]
+                for n in names:
+                    if n: chunk_carriers.add(n)
+            # Check individual claims
+            if "claims" in res and isinstance(res["claims"], list):
+                for c in res["claims"]:
+                    if c.get("carrier_name"):
+                        chunk_carriers.add(c["carrier_name"])
+
+        if chunk_carriers:
+            merged["carrier_name"] = ", ".join(sorted(list(chunk_carriers)))
+            print(f"   ✓ Aggregated carrier_name from chunks: {merged['carrier_name']}")
+        elif all_text:
+            # Only fallback to inference if no carriers found in chunks
             inferred_carrier = self._infer_carrier_from_text(all_text)
             if inferred_carrier:
                 merged["carrier_name"] = inferred_carrier

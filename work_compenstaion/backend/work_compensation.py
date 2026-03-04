@@ -1426,6 +1426,25 @@ Return ONLY the JSON object for claim {target_claim_number}."""
         return verification_data
 
 
+def parse_p3_gio_from_text(text: str) -> Dict[str, str]:
+    """
+    Parses P3_GIO form field data from the extracted text.
+    Looks for patterns like 'P3_GIO_Q1: Y' or 'P3_GIO_Q1: Yes'
+    """
+    results = {}
+    if not text:
+        return results
+        
+    for i in range(1, 25):
+        pattern = rf"P3_GIO_Q{i}:\s*(Y(?:es)?|N(?:o)?)"
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            val = match.group(1).strip().upper()
+            results[f"q{i}"] = "Y" if val.startswith("Y") else "N"
+            
+    return results
+
+
 def main():
     """Main function"""
     import sys

@@ -210,22 +210,80 @@ class EnhancedInsuranceExtractor:
         lines = text.splitlines()
         header_slice = "\n".join(lines[:120])
 
+        # 0) NEW: Check for explicit labels FIRST (Carrier:, Policy Company:, Insurer:)
+        # This prevents picking up claimant names that happen to be followed by "Indemnity"
+        explicit_labels = [
+            r"Policy Company:\s*([A-Z][A-Za-z&,\.\s]{2,80})",
+            r"Carrier:\s*([A-Z][A-Za-z&,\.\s]{2,80})",
+            r"Insurer:\s*([A-Z][A-Za-z&,\.\s]{2,80})",
+            r"Underwritten by:\s*([A-Z][A-Za-z&,\.\s]{2,80})",
+            r"Insurance Company:\s*([A-Z][A-Za-z&,\.\s]{2,80})"
+        ]
+        for pattern in explicit_labels:
+            label_match = re.search(pattern, header_slice, re.IGNORECASE)
+            if label_match:
+                candidate = label_match.group(1).strip()
+                # Basic validation
+                if len(candidate) > 5 and not any(word in candidate.lower() for word in ["insured", "claimant"]):
+                    return candidate
+
         # 1) Try to find explicit insurance-company style names
         # Examples this can catch:
         #  - State Compensation Insurance Fund
         #  - Stonetrust Commercial Insurance Company
         #  - AmTrust North America Insurance
+        
+        # Refined pattern: Be more restrictive if "Indemnity" is the only keyword
+        # Added keywords like "Assurance", "Underwriters"
+        # We want to avoid "Name Indemnity" unless it's followed by "Company" or similar if possible,
+        # OR if it's NOT preceded by "Claimant Name"
         insurance_pattern = re.compile(
-            r"([A-Z][A-Za-z&,\.\s]+?Insurance(?:\s+(?:Company|Co\.?|Fund|Group|Services?))?)",
+            r"([A-Z][A-Za-z&,\.\s]{2,80}?\s+(?:Insurance|Indemnity|Assurance|Accident|Casualty|Guarantee|Underwriters)(?:\s+(?:Company|Co\.?|Fund|Group|Services?))?)",
             re.IGNORECASE,
         )
+        
+        # Blacklist of keywords that indicate legal boilerplate / non-carrier text or row labels
+        BLACKLIST = {
+            "confidentiality", "privileged", "intended", "authorized", "representatives",
+            "reliance", "communication", "error", "remove", "notify", "immediately",
+            "subject to", "laws", "disclosure", "distribution",
+            "claimant", "employee", "insured name", "loss date", "claim number"
+        }
+        
         matches = insurance_pattern.findall(header_slice)
         if matches:
-            # Prefer the longest match (most specific branding)
-            best = max(matches, key=lambda m: len(m or ""))
-            best_clean = best.strip()
-            if best_clean:
-                return best_clean
+            valid_matches = []
+            for m in matches:
+                m_clean = m.strip()
+                # Skip if too short or too long
+                if len(m_clean) < 5 or len(m_clean) > 100:
+                    continue
+                # Skip if contains blacklisted legal boilerplate keywords or row labels
+                if any(word in m_clean.lower() for word in BLACKLIST):
+                    continue
+                # Skip if it's "Name Indemnity" but likely a claimant row
+                # (Claimant names often have tabs/large gaps before the coverage type)
+                if "\t" in m or "  " in m:
+                    # If there's a large gap before the keyword, it's likely a table row
+                    # unless it's very clearly a company name (ends in Company/Co)
+                    if not any(word in m_clean.lower() for word in ["company", "co.", "fund", "group"]):
+                        continue
+
+                # Skip if it doesn't look like a proper name (e.g. starts with lowercase or too many special chars)
+                if not m_clean[0].isupper() and not any(char.isdigit() for char in m_clean):
+                   # Allow some flexibility for results from OCR but generally skip lower-case starts
+                   pass 
+
+                valid_matches.append(m_clean)
+
+            if valid_matches:
+                # Prefer the one that actually starts with Uppercase if available
+                upper_starts = [m for m in valid_matches if m[0].isupper()]
+                best_source = upper_starts if upper_starts else valid_matches
+                
+                # Still prefer longest among valid candidates (e.g. "ABC Insurance Company" over "ABC Insurance")
+                best = max(best_source, key=len)
+                return best
 
         # 2) Fallback: infer from website / domain in header
         url_pattern = re.compile(r"(https?://[^\s]+|www\.[^\s]+)", re.IGNORECASE)
@@ -240,7 +298,8 @@ class EnhancedInsuranceExtractor:
             domain = domain.rstrip(".,);")
             # Normalize "www."
             domain = re.sub(r"^www\.", "", domain, flags=re.IGNORECASE)
-            if domain:
+            # Reject generic/agency domains if known
+            if domain and "atlas" not in domain.lower():
                 # Optionally prettify: turn "fcbifund.com" -> "FCBI Fund"
                 name_part = domain.split(".")[0]
                 tokens = re.split(r"[_\-]+", name_part)
@@ -765,6 +824,8 @@ Answer these questions to help us extract data accurately:
    Instructions:
    - Look for explicit mentions of an insurance company name.
    - Common indicators: Header/footer names, Copyright lines, Branding at top (e.g., State Fund Online), "Insurance Company", "Insurance Co.", etc.
+   - 🛑 CRITICAL: Do NOT return the agency name. (e.g., "Atlas General Insurance Services" is often the agency/MGA, while "Service American Indemnity Company" is the carrier).
+   - 🛑 CRITICAL: Do NOT return a claimant name. If you see a name followed by "Indemnity" in a table row (e.g., "John Doe - Indemnity"), that is the coverage type, NOT the carrier.
    - Do NOT return: Insured name, Brokerage name, District office, or Policyholder name.
    - If the carrier is clearly implied by document branding (e.g., "State Compensation Insurance Fund", "Stonetrust", or markers like "Report ID: 677" suggesting AmTrust North America), return that.
    - If no carrier can be confidently identified, return null.
@@ -1378,7 +1439,10 @@ Follow the format-specific instructions above. Validate your extractions."""
             if not claim.get("policy_number") and default_policy:
                 claim["policy_number"] = default_policy
             if not claim.get("carrier_name") and default_carrier:
-                claim["carrier_name"] = default_carrier
+                # RC4 FIX: Only propagate top-level carrier if it doesn't look like an aggregated list.
+                # We block commas (aggregated list) but ALLOW spaces (multi-word company names).
+                if "," not in str(default_carrier):
+                    claim["carrier_name"] = default_carrier
             
             # Guard against calibration hallucinations from the prompt
             current_carrier = str(claim.get("carrier_name") or "").lower()

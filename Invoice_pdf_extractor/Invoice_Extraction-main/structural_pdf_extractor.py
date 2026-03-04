@@ -231,6 +231,24 @@ def process_with_structural_layer(pdf_path, output_excel=None):
             if not page_data.get("LINE_ITEMS") and len(chunk_text) > 100:
                  print(f"    -> [Layer] Vertical fallback triggered for {chunk_type} chunk...")
                  # (Implementation of vertical fallback would go here or call v3 logic)
+            
+            # [FIX] OCR Fallback for Structural Layer
+            # If standard extraction failed or yielded low results, and the document is likely scanned
+            if not page_data.get("LINE_ITEMS") or v3.check_text_quality(chunk_text) < 0.2:
+                print(f"    -> [Layer] Low quality text or no items. Attempting OCR fallback for chunk {i+1}...")
+                try:
+                    # In structural mode, we might need to re-extract the specific pages covered by this chunk via OCR
+                    # For simplicity, if we already have the chunk text and it's bad, we can try to re-run v3's OCR on the whole PDF 
+                    # OR just notify that quality is too low. 
+                    # Since v3 already has extract_text_from_pdf_ocr, we use it.
+                    ocr_text = v3.extract_text_from_pdf_ocr(pdf_path)
+                    # We would need to re-segment or at least check if OCR helps.
+                    # As a targeted fix, we'll try to extract fields from the OCR version of this chunk if possible.
+                    # Since we don't have a clean way to OCR just one chunk without more complex logic, 
+                    # we let the user know we are attempting a full-doc OCR pass.
+                    page_data = v3.extract_fields_with_llm(ocr_text + prompt_hint, client, f"ocr_fallback_chunk_{i+1}")
+                except Exception as e:
+                    print(f"    -> [Layer][ERROR] OCR fallback failed: {e}")
         
         # Merge Header
         page_header = page_data.get("HEADER", {})
