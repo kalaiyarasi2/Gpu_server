@@ -105,6 +105,48 @@ def check_text_quality(text: str) -> float:
     alnum = sum(c.isalnum() for c in clean)
     return alnum / len(clean)
 
+
+def clean_billing_period(val: Optional[str]) -> Optional[str]:
+    """
+    Dynamically extract only the 'From' date from a billing period string.
+    Handles various formats and separators (-, to, thru).
+    
+    Logic:
+    1. Split on words like 'to', 'thru', 'through' with spaces.
+    2. Split on hyphens/dashes if they have spaces around them.
+    3. If dates use slashes (MM/DD/YY), allow splitting on hyphen without spaces.
+    4. Handle ISO dates (YYYY-MM-DD) carefully.
+    """
+    if not val or not str(val).strip() or str(val).lower() in ["n/a", "none"]:
+        return val
+        
+    s = str(val).strip()
+    
+    # Range words are very high confidence if surrounded by spaces
+    parts = re.split(r'\s+\b(?:to|thru|through)\b\s+', s, flags=re.IGNORECASE)
+    if len(parts) > 1:
+        return parts[0].strip()
+    
+    # Hyphen with spaces is high confidence
+    parts = re.split(r'\s+[-–—]\s*|[-–—]\s+', s)
+    if len(parts) > 1:
+        return parts[0].strip()
+        
+    # If date uses slashes or dots, hyphen without spaces is a range separator (e.g. 02/01/26-02/28/26)
+    if '/' in s or '.' in s:
+        parts = re.split(r'[-–—]', s)
+        if len(parts) > 1:
+            return parts[0].strip()
+            
+    # ISO Date Range (YYYY-MM-DD-YYYY-MM-DD) - usually 5 hyphens
+    if s.count('-') >= 5:
+        parts = s.split('-')
+        # If it looks like two ISO dates joined by a hyphen
+        if len(parts) >= 6:
+            return "-".join(parts[:3])
+            
+    return s
+
 # Configuration
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
@@ -521,7 +563,7 @@ def extract_unum_header_from_mirrored(raw_text: str) -> dict:
         # Billing Period start/end: "2/1/2026 - 2/28/2026"
         m = re.search(r'([\d/]+)\s*[-–]\s*([\d/]+)', rev)
         if m and not header["BILLING_PERIOD"]:
-            header["BILLING_PERIOD"] = f"{m.group(1).strip()} - {m.group(2).strip()}"
+            header["BILLING_PERIOD"] = clean_billing_period(m.group(1).strip())
     
     return header
 
@@ -584,7 +626,8 @@ Extract data from the document text provided below.
     - **FAM AGE RATED MANDATE**: "FAM AGE RATED" rows are INDIVIDUAL member enrollments (Family tier) and MUST be extracted as line items. Do NOT treat them as summary totals.
     - **MISSING MEMBER ALERT**: Ensure "SHARAD SAXTON" (approx. $2,485.21) is extracted. He is a primary subscriber.
     - **TARGET HEADCOUNT**: If the document says "SUBSCRIBERS CURRENT BILLING PERIOD: 4", you MUST find and return EXACTLY 4 member rows.
-    - **NO TRUNCATION**: Capture the FULL length of `INV_NUMBER` (usually 12 digits like 260210001403) and the FULL `BILLING_PERIOD` range.
+    - **NO TRUNCATION**: Capture the FULL length of `INV_NUMBER` (usually 12 digits like 260210001403).
+    - **BILLING_PERIOD**: Extract the START ("From") date only (e.g., `01/01/2026`) - do NOT include the end date.
     - **NO HALLUCINATION**: NEVER invent or create member rows. If a member is not explicitly in the detail table, return NULL. Do NOT use fake IDs like 123456789.
     - Plan names often include "LG GRP" or suffixes like "RC" on hanging lines; use Multiline Aggregation.
 - **GIS Benefits (Group Insurance Services)**:
@@ -598,7 +641,7 @@ Extract data from the document text provided below.
         - Contains "Spouse" → **ES**
         - Contains "Long Term Disability" (no Employee/Spouse suffix) → **EE**
     - **PLAN_NAME**: Use the full product name from Page 2 (e.g., "Voluntary STD", "Long Term Disability", "Voluntary Life & AD&D - Employee").
-    - **BILLING_PERIOD**: From the "Coverage Date" column (e.g., `2/1/2026`).
+    - **BILLING_PERIOD**: From the "Coverage Date" column. Extract the START date only (e.g., `2/1/2026`).
 - **Humana**:
     - **INDIVIDUAL LINE ITEMS**: Extract members EXCLUSIVELY from the "Employee Detail" section (Page 4).
     - **SUMMARIES TO IGNORE**: Do NOT extract data from the "Group Summary" or "Premiums by Product/Plan Type" tables.
@@ -618,6 +661,7 @@ Extract data from the document text provided below.
         - Do NOT extract the value from the `EP` or `COVERAGE` columns (which are usually large numbers like `3,750` or `865`) as a premium.
     - **TOTALS IGNORE**: Ignore lines labeled "TOTALS" for each member (e.g., the row that sums LTD + STD for that person). Focus ONLY on the individual plan rows.
     - **NAMES**: Ensure names are un-mirrored correctly (e.g., "NAPKA, LEANNE" not "AKPAN").
+    - **GENERAL DATES**: Always return only the STARTING date for `BILLING_PERIOD`. If the text says `02/01/26-02/28/26`, return `02/01/26`.
     - **REVERSE-AWARENESS TIP**: If you see names like `YAWOLLOH` or `NAPKA`, it means the system failed to un-mirror. In this case, YOU must mentally reverse every string (e.g., `YAWOLLOH` -> `HOLLOWAY`) before extraction.
 - **GENERAL MAPPING (IF CARRIER UNKNOWN)**:
     - "Invoice Date" / "Date" -> `INV_DATE`
@@ -1411,14 +1455,24 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
         
         if not line_items:
             # If no line items, just save header with empty line item fields
+            # Merge data from header with cleaned billing period
+            clean_header = header.copy()
+            if "BILLING_PERIOD" in clean_header:
+                clean_header["BILLING_PERIOD"] = clean_billing_period(clean_header["BILLING_PERIOD"])
+                
             row = {"SOURCE_FILE": source_filename}
-            row.update(header)
+            row.update(clean_header)
             rows.append(row)
         else:
             # Deduplicate/Merge items using multi-stage matching (Name + MemberID or Name + SSN)
             merged_items = []
             index_by_id = {}   # fname|lname|member_id -> item_index
             index_by_ssn = {}  # fname|lname|ssn -> item_index
+            
+            # Clean header metadata once
+            clean_header = header.copy()
+            if "BILLING_PERIOD" in clean_header:
+                clean_header["BILLING_PERIOD"] = clean_billing_period(clean_header["BILLING_PERIOD"])
             
             def to_float(val):
                 if val is None: return 0.0
@@ -1639,7 +1693,7 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                 for field in REQUIRED_FIELDS:
                     row[field] = item.get(field) # Will be None if missing
                 
-                row.update(header)
+                row.update(clean_header)
                 row.update(item)
                 # Remove internal fields that shouldn't be in Excel
                 for internal_field in ["PRICING_MODEL", "RELATIONSHIP"]:
