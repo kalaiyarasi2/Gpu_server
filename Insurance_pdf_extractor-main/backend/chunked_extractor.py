@@ -1,7 +1,7 @@
 import json
 import re
 from typing import Dict, List, Optional, Tuple
-from insurance_extractor import EnhancedInsuranceExtractor
+from insurance_extractor import EnhancedInsuranceExtractor, filter_claims_by_claim_year, MIN_INCLUDED_CLAIM_YEAR
 from pdf_rotation import auto_rotate_pdf_content
 import tempfile
 import shutil
@@ -247,6 +247,12 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
                 "confidence_score": confidence_score
             })
 
+        included_claims, excluded_claims, unknown_year_claims = filter_claims_by_claim_year(
+            clean_claims_for_schema,
+            min_year_inclusive=MIN_INCLUDED_CLAIM_YEAR,
+            keep_unknown_year=True,
+        )
+
         # Save analysis.json
         analysis_data = {
             "extraction_metadata": extraction_metadata,
@@ -255,14 +261,22 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
             "insured_name": schema_data.get("insured_name"),
             "policy_period": schema_data.get("policy_period"),
             "total_claims": len(all_claims),
-            "claims_validation_summary": claims_analysis_data
+            "claims_validation_summary": claims_analysis_data,
+            "year_filter": {
+                "min_claim_year_inclusive": MIN_INCLUDED_CLAIM_YEAR,
+                "keep_unknown_year": True,
+                "included_claims_count": len(included_claims),
+                "excluded_claims_count": len(excluded_claims),
+                "unknown_year_claims_count": len(unknown_year_claims),
+            },
+            "excluded_claims_before_year_threshold": excluded_claims,
         }
         analysis_file = session_dir / "analysis.json"
         with open(analysis_file, 'w', encoding='utf-8') as f:
             json.dump(analysis_data, f, indent=2, ensure_ascii=False)
             
         # Save schema (claims array + SummaryLevel object)
-        claims_only = clean_claims_for_schema or []
+        claims_only = included_claims or []
 
         # Compute summary fields from claims and header data
         years_set = set()
