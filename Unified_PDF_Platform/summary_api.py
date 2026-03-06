@@ -81,21 +81,7 @@ async def work_comp_trigger(request: Request, file: UploadFile = File(...)):
         )
 
     result = _perform_extraction(file, request)
-
-    if isinstance(result, dict) and "error" not in result:
-        json_filename = result.get("output_json")
-        json_full_path = file_path_cache.get(json_filename)
-
-        if json_full_path and _Path(json_full_path).exists():
-            print(f"[Work Comp] Returning direct file download: {json_filename}")
-            return _FileResponse(
-                path=json_full_path,
-                filename=json_filename,
-                media_type="application/json"
-            )
-
-    # Fallback: return error dict if extraction failed
-    return result
+    return JSONResponse(content=result)
 
 @router.post("/api/claim-summary")
 async def get_claim_summary(request: Request):

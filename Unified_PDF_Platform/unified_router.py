@@ -22,18 +22,41 @@ try:
 except ImportError:
     OCR_AVAILABLE = False
 
-# Reconfigure stdout for UTF-8 support on Windows
-if sys.stdout.encoding != 'utf-8':
+# Reconfigure stdout for UTF-8 support and LINE BUFFERING on Windows
+if sys.stdout.encoding != 'utf-8' or not getattr(sys.stdout, 'line_buffering', False):
     try:
-        sys.stdout.reconfigure(encoding='utf-8')
-    except AttributeError:
-        # Fallback for Python versions that don't support reconfigure
+        # Try to reconfigure with line buffering to ensure real-time terminal logs
+        sys.stdout.reconfigure(encoding='utf-8', line_buffering=True)
+    except (AttributeError, TypeError):
+        # Fallback for older Python versions or environments that don't support reconfigure
         import io
-        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', line_buffering=True)
+
+# --- GLOBAL LOGGING FIX: Force Unbuffered Output ---
+# This ensures that even in Uvicorn/FastAPI request cycles, every print reaches the terminal immediately.
+import builtins
+old_print = builtins.print
+def flushed_print(*args, **kwargs):
+    kwargs.setdefault('flush', True)
+    old_print(*args, **kwargs)
+builtins.print = flushed_print
+# ---------------------------------------------------
 
 # Load environment variables
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+# Configuration for paths
+BASE_DIR = Path(__file__).parent
+INSURANCE_BACKEND_DIR = BASE_DIR.parent / "Insurance_pdf_extractor-main/backend"
+INVOICE_BACKEND_DIR = BASE_DIR.parent / "Invoice_pdf_extractor/Invoice_Extraction-main"
+GENERAL_INVOICE_BACKEND_DIR = BASE_DIR.parent / "invoice/backend"
+WORK_COMPENSATION_BACKEND_DIR = BASE_DIR.parent / "work_compenstaion/backend"
+
+# Add backend dirs to sys.path early to allow module imports
+for d in [INSURANCE_BACKEND_DIR, WORK_COMPENSATION_BACKEND_DIR, GENERAL_INVOICE_BACKEND_DIR, INVOICE_BACKEND_DIR]:
+    if d.exists() and str(d) not in sys.path:
+        sys.path.append(str(d))
 
 # Configure Poppler PATH for pdf2image (OCR support)
 POPPLER_PATH = os.getenv("POPPLER_PATH")
@@ -43,31 +66,26 @@ if POPPLER_PATH and os.path.exists(POPPLER_PATH):
 else:
     print("Warning: POPPLER_PATH not set or invalid. OCR may not work for scanned PDFs.")
 
-BASE_DIR = Path(__file__).parent
-INSURANCE_BACKEND_DIR = BASE_DIR.parent / "Insurance_pdf_extractor-main/backend"
-INVOICE_BACKEND_DIR = BASE_DIR.parent / "Invoice_pdf_extractor/Invoice_Extraction-main"
-GENERAL_INVOICE_BACKEND_DIR = BASE_DIR.parent / "invoice/backend"
-WORK_COMPENSATION_BACKEND_DIR = BASE_DIR.parent / "work_compenstaion/backend"
 
 # Import Insurance extractor as module
 try:
     from chunked_extractor import ChunkedInsuranceExtractor
     INSURANCE_MODULE_AVAILABLE = True
     print("[OK] Insurance extractor module loaded successfully")
-except ImportError as e:
+except Exception as e:
     INSURANCE_MODULE_AVAILABLE = False
     print(f"Warning: Could not import Insurance extractor module: {e}")
+    # print(f"   (Search path: {sys.path[:3]}...)")
     print("   Will fall back to subprocess method if needed.")
 
 # Configuration for paths
 INVOICE_SCRIPT = BASE_DIR.parent / "Invoice_pdf_extractor/Invoice_Extraction-main/universal_pdf_extractor_v3.py"
 STRUCTURAL_INVOICE_SCRIPT = BASE_DIR.parent / "Invoice_pdf_extractor/Invoice_Extraction-main/structural_pdf_extractor.py"
 INSURANCE_SCRIPT = BASE_DIR.parent / "Insurance_pdf_extractor-main/backend/chunked_extractor.py"
-INSURANCE_BACKEND_DIR = BASE_DIR.parent / "Insurance_pdf_extractor-main/backend"
 INSURANCE_OUTPUT_DIR = INSURANCE_BACKEND_DIR / "outputs"
 
 # Work Compensation Paths
-WORK_COMP_BACKEND_DIR = BASE_DIR.parent / "work_compenstaion/backend"
+WORK_COMP_BACKEND_DIR = WORK_COMPENSATION_BACKEND_DIR
 WORK_COMP_OUTPUT_DIR = WORK_COMP_BACKEND_DIR / "outputs"
 
 # General Invoice (POC) Paths
@@ -1380,6 +1398,58 @@ Return ONLY the company name or UNKNOWN:"""
             print(f"[Provider-ID] Failed: {e}")
             return "UNKNOWN"
 
+    async def _run_with_logging(self, cmd, timeout_secs):
+        """Wrapper to run process with line-by-line output for debugging hangs."""
+        print(f"  [Debug] Running command: {' '.join(cmd)}")
+        try:
+            import subprocess
+            import sys
+            import threading
+            
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                env={"PYTHONIOENCODING": "utf-8", **os.environ},
+                encoding="utf-8",
+                bufsize=1,
+                universal_newlines=True
+            )
+            
+            full_stdout = []
+            full_stderr = []
+            
+            def stream_reader(pipe, log_label, collector):
+                for line in iter(pipe.readline, ""):
+                    print(f"    [{log_label}] {line.strip()}")
+                    collector.append(line)
+            
+            t1 = threading.Thread(target=stream_reader, args=(process.stdout, "OUT", full_stdout))
+            t2 = threading.Thread(target=stream_reader, args=(process.stderr, "ERR", full_stderr))
+            t1.start()
+            t2.start()
+            
+            # Wait with timeout
+            try:
+                process.wait(timeout=timeout_secs)
+            except subprocess.TimeoutExpired:
+                process.terminate()
+                raise subprocess.TimeoutExpired(cmd, timeout_secs)
+            
+            t1.join()
+            t2.join()
+            
+            class ExecutionResult:
+                def __init__(self, stdout, stderr, returncode):
+                    self.stdout = "".join(stdout)
+                    self.stderr = "".join(stderr)
+                    self.returncode = returncode
+                    
+            return ExecutionResult(full_stdout, full_stderr, process.returncode)
+        except Exception as e:
+            raise e
+
     def run_invoice_extractor(self, pdf_path, use_structural=False):
         """Run the invoice extractor on the PDF.
         
@@ -1408,64 +1478,15 @@ Return ONLY the company name or UNKNOWN:"""
         print("\n[INFO] Processing... (this may take 30-60 seconds)\n")
 
         try:
-            # Wrapper to run process with line-by-line output for debugging hangs
-            def run_with_logging(cmd, timeout_secs):
-                print(f"  [Debug] Running command: {' '.join(cmd)}")
-                try:
-                    import subprocess
-                    import sys
-                    process = subprocess.Popen(
-                        cmd,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
-                        text=True,
-                        env={"PYTHONIOENCODING": "utf-8", **os.environ},
-                        encoding="utf-8",
-                        bufsize=1,
-                        universal_newlines=True
-                    )
-                    
-                    full_stdout = []
-                    full_stderr = []
-                    
-                    import threading
-                    def stream_reader(pipe, log_label, collector):
-                        for line in iter(pipe.readline, ""):
-                            print(f"    [{log_label}] {line.strip()}")
-                            collector.append(line)
-                    
-                    t1 = threading.Thread(target=stream_reader, args=(process.stdout, "OUT", full_stdout))
-                    t2 = threading.Thread(target=stream_reader, args=(process.stderr, "ERR", full_stderr))
-                    t1.start()
-                    t2.start()
-                    
-                    # Wait with timeout
-                    try:
-                        process.wait(timeout=timeout_secs)
-                    except subprocess.TimeoutExpired:
-                        process.terminate()
-                        raise subprocess.TimeoutExpired(cmd, timeout_secs)
-                    
-                    t1.join()
-                    t2.join()
-                    
-                    class Result:
-                        def __init__(self, stdout, stderr, returncode):
-                            self.stdout = "".join(stdout)
-                            self.stderr = "".join(stderr)
-                            self.returncode = returncode
-                            
-                    return Result(full_stdout, full_stderr, process.returncode)
-                except Exception as e:
-                    raise e
-
             # For structural extractor, output file is auto-named
             if use_structural and script_to_use == STRUCTURAL_INVOICE_SCRIPT:
-                result = run_with_logging([sys.executable, str(script_to_use), str(pdf_path)], 900)
+                import asyncio
+                result = asyncio.run(self._run_with_logging([sys.executable, str(script_to_use), str(pdf_path)], 900))
                 # Structural extractor creates its own output file
                 output_xlsx = Path(pdf_path).parent / "extracted_data_structural.xlsx"
             else:
-                result = run_with_logging([sys.executable, str(script_to_use), str(pdf_path), str(output_xlsx)], 900)
+                import asyncio
+                result = asyncio.run(self._run_with_logging([sys.executable, str(script_to_use), str(pdf_path), str(output_xlsx)], 900))
             
             if result.returncode != 0:
                 print(f"\n[ERR] Extraction Failed (Exit Code: {result.returncode})")
@@ -1490,7 +1511,15 @@ Return ONLY the company name or UNKNOWN:"""
             print(f"\n[STEP] Excel File: {output_xlsx.name}")
             print(f"   Location: {output_xlsx}")
             
-            return {"type": "INVOICE", "excel": str(output_xlsx), "json": self.xlsx_to_json(output_xlsx)}
+            # Derive the original extractor JSON path (same stem as XLSX but with _invoice.json suffix)
+            # This JSON has INV_TOTAL and other metadata fields that xlsx_to_json strips out.
+            orig_json_path = str(output_xlsx).replace(".xlsx", ".json")
+            # Generate the xlsx-derived JSON too (for download only), but use orig for metadata
+            xlsx_json_path = self.xlsx_to_json(output_xlsx)
+            # Prefer original extractor JSON if it exists (has richer metadata e.g. INV_TOTAL)
+            json_for_metadata = orig_json_path if os.path.exists(orig_json_path) else xlsx_json_path
+            return {"type": "INVOICE", "excel": str(output_xlsx), "json": json_for_metadata}
+
         except subprocess.TimeoutExpired:
             print(f"\n[ERR] Invoice Extraction Failed: Timeout after 900 seconds.")
             return {"error": "Invoice extraction timed out."}
@@ -1538,13 +1567,11 @@ Return ONLY the company name or UNKNOWN:"""
         # If not actually merged, run the original subprocess path (unchanged behaviour)
         if not sub_pdfs or len(sub_pdfs) <= 1:
             try:
-                result = subprocess.run(
+                import asyncio
+                result = asyncio.run(self._run_with_logging(
                     [sys.executable, str(GENERAL_INVOICE_SCRIPT), str(pdf_path)],
-                    capture_output=True,
-                    text=True,
-                    env={"PYTHONIOENCODING": "utf-8", **os.environ},
-                    encoding="utf-8"
-                )
+                    900
+                ))
                 if result.returncode != 0:
                     print(f"\n[ERR] General Invoice Extraction Failed (Exit Code: {result.returncode})")
                     print(f"Error Details:\n{result.stderr}")
@@ -1765,14 +1792,11 @@ Return ONLY the company name or UNKNOWN:"""
             print(f"[INFO] Script: {INSURANCE_SCRIPT}")
             print("\n[INFO] Processing... (this may take 1-2 minutes)\n")
             
-            result = subprocess.run(
+            import asyncio
+            result = asyncio.run(self._run_with_logging(
                 [sys.executable, str(INSURANCE_SCRIPT), str(pdf_path)],
-                capture_output=True,
-                text=True,
-                cwd=str(INSURANCE_SCRIPT.parent),
-                env={"PYTHONIOENCODING": "utf-8", **os.environ},
-                encoding="utf-8"
-            )
+                900
+            ))
             
             if result.returncode == 0:
                 print("[OK] Insurance extractor completed successfully!")
@@ -1830,7 +1854,8 @@ Return ONLY the company name or UNKNOWN:"""
                 schema_file = session_dir / "extracted_schema.json"
                 
                 if schema_file.exists():
-                    excel_path = self.json_to_xlsx(schema_file)
+                    # Use the specialized Workers' Comp flattener for multi-sheet output
+                    excel_path = self.flatten_workers_comp_to_excel(schema_file)
                     return {
                         "type": "WORK_COMPENSATION",
                         "json": str(schema_file),
@@ -2072,6 +2097,9 @@ Return ONLY the company name or UNKNOWN:"""
                             
                         total_keywords = ["TOTAL", "SUMMARY", "SUBTOTAL", "BALANCE DUE", "GRAND TOTAL", "INVOICE TOTAL"]
                         if any(re.search(fr'\b{kw}\b', val) for kw in total_keywords):
+                            # EXEMPTION: Keep "REPORTED INVOICE TOTAL" for metadata and audit
+                            if "REPORTED INVOICE TOTAL" in val:
+                                return False
                             return True
                     
                     # 2. Check for empty/None identity columns with a premium value
@@ -2114,20 +2142,89 @@ Return ONLY the company name or UNKNOWN:"""
             with open(json_path, 'r') as f:
                 data = json.load(f)
             
-            if isinstance(data, dict) and "claims" in data:
-                rows = data["claims"]
+            xlsx_path = Path(json_path).with_suffix(".xlsx")
+            
+            # Handle potential nested dictionary structure (e.g. Workers' Comp)
+            # or wrapped data from certain extractors
+            if isinstance(data, dict):
+                if "data" in data and isinstance(data["data"], dict):
+                    # It's a nested structure like Work Comp, we should probably 
+                    # use a specialized flattener, but as a fallback we take the 
+                    # largest list we find or just stringify the dict.
+                    potential_lists = {k: v for k, v in data["data"].items() if isinstance(v, list)}
+                    if potential_lists:
+                        # Pick the longest list as the primary "rows"
+                        main_key = max(potential_lists, key=lambda k: len(potential_lists[k]))
+                        rows = potential_lists[main_key]
+                    else:
+                        rows = [data["data"]]
+                elif "claims" in data:
+                    rows = data["claims"]
+                else:
+                    rows = [data]
             elif isinstance(data, list):
                 rows = data
             else:
                 rows = [data]
                 
             df = pd.DataFrame(rows)
-            xlsx_path = Path(json_path).with_suffix(".xlsx")
             df.to_excel(xlsx_path, index=False)
             return str(xlsx_path)
         except Exception as e:
             print(f"[Router] JSON to Excel conversion failed: {e}")
             return None
+
+    def flatten_workers_comp_to_excel(self, json_path):
+        """Specially flattens the nested Workers' Comp JSON into a multi-sheet Excel file."""
+        try:
+            with open(json_path, 'r', encoding='utf-8') as f:
+                raw_data = json.load(f)
+            
+            data = raw_data.get("data", {})
+            xlsx_path = Path(json_path).with_suffix(".xlsx")
+            
+            with pd.ExcelWriter(xlsx_path, engine='openpyxl') as writer:
+                # 1. Demographics & Totals
+                demographics = data.get("demographics", {})
+                premium_calc = data.get("premiumCalculation", {})
+                
+                # Merge into one summary sheet
+                summary_data = {**demographics, **premium_calc}
+                df_summary = pd.DataFrame([summary_data])
+                df_summary.to_excel(writer, sheet_name='Demographics_Summary', index=False)
+                
+                # 2. Rating by State
+                rating = data.get("ratingByState", [])
+                if rating:
+                    df_rating = pd.DataFrame(rating)
+                    df_rating.to_excel(writer, sheet_name='Rating_by_State', index=False)
+                
+                # 3. Prior Carriers
+                carriers = data.get("priorCarriers", [])
+                if carriers:
+                    df_carriers = pd.DataFrame(carriers)
+                    df_carriers.to_excel(writer, sheet_name='Prior_Carriers', index=False)
+                
+                # 4. Individuals
+                individuals = data.get("individuals", [])
+                if individuals:
+                    df_individuals = pd.DataFrame(individuals)
+                    df_individuals.to_excel(writer, sheet_name='Individuals', index=False)
+                
+                # 5. General Questions
+                questions = data.get("generalQuestions", {})
+                if questions:
+                    # Transpose questions for better readability
+                    q_rows = [{"Question": k, "Answer": v} for k, v in questions.items()]
+                    df_questions = pd.DataFrame(q_rows)
+                    df_questions.to_excel(writer, sheet_name='Questions', index=False)
+            
+            print(f"[Router] Workers' Comp Excel created with multiple sheets: {xlsx_path.name}")
+            return str(xlsx_path)
+        except Exception as e:
+            print(f"[Router] Workers' Comp Excel flattening failed: {e}")
+            # Fallback to generic simple Excel if multi-sheet fails
+            return self.json_to_xlsx(json_path)
 
     def validate_extraction(self, excel_path, provider):
         """Layer 6: Validation & Quality Check."""

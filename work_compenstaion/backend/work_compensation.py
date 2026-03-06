@@ -935,7 +935,7 @@ Return ONLY the JSON."""
         prompt = f"""You are an expert at extracting structured data from Workers' Compensation application forms (ACORD 130).
         
 ACORD FORM SPECIFIC RULES:
-1. **Applicant Name**: Often labeled as "APPLICANT NAME" or "INSURED". Handle OCR noise like "A1" becoming "A" or "A 1". **CROSS-REFERENCE**: Check the email addresses (e.g., CALEXANDER@A1ESCORTLLC.COM); if the email domain contains "A1", the applicant name is likely "A1 ESCORT..." even if OCR missed the "1" in the name field.
+1. **Applicant Name**: Often labeled as "APPLICANT NAME" or "INSURED". Handle OCR noise like "A1" becoming "A" or "A 1". Do not guess the name based on other fields; extract only what is written.
 2. **Zip Codes**: Zip codes in DE/MD often start with 19 or 21. If you see "1980%", it is "19801". Use the **MAILING ADDRESS** zip code for demographics, not the Location addresses found lower in the form.
 3. **Fuzzy Date Correction**: OCR often misreads years (e.g., "3024" for "2024", "1900" for "2026"). If a year is logically impossible (like 3024) or a placeholder (like 1900), look for the surrounding context or use the current year as a baseline.
 4. **Fuzzy Carrier Correction**: Misread carrier names should be corrected to their most likely official name. Examples: 
@@ -957,13 +957,22 @@ Extract ALL available information from the application form into the requested J
 
 === KEY SECTIONS TO EXTRACT ===
 
+=== ⚠️ ABSOLUTELY NO HALLUCINATION / NO GUESSING ===
+1. **Literal Extraction Only**: Return ONLY data that is explicitly and literally present in the text.
+2. **No Inferences**: DO NOT guess email addresses, websites, or phone numbers based on the applicant's name. (e.g., If the name is "ABC Corp", DO NOT extract "info@abccorp.com" unless it is explicitly typed in the document).
+3. **Missing Data**: If a field is not found, return "N/A" or null. NEVER leave a placeholder or a best guess.
+4. **Verification**: If you are not 100% sure a piece of text belongs to a field, do not extract it.
+
 1. DEMOGRAPHICS:
    - Applicant Name, Business Description, FEIN
-   - Contact Info (Email, Phone, Website)
+   - Contact Info (Email, Phone, Website):
+     - **Literal Only**: Do not guess.
+     - **Phone Numbers**: If a primary phone is not found on Page 1, check the "CONTACT INFORMATION" section (usually Page 2). Phone numbers for "Accounting", "Claims", or "Inspection" contacts ARE acceptable for `officePhone` as they are literal business contact numbers found in the document.
+     - **Email**: Only extract if explicitly found. Do not infer from business name.
    - Mailing Address
    - SIC/NAICS codes, Years in Business
    - Proposed Policy Dates and States
-   - Agency Customer ID (often found in headers like "Agency Customer ID" or "ATOTALS-01")
+   - Agency Customer ID (often found in headers like "Agency Customer ID" or "ABCDEF-01")
 
 2. GENERAL QUESTIONS:
    - Extract q1 through q24 as "Y" or "N".

@@ -78,8 +78,18 @@ def should_trigger_refinement(extracted_data: Dict, raw_text: str) -> tuple:
         total_matches = re.findall(r'TOTAL\s*[:$]*\s*([0-9,]+\.[0-9]{2})', raw_text.upper())
 
     combined_targets = []
-    if total_matches:
-        combined_targets.extend([float(m.replace(',', '')) for m in total_matches])
+    
+    # Priority Tier 1: Strong indicators of the final payable amount
+    high_priority_labels = r'(?:AMOUNT DUE|AMOUNTDUE|BALANCEDUE|BALANCE DUE|INVOICED AMOUNT|TOTAL DUE)'
+    hp_matches = re.findall(fr'{high_priority_labels}\s*[:$]*\s*([0-9,]+\.[0-9]{2})', raw_text.upper())
+    if hp_matches:
+        combined_targets.extend([float(m.replace(',', '')) for m in hp_matches])
+        print(f"  [LEARNING] Detected High-Priority Total(s): {combined_targets}")
+
+    # Priority Tier 2: Generic totals (only if Tier 1 is missing)
+    if not combined_targets:
+        if total_matches:
+            combined_targets.extend([float(m.replace(',', '')) for m in total_matches])
     
     if mirrored_matches:
         # Reverse the mirrored numbers (e.g. "45.498" -> "894.54")
@@ -222,15 +232,21 @@ def generate_refinement_prompt(extracted_data: Dict, raw_text: str, target_total
 """
 
     return f"""
-[REFINEMENT] The previous extraction attempt had a FINANCIAL DISCREPANCY.
+[REFINEMENT] The previous extraction attempt had a FINANCIAL DISCREPANCY or QUALITY ISSUE.
 - Expected Total Sum (from Text): ${target_total:.2f}
 - Currently Extracted Sum: ${current_sum:.2f}
+
+### REFINEMENT TASK:
+1. **RE-SCAN THE DETAIL TABLE**: You missed or incorrectly extracted some members.
+2. **PRIORITIZE AMOUNT DUE**: The final invoice total should match the "Amount Due" or "Balance Due" labeled in the text (${target_total:.2f}).
+3. **CHECK COLUMN MAPPING**: Ensure "Total" column values are mapped to `CURRENT_PREMIUM`.
+4. **MEMBER RECOVERY**: If the sum is too low, you likely missed rows. If too high, you likely captured summary rows.
 {multi_col_msg}
+
 ### REFINEMENT INSTRUCTIONS:
-1. **CHECK EVERY PREMIUM**: Do NOT assume a standard rate (e.g., $2.90). Look at EACH member's line in the raw text. Some members may have different rates (e.g. $1.31 or $1.89) depending on their age or group. Extract the ACTUAL number for each row.
-2. **COLUMN MAPPING**: Ensure you are not shifting columns (e.g. using Volume as Premium).
-3. **ZERO HALLUCINATION**: If the text says one number, return that EXACT number. Never invent a number.
-4. **COMPLETE CAPTURE**: Ensure EVERY name listed in the detail table (in ALL columns) is captured.
+1. **CHECK EVERY PREMIUM**: Do NOT assume a standard rate. Look at EACH member's line in the raw text. 
+2. **ZERO HALLUCINATION**: If the text says one number, return that EXACT number. Never invent a number.
+3. **COMPLETE CAPTURE**: Ensure EVERY name listed in the detail table (in ALL columns) is captured.
 
 TEXT TO RE-PROCESS:
 {raw_text}

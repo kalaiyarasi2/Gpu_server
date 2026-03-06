@@ -139,7 +139,61 @@ def _perform_extraction(file: UploadFile, request: Request):
                     response["total_value"] = total_amount
                     print(f"[Unified][API] Extracted Vendor Invoice Metadata: {vendor_name}, ${total_amount}")
             except Exception as meta_err:
-                print(f"[Unified][WARN] Could not extract vendor invoice metadata: {meta_err}")
+                print(f"[Unified][API][WARN] Could not extract vendor invoice metadata: {meta_err}")
+
+        # Add STANDARD INVOICE (Benefit/Insurance) specific metadata
+        if doc_type == "INVOICE" and json_path:
+            try:
+                import json as json_lib
+                with open(json_path, "r", encoding="utf-8") as f:
+                    data = json_lib.load(f)
+                
+                # In universal_pdf_extractor_v3 JSON, data is usually a list of items or a dict with "line_items"
+                items = data if isinstance(data, list) else data.get("line_items", [])
+                
+                total_val = 0.0
+                insurer_name = "Insurance Document"
+                
+                if items:
+                    # Look for the special audit row or the INV_TOTAL field
+                    for item in items:
+                        # Priority 1: Check for the 'INV_TOTAL' metadata field on any row
+                        it = item.get("INV_TOTAL")
+                        if it and str(it).lower() not in ["n/a", "none", "", "nan"]:
+                            try:
+                                total_val = float(str(it).replace(",", "").replace("$", ""))
+                                if total_val > 0:
+                                    break
+                            except: pass
+
+                    if not total_val:
+                        # Priority 2: Look for the audit summary row with priority labels
+                        priority_order = ["AMOUNT DUE", "INVOICED AMOUNT", "BALANCE DUE", "REPORTED INVOICE TOTAL", "GRAND TOTAL"]
+                        
+                        found = False
+                        for label in priority_order:
+                            for item in reversed(items):
+                                pn = str(item.get("PLAN_NAME") or "").upper()
+                                fn = str(item.get("FIRSTNAME") or "").upper()
+                                if label in pn or label in fn:
+                                    try:
+                                        val = float(str(item.get("CURRENT_PREMIUM", 0)).replace(",", "").replace("$", ""))
+                                        if val > 0:
+                                            total_val = val
+                                            found = True
+                                            break
+                                    except: pass
+                            if found: break
+                    
+                    if not total_val:
+                        # Priority 3: Fallback to summing CURRENT_PREMIUM (for rows that have a name)
+                        total_val = sum(float(str(i.get("CURRENT_PREMIUM", 0)).replace(",", "").replace("$", "")) for i in items if i.get("FIRSTNAME"))
+                
+                response["insurer"] = insurer_name
+                response["total_value"] = total_val
+                print(f"[Unified][API] Extracted Insurance Invoice Metadata: {insurer_name}, ${total_val}")
+            except Exception as meta_err:
+                print(f"[Unified][API][WARN] Could not extract insurance invoice metadata: {meta_err}")
 
         # Add Work Compensation specific metadata
         if doc_type == "WORK_COMPENSATION" and json_path:

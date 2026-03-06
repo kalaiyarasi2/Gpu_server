@@ -79,7 +79,8 @@ def clean_ocr_noise(text: str) -> str:
             
         # V3: Virtual Pipes - Replace large whitespace gaps with | 
         # This prevents the LLM from losing track of columns in landscape/wide docs
-        line = re.sub(r'\s{3,}', ' | ', line)
+        # Changed from \s{3,} to \s{2,} to better detect tight columns (like name splitting)
+        line = re.sub(r'\s{2,}', ' | ', line)
         
         cleaned_lines.append(line)
         
@@ -148,10 +149,53 @@ def clean_billing_period(val: Optional[str]) -> Optional[str]:
             
     return s
 
+
+def clean_string_spacing(val: Optional[str], preserve_single: bool = True) -> Optional[str]:
+    """
+    Clean redundant whitespace from strings (names, plan types, etc.).
+    - preserve_single=True: Normalizes 2+ spaces/newlines to 1 space.
+    """
+    if not val or not str(val).strip() or str(val).lower() in ["n/a", "none"]:
+        return val
+    
+    s = str(val).strip()
+    if preserve_single:
+        # Replace newlines and redundant internal spaces with a single space
+        s = re.sub(r'[\r\n\t]+', ' ', s)
+        s = re.sub(r'\s{2,}', ' ', s)
+    else:
+        # Strip all whitespace
+        s = re.sub(r'\s+', '', s)
+    return s.strip()
+
+
+def format_date_clean(val: Optional[str]) -> Optional[str]:
+    """
+    Standardize dates to M/D/YYYY format, stripping leading zeros.
+    Example: 01/02/2026 -> 1/2/2026
+    """
+    if not val or not str(val).strip() or str(val).lower() in ["n/a", "none"]:
+        return val
+        
+    s = str(val).strip()
+    # Try common formats: MM/DD/YYYY, MM/DD/YY, M/D/YY
+    match = re.search(r'(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})', s)
+    if match:
+        m, d, y = match.groups()
+        # Strip leading zeros
+        m_clean = str(int(m))
+        d_clean = str(int(d))
+        # Ensure year is 4 digits if it's 2
+        y_clean = y
+        if len(y) == 2:
+            y_clean = "20" + y
+        return f"{m_clean}/{d_clean}/{y_clean}"
+    
+    return s
+
 # Configuration
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-# Define the fields to extract (Standardized 15 fields for 7-Layer Pipeline)
 REQUIRED_FIELDS = [
     "INV_DATE",
     "INV_NUMBER",
@@ -621,7 +665,13 @@ Extract data from the document text provided below.
     - **Audit Total**: Ensure every member listed in the detail table is captured.
 - **BCBS (BlueCross BlueShield)**: 
     - **Subscriber ID** or **Member ID** -> maps to `MEMBERID`.
-    - **Coverage from Plan**: In BCBS RI, coverage is often inside the plan string (e.g., "IND AGE RATED" -> **EE**, "FAM AGE RATED" -> **FAM**).
+    - **Coverage Mapping**: 
+        - "SINGLE" -> **EE**
+        - "EMPLOYEE/CHILDREN" -> **EC**
+        - "EMPLOYEE/SPOUSE" -> **ES**
+        - "FAMILY" -> **FAM**
+        - Also check plan string (e.g., "IND AGE RATED" -> **EE**, "FAM AGE RATED" -> **FAM**).
+    - **PLAN_TYPE**: Default to **MEDICAL** for all health coverage rows unless otherwise specified.
     - **MANDATORY DETAIL EXTRACTION**: Extract members ONLY from the subscriber detail tables (e.g., "SECTION 3" or "DETAIL OF SUBSCRIBERS").
     - **GREEDY EXTRACTION**: Capture every row in the detail table. Even if a name was seen in a summary header (e.g., Account Owner "SHARAD SAXTON"), extract it again as a member row if it appears with a Subscriber ID and Premium.
     - **FAM AGE RATED MANDATE**: "FAM AGE RATED" rows are INDIVIDUAL member enrollments (Family tier) and MUST be extracted as line items. Do NOT treat them as summary totals.
@@ -630,6 +680,7 @@ Extract data from the document text provided below.
     - **NO TRUNCATION**: Capture the FULL length of `INV_NUMBER` (usually 12 digits like 260210001403).
     - **BILLING_PERIOD**: Extract the START ("From") date only (e.g., `01/01/2026`) - do NOT include the end date.
     - **NO HALLUCINATION**: NEVER invent or create member rows. If a member is not explicitly in the detail table, return NULL. Do NOT use fake IDs like 123456789.
+    - **TOTAL RECOVERY (CRITICAL)**: Look for **"Invoiced Amount"** or **"Amount Due"** in the header. If both are present, use **"Amount Due"** (e.g., $22,557.30). Do **NOT** use "TOTAL BILLED AMOUNT" if "AMOUNT DUE" exists.
     - Plan names often include "LG GRP" or suffixes like "RC" on hanging lines; use Multiline Aggregation.
 - **GIS Benefits (Group Insurance Services)**:
     - GIS invoices have TWO tables: Page 1 (summary) and Page 2+ (detail with Payroll File Numbers).
@@ -653,6 +704,10 @@ Extract data from the document text provided below.
     - **MIRRORING**: Unum invoices are often MIRRORED (reversed). The system fixes this, but LLMs sometimes misread digits (e.g., '3' vs '8'). BE EXTREMELY CAREFUL with digits.
     - **MEMBERID**: Extract from the "ID NO:" field or equivalent numeric column (e.g., `278069173`).
     - **MULTIPLE PLAN ROWS (CRITICAL)**: A member may have MULTIPLE rows (e.g., one for **LTD** and one for **STD**). You MUST extract EACH row as a separate line item. DO NOT consolidate them into one row; the system will handle it.
+- **KCL (Kansas City Life)**:
+    - **INV_NUMBER SOURCE**: Extract the "Group Number" (e.g., `27716`) and map it to `INV_NUMBER`. In KCL documents, this is the primary invoice identifier.
+    - **HEADER DATA**: Extract `INV_DATE` (e.g., "Date Prepared") and `BILLING_PERIOD` (e.g., "Provides coverage from").
+    - **PLAN_TYPE**: Map "TG Life" to **LIFE** and "TG AD&D" to **AD&D**.
     - **PLAN_TYPE MAPPING**: 
         - If "LTD" appears in the row -> `PLAN_TYPE`: **LTD**
         - If "STD" appears in the row -> `PLAN_TYPE`: **STD**
@@ -661,9 +716,11 @@ Extract data from the document text provided below.
         - The `TOTAL DUE` column is the SUM of ER + EE costs; DO NOT use it for `CURRENT_PREMIUM` unless EE is missing.
         - Do NOT extract the value from the `EP` or `COVERAGE` columns (which are usually large numbers like `3,750` or `865`) as a premium.
     - **TOTALS IGNORE**: Ignore lines labeled "TOTALS" for each member (e.g., the row that sums LTD + STD for that person). Focus ONLY on the individual plan rows.
-    - **NAMES**: Ensure names are un-mirrored correctly (e.g., "NAPKA, LEANNE" not "AKPAN").
+    - **NAMES**: Ensure names are un-mirrored correctly (e.g., "NAPKA, LEANNE" not "AKPAN"). 
+    - **NAME SPLITTING (CRITICAL)**: If First and Last names appear joined (e.g. "MELLAMANDI"), use capital letters or common name patterns to split them (e.g. "MELLA MANDI" -> FIRST: MELLA, LAST: MANDI).
     - **GENERAL DATES**: Always return only the STARTING date for `BILLING_PERIOD`. If the text says `02/01/26-02/28/26`, return `02/01/26`.
     - **REVERSE-AWARENESS TIP**: If you see names like `YAWOLLOH` or `NAPKA`, it means the system failed to un-mirror. In this case, YOU must mentally reverse every string (e.g., `YAWOLLOH` -> `HOLLOWAY`) before extraction.
+- **TG PLAN PREFIX (CRITICAL)**: If a plan name starts with 'TG' (like TG LIFE or TG AD&D), there MUST be a space between 'TG' and the rest of the name. Never extract it as 'TGLife' or 'TGAD&D'.
 - **GENERAL MAPPING (IF CARRIER UNKNOWN)**:
     - "Invoice Date" / "Date" -> `INV_DATE`
     - "Invoice #" / "Inv #" -> `INV_NUMBER`
@@ -672,6 +729,7 @@ Extract data from the document text provided below.
     - "Adjustment" / "Credit" / "Debit" -> `ADJUSTMENT_PREMIUM`
     - "Product" / "Plan Description" / "Coverage Type" -> `PLAN_NAME`
     - "Policy No." / "Policy Number" -> `POLICYID`
+    - "Amount Due" / "Invoiced Amount" / "Balance Due" / "Grand Total" / "Invoice Total" -> `INV_TOTAL`
 3. **Multiline Value Aggregation**:
    - **CRITICAL**: Some columns (especially 'Product', 'Plan', or 'Address') span multiple lines vertically.
    - You MUST look at the lines immediately following a member row. If they contain hanging text (e.g., "LG GRP PLAN 49-" and "RC" below "BLUECARE NFQ"), AGGREGATE them into the appropriate field (e.g., `PLAN_NAME`) with a space.
@@ -688,9 +746,24 @@ Extract data from the document text provided below.
 - If a row contains "Total", "Amount Due", or "Balance Due", skip it completely.
 
 4. **Leading Zeros**: Preserve every single zero.
-5. **Landscape Awareness**: This text may come from a LANDSCAPE document with dense columns. Ensure you look horizontally across mashed strings (e.g., "$100|ID123") to find all fields.
-6. **Aggressive Row Capture**: You MUST extract EVERY individual listed in the main table. Even if the name contains symbols (e.g., "#27411" or "“6078") or looks like garbage, extract it as-is. Do not skip any rows.
-6. **SSN/Identifier Capture**: 
+5. **Aggressive Row Capture**: You MUST extract EVERY individual listed in the main table. Even if the name contains symbols (e.g., "#27411" or "“6078") or looks like garbage, extract it as-is. Do not skip any rows.
+6. **HORIZONTAL REPETITION (CRITICAL)**:
+  If a line contains multiple names (e.g. `Bennett Andrew Gacio Tomas`) or multiple amounts side-by-side (e.g. `$2.99 $2.99`), it indicates multiple members per column. YOU MUST extract EVERY member by scanning horizontally across the mashed string. 
+  **EXAMPLE**: If you see `GacioTomas PauleyGlen`, there are TWO people there. If you only extract `Pauley Glen`, you have missed `Gacio Tomas`. Look for recurring patterns of `Name | Code | Premium | Volume`.
+7. **SPACE PRESERVATION (CRITICAL)**: In `PLAN_NAME` and `PLAN_TYPE`, you MUST preserve any spaces that appear in the source text. For example, if you see `TG AD&D`, do NOT extract it as `TGAD&D`. Keep the internal space.
+8. **DATA ACCURACY (INVOICE #)**:
+    - NEVER map the total amount due (even if formatted as a long number like `000000005372` for $53.72) to `INV_NUMBER`.
+    - Look for common labels like "Invoice No:", "Invoice #", "Invoice Number", "No:", "#", or "Group Number:" to find the invoice number.
+    - **KCL SPECIFIC**: For KCL, the "Group Number" is the invoice number. You MUST extract it.
+    - Only return NULL if there is absolutely NO alphanumeric string in the header that is clearly labeled as an invoice identifier.
+9. **COVERAGE MAPPING (CRITICAL)**:
+    - If a table has a "Code" column with values like `EE`, `SP`, `CH`, `FAM`, map this to the `COVERAGE` field.
+    - If `EE` is the only code, ensure it is applied to all rows.
+10. **PLAN_TYPE DISTINCTION (CRITICAL)**:
+    - `PLAN_TYPE` must be a high-level category (e.g., LIFE, AD&D, MEDICAL, DENTAL, VISION).
+    - **CRITICAL**: NEVER put `EE`, `FAM`, or other coverage tiers into the `PLAN_TYPE` field. 
+    - If the document lacks a `PLAN_TYPE` column, infer it from the `PLAN_NAME`. (e.g., `TG Life` -> `PLAN_TYPE`: `LIFE`, `TG AD&D` -> `PLAN_TYPE`: `AD&D`).
+11. **SSN/Identifier Capture**: 
     - Extract any visible digits in the SSN column. 
     - **CRITICAL**: If the SSN is masked (e.g., `*****9868`), extract ONLY the last 4 digits (`9868`). 
     - **IGNORE OCR ARTIFACTS**: OCR often misreads the mask `*****` as digits (e.g., `884`). If you see a 7 or 8-digit SSN starting with repetitive or suspicious numbers (like `884`), ignore the prefix and capture ONLY the trailing digits that match the pattern in the rest of the document.
@@ -762,7 +835,11 @@ Extract data from the document text provided below.
 6. **PREMIUM FIELDS (STRICT DEFINITIONS)**:
    - **CURRENT_PREMIUM**: Maps to the recurring base premium for the current period.
    - **ADJUSTMENT_PREMIUM**: Maps to retroactive or corrective amounts (e.g., credits, prorated debits).
-   - **GRAND TOTAL AUTHORITATIVE**: Prioritize labels like "Total Amount Due", "Total Amount Billed", "Total Payment Due", or "Current Charges & Adjustments" from Page 1 (Cover Page). 
+   - **GRAND TOTAL AUTHORITATIVE (CRITICAL)**: Always prioritize Page 1 (Cover Page) for document-level totals:
+      - **TOTAL_BILLED**: The base premium before any adjustments (e.g., "TOTAL BILLED AMOUNT").
+      - **TOTAL_ADJUSTMENTS**: The sum of all adjustments/retroactivity (e.g., "ON-BILL ADJUSTMENTS").
+      - **AMOUNT_DUE**: The final bottom-line amount (e.g., "AMOUNT DUE"). This is the MOST IMPORTANT number in the document.
+      - **NOTE**: These fields should be placed in the `HEADER` object.
    - **PREMIUM THRESHOLD (CRITICAL)**: If a row in the member table lists a premium > $4,000, it is a **Sub-total** or **Total** line. You MUST filter this out. 
    - **NO HALLUCINATION**: Do not invent member rows. Do not try to match a global total if the data is not on the page.
 
@@ -777,8 +854,12 @@ Extract data from the document text provided below.
 7. **PRICING_MODEL (INTERNAL ANALYSIS)**:
    - **Definition**: Captures descriptors like "FAM AGE RATED" or "COMMUNITY RATED".
    - **RULE**: Use this to handle rating text without polluting `PLAN_TYPE`. Do not include in final output.
+    
+8. **TOTAL VERIFICATION (CROSS-CHECK)**:
+    - **MANDATORY**: Sum all individual premiums you extracted. Compare this sum to the "Grand Total" or `INV_TOTAL` found on the page.
+    - If your sum (e.g. $50.35) is less than the Grand Total (e.g. $53.72), it means you MISSED a member like `Gacio Tomas`. You MUST re-scan the text (especially the horizontal space between columns) to find the missing person and include them.
+    - ALWAYS capture the "Grand Total" into the `INV_TOTAL` field of every row (it's document level metadata).
    
-
 
 
 
@@ -786,6 +867,7 @@ Extract data from the document text provided below.
 ### NAME FORMATTING RULES:
 - **Consistency**: Look for a pattern in the document (usually all names follow the same FIRST LAST or LAST FIRST format).
 - **LASTNAME/FIRSTNAME**: Split Names carefully. 
+- **STRICT SPLITTING**: If name columns are tight, the text may arrive as `LASTFIRST` (e.g. `DOEJOHN`). You MUST detect the split (e.g. `LAST: DOE`, `FIRST: JOHN`).
 - **BCBS RI Rule**: Names are likely **FIRST LAST** (e.g., "SHARAD SAXTON"). Confirm by checking common names.
 - **Ignore Noise**: Do NOT put "N/A" or Department numbers (e.g., "3") into name fields.
 - **Standard**: Prefer `LASTNAME, FIRSTNAME` if the document uses commas. If no commas, use your best judgment but keep it consistent across all rows.
@@ -859,7 +941,10 @@ Output: `{{"LASTNAME": "ANAND", "FIRSTNAME": "ARJUN", "MEMBERID": "2543915", "SS
   "HEADER": {{
     "INV_DATE": null,
     "INV_NUMBER": null,
-    "BILLING_PERIOD": null
+    "BILLING_PERIOD": null,
+    "TOTAL_BILLED": null,
+    "TOTAL_ADJUSTMENTS": null,
+    "AMOUNT_DUE": null
   }},
   "LINE_ITEMS": [
     {{
@@ -1178,7 +1263,7 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
         print(f"    - Result: WARNING (Length mismatch: {combined_pages_len + markers_len} vs {original_len})")
 
     all_line_items = []
-    final_header = {field: None for field in REQUIRED_FIELDS if field in ["INV_DATE", "INV_NUMBER", "BILLING_PERIOD", "GROUP_NUMBER", "PRICING_ADJUSTMENT"]}
+    final_header = {field: None for field in ["INV_DATE", "INV_NUMBER", "BILLING_PERIOD", "TOTAL_BILLED", "TOTAL_ADJUSTMENTS", "AMOUNT_DUE", "GROUP_NUMBER", "PRICING_ADJUSTMENT"]}
     
     print(f"  [V3] Splitting large document into {len(pages)} pages for reliable extraction...")
     
@@ -1330,6 +1415,19 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
         "LINE_ITEMS": all_line_items
     }
     
+    # Propagate Header Total to line item field if AI only extracted it in header
+    # This ensures consistency even if the LLM followed instructions to keep it in HEADER
+    header_amt_due = final_header.get("AMOUNT_DUE")
+    if header_amt_due and not any(item.get("PLAN_NAME") == "TOTAL" for item in all_line_items):
+        final_total = to_float(header_amt_due)
+        if final_total > 0:
+            print(f"    [V4] Adding synthetic TOTAL row from Header AMOUNT_DUE: {final_total}")
+            all_line_items.append({
+                "PLAN_NAME": "TOTAL",
+                "FIRSTNAME": "INVOICE TOTAL",
+                "CURRENT_PREMIUM": final_total
+            })
+    
 
         
     return data
@@ -1360,12 +1458,23 @@ def process_single_pdf_to_excel(pdf_path: str, output_excel: str):
     # Convert to DataFrame
     df = pd.DataFrame(rows)
     
-    # Ensure all REQUIRED_FIELDS are present as columns
+    # Save the full data to JSON before filtering columns for Excel
+    # This JSON is used by the UI to display metadata like the total_value
+    json_output = output_excel.replace(".xlsx", ".json")
+    try:
+        import json as json_lib
+        with open(json_output, "w", encoding="utf-8") as f:
+            json_lib.dump(rows, f, indent=4)
+        print(f"[OK] Full extraction data saved to JSON: {json_output}")
+    except Exception as je:
+        print(f"[WARN] Failed to save JSON: {je}")
+
+    # Ensure all REQUIRED_FIELDS are present as columns for Excel
     for field in REQUIRED_FIELDS:
         if field not in df.columns:
             df[field] = None
             
-    # Reorder columns
+    # Reorder columns - STRICTLY use REQUIRED_FIELDS for Excel
     cols = ['SOURCE_FILE'] + REQUIRED_FIELDS
     # Only pick columns that actually exist to avoid KeyError
     cols = [c for c in cols if c in df.columns]
@@ -1474,6 +1583,49 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
             clean_header = header.copy()
             if "BILLING_PERIOD" in clean_header:
                 clean_header["BILLING_PERIOD"] = clean_billing_period(clean_header["BILLING_PERIOD"])
+            
+            # Additional header cleaning for dates and spacing
+            for k in ["INV_DATE", "BILLING_PERIOD"]:
+                if k in clean_header: clean_header[k] = format_date_clean(clean_header[k])
+            for k in ["INV_NUMBER", "POLICYID"]:
+                if k in clean_header: clean_header[k] = clean_string_spacing(clean_header[k], preserve_single=True)
+            
+            # Post-processing: Correct INV_NUMBER if it looks like a formatted Amount Due
+            # e.g., 000000005372 for $53.72 total.
+            if clean_header.get("INV_NUMBER"):
+                inv_num_val = str(clean_header["INV_NUMBER"])
+                # Find the total amount from line items to compare
+                potential_total = 0.0
+                for item in line_items:
+                    if str(item.get("PLAN_NAME") or "").upper() == "TOTAL" or \
+                       str(item.get("FIRSTNAME") or "").upper() == "INVOICE TOTAL":
+                        try:
+                            s = str(item.get("CURRENT_PREMIUM") or "").replace('$', '').replace(',', '').strip()
+                            potential_total = float(s)
+                        except: pass
+                        break
+                
+                if potential_total > 0:
+                    total_cents = str(int(round(potential_total * 100))) # e.g. 5372
+                    # If INV_NUMBER contains many zeros and ends with the exact cents of the total
+                    if len(inv_num_val) > 8 and inv_num_val.lstrip('0') == total_cents:
+                        print(f"    [V3][FIX] Resetting INV_NUMBER '{inv_num_val}' because it matches Total Amount '{potential_total}'")
+                        clean_header["INV_NUMBER"] = None
+                        inv_num_val = ""  # Don't do further processing
+                
+                # Strip excessive leading zeros (e.g. "000000000027716" -> "27716")
+                # Only do this if: the value is all-numeric, has 4+ leading zeros, and dropping them
+                # leaves a meaningful number (3+ digits). This avoids stripping BCBS 12-digit IDs
+                # like "260210001403" which don't start with 4+ zeros.
+                if clean_header.get("INV_NUMBER") and inv_num_val:
+                    inv_num_val = str(clean_header["INV_NUMBER"])
+                    if inv_num_val.replace(".", "").replace("-", "").isdigit():
+                        stripped = inv_num_val.lstrip('0')
+                        leading_zeros = len(inv_num_val) - len(stripped)
+                        # Only strip if there are 4+ leading zeros AND the result has 3+ digits
+                        if leading_zeros >= 4 and len(stripped) >= 3:
+                            print(f"    [V3][FIX] Stripping leading zeros from INV_NUMBER '{inv_num_val}' -> '{stripped}'")
+                            clean_header["INV_NUMBER"] = stripped
             
             def to_float(val):
                 if val is None: return 0.0
@@ -1587,20 +1739,20 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                     # Check if we have an existing record with the SAME name
                     matched_by_name_idx = None
                     for idx, ex in enumerate(merged_items):
-                        ex_fname = str(ex.get("FIRSTNAME") or "").strip().lower()
-                        ex_lname = str(ex.get("LASTNAME") or "").strip().lower()
+                        # Normalize names for comparison (remove spaces, e.g. "Gacio Tomas" == "GacioTomas")
+                        ex_fname = str(ex.get("FIRSTNAME") or "").replace(" ", "").strip().lower()
+                        ex_lname = str(ex.get("LASTNAME") or "").replace(" ", "").strip().lower()
                         
-                        # [ENHANCEMENT] Handle middle initials in first name (e.g. "John" vs "John A")
-                        f1, f2 = fname, ex_fname
-                        l1, l2 = lname, ex_lname
+                        f1, f2 = fname.replace(" ", ""), ex_fname
+                        l1, l2 = lname.replace(" ", ""), ex_lname
                         
                         name_match = False
                         if l1 == l2:
-                            # Direct first name match
                             if f1 == f2:
                                 name_match = True
                             # One First Name starts with the other First Name (handles initials)
-                            elif (len(f1) > 1 and len(f2) > 1) and (f1.startswith(f2) or f2.startswith(f1)):
+                            # Only merge if one name is an initial (1 char) to avoid Tomas -> Tomas-Phillip
+                            elif (f1.startswith(f2) or f2.startswith(f1)) and (len(f1) == 1 or len(f2) == 1):
                                 name_match = True
                         
                         if name_match:
@@ -1696,6 +1848,45 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                 
                 row.update(clean_header)
                 row.update(item)
+                
+                # --- V3.1 CLEANING LOGIC (User Requested Formatting) ---
+                # Clean names (normalize multiple spaces)
+                for f in ["FIRSTNAME", "LASTNAME", "MIDDLENAME"]:
+                    if row.get(f): row[f] = clean_string_spacing(row[f], preserve_single=True)
+                
+                # Clean Plan/Plan Type (preserve single spaces but fix redundant gaps)
+                for f in ["PLAN_NAME", "PLAN_TYPE"]:
+                    if row.get(f): 
+                        row[f] = clean_string_spacing(row[f], preserve_single=True)
+                        # Fix "TG" prefix missing space (e.g., TGAD&D -> TG AD&D, TGLife -> TG Life)
+                        if f == "PLAN_NAME" and row[f]:
+                            row[f] = re.sub(r'^TG([A-Za-z&])', r'TG \1', str(row[f]), flags=re.IGNORECASE)
+                
+                # Normalize Coverage and Plan Type
+                if row.get("COVERAGE"):
+                    row["COVERAGE"] = str(row["COVERAGE"]).strip().upper()
+                
+                # Fix common PLAN_TYPE mis-mappings (EE -> LIFE/AD&D inference)
+                if row.get("PLAN_TYPE") and str(row["PLAN_TYPE"]).upper() in ["EE", "FAM", "SP", "CH", "DEP"]:
+                    # Likely a mapping error - try to infer from PLAN_NAME
+                    pn = str(row.get("PLAN_NAME") or "").upper()
+                    if "AD&D" in pn: row["PLAN_TYPE"] = "AD&D"
+                    elif "LIFE" in pn: row["PLAN_TYPE"] = "LIFE"
+                    elif "DENTAL" in pn: row["PLAN_TYPE"] = "DENTAL"
+                    elif "VISION" in pn: row["PLAN_TYPE"] = "VISION"
+                    elif "MED" in pn or "BLUE" in pn or "EVERYDAY" in pn: row["PLAN_TYPE"] = "MEDICAL"
+                
+                # Default PLAN_TYPE for BCBS if missing
+                if not row.get("PLAN_TYPE"):
+                    pn = str(row.get("PLAN_NAME") or "").upper()
+                    # Florida Blue / BCBS patterns
+                    if "EVERYDAY" in pn or "BLUE" in pn or "FLORIDA BLUE" in pn or "HEALTH" in pn:
+                        row["PLAN_TYPE"] = "MEDICAL"
+                
+                # Clean Dates (M/D/YYYY format, strip leading zeros)
+                for f in ["INV_DATE", "BILLING_PERIOD"]:
+                    if row.get(f): row[f] = format_date_clean(row[f])
+                # -------------------------------------------------------
                 # Remove internal fields that shouldn't be in Excel
                 for internal_field in ["PRICING_MODEL", "RELATIONSHIP"]:
                     if internal_field in row:
@@ -1735,12 +1926,18 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                 if prem_val > 4000 and not is_sharad_with_id:
                     is_total = True
                 
-                # If FIRSTNAME and PLAN_NAME are empty, but LASTNAME and PREMIUM match a summary pattern
+                # If FIRSTNAME/LASTNAME exist but PLAN_NAME and MEMBERID are missing,
+                # it's almost certainly an account-level summary or header row.
                 if not is_total:
-                    has_first = idx_f and idx_f not in ["NONE", "NAN", "N/A", "UNKNOWN"]
-                    has_plan = idx_p and idx_p not in ["NONE", "NAN", "N/A", "UNKNOWN"]
-                    if not has_first and not has_plan and idx_l:
-                        # This looks like an entity name (e.g. RAPID TRADING LLC) rather than a person
+                    has_mid = idx_mid and idx_mid not in ["NONE", "NAN", "N/A", "UNKNOWN", ""]
+                    has_plan = idx_p and idx_p not in ["NONE", "NAN", "N/A", "UNKNOWN", ""]
+                    has_names = idx_f and idx_l and idx_f not in ["NONE", "NAN", "N/A"]
+                    
+                    if has_names and not has_mid and not has_plan:
+                        # Case: Sharad Saxton appearing without ID/Plan (Account Header)
+                        is_total = True
+                    elif not has_names and not has_plan:
+                        # Entity name or random header text
                         is_total = True
                 
                 if is_total:
@@ -1770,24 +1967,10 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
             # Build audit-ready total rows
             final_total_rows = []
             
-            # Row 1: Sum of all Current Premiums
-            row_curr = {field: None for field in REQUIRED_FIELDS}
-            row_curr["PLAN_NAME"] = "TOTAL CURRENT PREMIUM"
-            row_curr["CURRENT_PREMIUM"] = sum_current
-            final_total_rows.append(row_curr)
-            
-            # Row 2: Sum of all Adjustments (Only if non-zero)
-            if abs(sum_adj) > 0.001:
-                row_adj = {field: None for field in REQUIRED_FIELDS}
-                row_adj["PLAN_NAME"] = "TOTAL ADJUSTMENTS"
-                row_adj["ADJUSTMENT_PREMIUM"] = sum_adj
-                final_total_rows.append(row_adj)
-            
-            # Row 3: Final Combined Total (at the bottom of Current Premium column per user request)
-            row_grand = {field: None for field in REQUIRED_FIELDS}
-            row_grand["PLAN_NAME"] = "GRAND TOTAL (COMBINED)"
-            row_grand["CURRENT_PREMIUM"] = combined_total
-            final_total_rows.append(row_grand)
+            # Row 1 (REMOVED): Previously had TOTAL CURRENT PREMIUM - user requested removal.
+            # Row 2 (REMOVED): Previously had TOTAL ADJUSTMENTS - user requested removal.
+            # Row 3 (REMOVED): Previously had GRAND TOTAL (COMBINED) - user requested removal.
+            # Only "REPORTED INVOICE TOTAL (FOR AUDIT)" is now emitted.
 
             # Audit Check: If the LLM explicitly extracted a "TOTAL" line item that differs from our sum
             llm_total_val = 0.0
@@ -1806,12 +1989,46 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                         llm_total_val = to_float(item.get("CURRENT_PREMIUM"))
                         break
             
-            if llm_total_val > 0 and abs(llm_total_val - combined_total) > 0.05:
+            # Use explicitly captured INV_TOTAL if present on any row
+            if not llm_total_val:
+                for item in line_items:
+                    itotal = to_float(item.get("INV_TOTAL"))
+                    if itotal > 0:
+                        llm_total_val = itotal
+                        break
+            
+            # Ensure we ALWAYS have a total row for audit
+            # V4 Strategy: 
+            # 1. Prioritize Header AMOUNT_DUE if explicitly extracted
+            # 2. Fallback to LLM_TOTAL (from line items)
+            # 3. Fallback to combined_total (calculated sum)
+            header_total = to_float(header.get("AMOUNT_DUE"))
+            effective_total = header_total if header_total > 0 else (llm_total_val if llm_total_val > 0 else combined_total)
+            
+            if effective_total > 0:
                 row_report = {field: None for field in REQUIRED_FIELDS}
-                row_report["PLAN_NAME"] = "REPORTED INVOICE TOTAL (FOR AUDIT)"
-                row_report["CURRENT_PREMIUM"] = llm_total_val
+                # Label based on whether it was explicitly reported or just calculated by us
+                # If we have a header total or llm reported total, it's REPORTED.
+                source_is_reported = (header_total > 0 or llm_total_val > 0)
+                label = "REPORTED INVOICE TOTAL" if source_is_reported else "CALCULATED INVOICE TOTAL"
+                row_report["PLAN_NAME"] = f"{label} (FOR AUDIT)"
+                row_report["CURRENT_PREMIUM"] = effective_total
+                
                 final_total_rows.append(row_report)
-                print(f"    [V3][AUDIT] Total mismatch detected! Calculated: {combined_total}, Reported: {llm_total_val}")
+                
+                # Enhanced Validation Logging
+                reported_val = header_total if header_total > 0 else llm_total_val
+                if reported_val > 0 and abs(combined_total - reported_val) > 0.05:
+                    print(f"\n    [V4][AUDIT][WARNING] Total calculation discrepancy detected!")
+                    print(f"      Reported (Document): {reported_val}")
+                    print(f"      Calculated (Sum):     {combined_total} (Current: {sum_current}, Adj: {sum_adj})")
+                    print(f"      Difference:           {round(combined_total - reported_val, 2)}\n")
+
+            # Propagate the real invoice total (effective_total) to every member row as INV_TOTAL
+            # so that shared_configs.py can use it for the UI card.
+            if effective_total > 0:
+                for mr in member_rows:
+                    mr["INV_TOTAL"] = effective_total
 
             rows = member_rows + final_total_rows
                 
@@ -1855,6 +2072,27 @@ def process_step(txt_path: str, output_excel: str = "extracted_data.xlsx"):
     
     # Convert to DataFrame
     df = pd.DataFrame(rows)
+    
+    # Save the full data to JSON before filtering columns for Excel
+    json_output = output_excel.replace(".xlsx", ".json")
+    try:
+        import json as json_lib
+        with open(json_output, "w", encoding="utf-8") as f:
+            json_lib.dump(rows, f, indent=4)
+        print(f"[OK] Full extraction data saved to JSON: {json_output}")
+    except Exception as je:
+        print(f"[WARN] Failed to save JSON: {je}")
+
+    # Ensure all REQUIRED_FIELDS are present as columns for Excel
+    for field in REQUIRED_FIELDS:
+        if field not in df.columns:
+            df[field] = None
+            
+    # Reorder columns - STRICTLY use REQUIRED_FIELDS for Excel
+    cols = ['SOURCE_FILE'] + REQUIRED_FIELDS
+    # Only pick columns that actually exist to avoid KeyError
+    cols = [c for c in cols if c in df.columns]
+    df = df[cols]
     
     # Save to Excel
     df.to_excel(output_excel, index=False, engine='openpyxl')
