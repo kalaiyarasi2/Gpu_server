@@ -173,24 +173,38 @@ def format_date_clean(val: Optional[str]) -> Optional[str]:
     """
     Standardize dates to M/D/YYYY format, stripping leading zeros.
     Example: 01/02/2026 -> 1/2/2026
+    Also handles YYYYMM (202603 -> 3/1/2026) and MM/YYYY (03/2026 -> 3/1/2026).
     """
     if not val or not str(val).strip() or str(val).lower() in ["n/a", "none"]:
         return val
         
     s = str(val).strip()
-    # Try common formats: MM/DD/YYYY, MM/DD/YY, M/D/YY
+    
+    # 1. Full Date Try: MM/DD/YYYY, MM/DD/YY, M/D/YY
     match = re.search(r'(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})', s)
     if match:
         m, d, y = match.groups()
-        # Strip leading zeros
         m_clean = str(int(m))
         d_clean = str(int(d))
-        # Ensure year is 4 digits if it's 2
-        y_clean = y
-        if len(y) == 2:
-            y_clean = "20" + y
+        y_clean = y if len(y) == 4 else ("20" + y)
         return f"{m_clean}/{d_clean}/{y_clean}"
     
+    # 2. Year/Month Only Try: YYYYMM (e.g. 202603)
+    match_yyyymm = re.search(r'^(\d{4})(\d{2})$', s)
+    if match_yyyymm:
+        y, m = match_yyyymm.groups()
+        m_int = int(m)
+        if 1 <= m_int <= 12:
+            return f"{m_int}/1/{y}"
+            
+    # 3. Month/Year Try: MM/YYYY or MM-YYYY
+    match_mmyyyy = re.search(r'(\d{1,2})[/-](\d{4})', s)
+    if match_mmyyyy:
+        m, y = match_mmyyyy.groups()
+        m_int = int(m)
+        if 1 <= m_int <= 12:
+            return f"{m_int}/1/{y}"
+
     return s
 
 # Configuration
@@ -720,6 +734,13 @@ Extract data from the document text provided below.
     - **NAME SPLITTING (CRITICAL)**: If First and Last names appear joined (e.g. "MELLAMANDI"), use capital letters or common name patterns to split them (e.g. "MELLA MANDI" -> FIRST: MELLA, LAST: MANDI).
     - **GENERAL DATES**: Always return only the STARTING date for `BILLING_PERIOD`. If the text says `02/01/26-02/28/26`, return `02/01/26`.
     - **REVERSE-AWARENESS TIP**: If you see names like `YAWOLLOH` or `NAPKA`, it means the system failed to un-mirror. In this case, YOU must mentally reverse every string (e.g., `YAWOLLOH` -> `HOLLOWAY`) before extraction.
+- **APL (American Public Life)**:
+    - **Header Identifiers**: Extract "Group Number" as **INV_NUMBER**.
+    - **Member Columns**: "Policy" -> **POLICYID**, "Name" -> **FIRSTNAME/LASTNAME**, "SSN" -> **SSN**, "Product" -> **PLAN_NAME**, "Billed"/"Due" -> **CURRENT_PREMIUM**.
+    - **MULTILINE PLAN NAMES (CRITICAL)**: In APL invoices, the "Product" (PLAN_NAME) often wraps to a second line. 
+        - Example: "MEDLINKSELECT GROUP MED" (Line 1) and "SUP" (Line 2).
+        - You MUST concatenate these into a single string: "MEDLINKSELECT GROUP MED SUP".
+    - **COVERAGE INFERENCE**: If "Product" contains "MED", set **PLAN_TYPE** to **MEDICAL**. If it contains "SUP", it is typically a supplemental medical plan.
 - **TG PLAN PREFIX (CRITICAL)**: If a plan name starts with 'TG' (like TG LIFE or TG AD&D), there MUST be a space between 'TG' and the rest of the name. Never extract it as 'TGLife' or 'TGAD&D'.
 - **GENERAL MAPPING (IF CARRIER UNKNOWN)**:
     - "Invoice Date" / "Date" -> `INV_DATE`
@@ -733,6 +754,7 @@ Extract data from the document text provided below.
 3. **Multiline Value Aggregation**:
    - **CRITICAL**: Some columns (especially 'Product', 'Plan', or 'Address') span multiple lines vertically.
    - You MUST look at the lines immediately following a member row. If they contain hanging text (e.g., "LG GRP PLAN 49-" and "RC" below "BLUECARE NFQ"), AGGREGATE them into the appropriate field (e.g., `PLAN_NAME`) with a space.
+   - In APL documents, "SUP" often appears on a second line below "MED". You MUST capture this.
    - Do not stop at the first line of the table row; ensure the entire block of data for that member is captured.
 ### NUMERICAL FAITHFULNESS (ZERO TOLERANCE FOR HALLUCINATION):
 - Extract ALL premiums, IDs, and quantities EXACTLY as they appear in the text.
@@ -930,8 +952,10 @@ Extract data from the document text provided below.
 
 
 ### EXAMPLE MAPPING (APL):
-Input: `2543915 ANAND, ARJUN ****_7635 MEDLINK SELECT $85.27`
-Output: `{{"LASTNAME": "ANAND", "FIRSTNAME": "ARJUN", "MEMBERID": "2543915", "SSN": "7635", "PLAN_NAME": "MEDLINK SELECT", "CURRENT_PREMIUM": 85.27}}`
+Input: 
+`2543915 | ANAND, ARJUN | | ***-**-7635 | MEDLINKSELECT GROUP MED | $85.27 | - | $85.27`
+`| | | | SUP | | |`
+Output: `{{"LASTNAME": "ANAND", "FIRSTNAME": "ARJUN", "MEMBERID": "2543915", "SSN": "7635", "PLAN_NAME": "MEDLINKSELECT GROUP MED SUP", "CURRENT_PREMIUM": 85.27}}`
 
 8. **PLAN DATA INFERENCE**:
    - If PLAN_NAME is missing on the row, look for a general plan name in the header (e.g., "Medical", "MERP", "Dental").
@@ -1814,9 +1838,19 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                                     # Identical value likely from chunk overlap/redundant extraction
                                     pass
                         elif v and str(v).lower() not in ["n/a", "none", ""]:
-                            # Keep first non-null encounter for others, unless existing is null
-                            if not existing.get(k) or str(existing.get(k)).lower() in ["n/a", "none", ""]:
-                                existing[k] = v
+                            # [DYNAMIC] Concatenate multi-line fields (e.g. Plan Name fragments)
+                            if k in ["PLAN_NAME", "PLAN_TYPE"]:
+                                ex_v = str(existing.get(k) or "").strip()
+                                new_v = str(v).strip()
+                                # Only concatenate if new_v is not already a substring of ex_v
+                                if ex_v and new_v and new_v.lower() not in ex_v.lower():
+                                    existing[k] = f"{ex_v} {new_v}"
+                                elif not ex_v:
+                                    existing[k] = new_v
+                            else:
+                                # Keep first non-null encounter for others, unless existing is null
+                                if not existing.get(k) or str(existing.get(k)).lower() in ["n/a", "none", ""]:
+                                    existing[k] = v
                     
                     # Also update missing indices if the current item has them
                     # Index BOTH strict and loose keys to enable flexible matching

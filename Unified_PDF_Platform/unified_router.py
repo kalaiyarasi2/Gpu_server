@@ -1398,9 +1398,9 @@ Return ONLY the company name or UNKNOWN:"""
             print(f"[Provider-ID] Failed: {e}")
             return "UNKNOWN"
 
-    async def _run_with_logging(self, cmd, timeout_secs):
+    def _run_with_logging(self, cmd, timeout_secs):
         """Wrapper to run process with line-by-line output for debugging hangs."""
-        print(f"  [Debug] Running command: {' '.join(cmd)}")
+        print(f"  [Debug] Running command: {' '.join(cmd)}", flush=True)
         try:
             import subprocess
             import sys
@@ -1411,7 +1411,7 @@ Return ONLY the company name or UNKNOWN:"""
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
-                env={"PYTHONIOENCODING": "utf-8", **os.environ},
+                env={"PYTHONIOENCODING": "utf-8", "PYTHONUNBUFFERED": "1", **os.environ},
                 encoding="utf-8",
                 bufsize=1,
                 universal_newlines=True
@@ -1422,7 +1422,7 @@ Return ONLY the company name or UNKNOWN:"""
             
             def stream_reader(pipe, log_label, collector):
                 for line in iter(pipe.readline, ""):
-                    print(f"    [{log_label}] {line.strip()}")
+                    print(f"    [{log_label}] {line.strip()}", flush=True)
                     collector.append(line)
             
             t1 = threading.Thread(target=stream_reader, args=(process.stdout, "OUT", full_stdout))
@@ -1481,12 +1481,12 @@ Return ONLY the company name or UNKNOWN:"""
             # For structural extractor, output file is auto-named
             if use_structural and script_to_use == STRUCTURAL_INVOICE_SCRIPT:
                 import asyncio
-                result = asyncio.run(self._run_with_logging([sys.executable, str(script_to_use), str(pdf_path)], 900))
+                result = self._run_with_logging([sys.executable, str(script_to_use), str(pdf_path)], 900)
                 # Structural extractor creates its own output file
                 output_xlsx = Path(pdf_path).parent / "extracted_data_structural.xlsx"
             else:
                 import asyncio
-                result = asyncio.run(self._run_with_logging([sys.executable, str(script_to_use), str(pdf_path), str(output_xlsx)], 900))
+                result = self._run_with_logging([sys.executable, str(script_to_use), str(pdf_path), str(output_xlsx)], 900)
             
             if result.returncode != 0:
                 print(f"\n[ERR] Extraction Failed (Exit Code: {result.returncode})")
@@ -1568,10 +1568,10 @@ Return ONLY the company name or UNKNOWN:"""
         if not sub_pdfs or len(sub_pdfs) <= 1:
             try:
                 import asyncio
-                result = asyncio.run(self._run_with_logging(
+                result = self._run_with_logging(
                     [sys.executable, str(GENERAL_INVOICE_SCRIPT), str(pdf_path)],
                     900
-                ))
+                )
                 if result.returncode != 0:
                     print(f"\n[ERR] General Invoice Extraction Failed (Exit Code: {result.returncode})")
                     print(f"Error Details:\n{result.stderr}")
@@ -1793,10 +1793,10 @@ Return ONLY the company name or UNKNOWN:"""
             print("\n[INFO] Processing... (this may take 1-2 minutes)\n")
             
             import asyncio
-            result = asyncio.run(self._run_with_logging(
+            result = self._run_with_logging(
                 [sys.executable, str(INSURANCE_SCRIPT), str(pdf_path)],
                 900
-            ))
+            )
             
             if result.returncode == 0:
                 print("[OK] Insurance extractor completed successfully!")

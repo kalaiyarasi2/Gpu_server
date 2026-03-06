@@ -219,6 +219,18 @@ async def serve_frontend(request: Request, path: str = ""):
 
 if __name__ == "__main__":
     import uvicorn
+    import sys
+    
+    # [DYNAMIC] Port Selection
+    port = 8007
+    if "--port" in sys.argv:
+        try:
+            port_idx = sys.argv.index("--port")
+            if port_idx + 1 < len(sys.argv):
+                port = int(sys.argv[port_idx + 1])
+        except ValueError:
+            print(f"⚠️ Warning: Invalid port specified, falling back to {port}")
+
     # Diagnostic: Print all registered routes
     print("\n[Diagnostic] Registered Routes:")
     for route in app.routes:
@@ -226,6 +238,6 @@ if __name__ == "__main__":
         print(f" - {route.path} [{methods}]")
     print("\n" + "="*50)
     print("UNIFIED INTELLIGENT ROUTER STARTING")
-    print("Access the UI at: http://localhost:8007")
+    print(f"Access the UI at: http://localhost:{port}")
     print("="*50 + "\n")
-    uvicorn.run("unified_app:app", host="0.0.0.0", port=8007, reload=True)
+    uvicorn.run("unified_app:app", host="0.0.0.0", port=port, reload=True)
