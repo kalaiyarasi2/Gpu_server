@@ -20,6 +20,53 @@ import subprocess
 import sys
 from io import BytesIO
 
+MIN_INCLUDED_CLAIM_YEAR = 2022
+
+def filter_claims_by_claim_year(
+    claims: List[Dict],
+    *,
+    min_year_inclusive: int = MIN_INCLUDED_CLAIM_YEAR,
+    keep_unknown_year: bool = True,
+) -> tuple[list[Dict], list[Dict], list[Dict]]:
+    """
+    Split claims into (included, excluded, unknown_year) by claim_year.
+
+    - included: claim_year is None (if keep_unknown_year) OR claim_year >= min_year_inclusive
+    - excluded: claim_year is not None AND claim_year < min_year_inclusive
+    - unknown_year: claim_year is None (always returned separately)
+    """
+    included: list[Dict] = []
+    excluded: list[Dict] = []
+    unknown: list[Dict] = []
+
+    for c in claims or []:
+        year = c.get("claim_year")
+        if year is None:
+            unknown.append(c)
+            if keep_unknown_year:
+                included.append(c)
+            else:
+                excluded.append(c)
+            continue
+
+        try:
+            y = int(year)
+        except Exception:
+            # Treat non-parsable year as unknown
+            unknown.append(c)
+            if keep_unknown_year:
+                included.append(c)
+            else:
+                excluded.append(c)
+            continue
+
+        if y >= int(min_year_inclusive):
+            included.append(c)
+        else:
+            excluded.append(c)
+
+    return included, excluded, unknown
+
 try:
     import fitz  # PyMuPDF
     from PIL import Image
@@ -2047,10 +2094,29 @@ Return ONLY the JSON object for claim {target_claim_number}."""
                 claims_only.append(cleaned)
             else:
                 claims_only.append(claim)
+
+        included_claims, excluded_claims, unknown_year_claims = filter_claims_by_claim_year(
+            claims_only,
+            min_year_inclusive=MIN_INCLUDED_CLAIM_YEAR,
+            keep_unknown_year=True,
+        )
+
+        # Add filter audit info + excluded claims to analysis.json
+        analysis_data["year_filter"] = {
+            "min_claim_year_inclusive": MIN_INCLUDED_CLAIM_YEAR,
+            "keep_unknown_year": True,
+            "included_claims_count": len(included_claims),
+            "excluded_claims_count": len(excluded_claims),
+            "unknown_year_claims_count": len(unknown_year_claims),
+        }
+        analysis_data["excluded_claims_before_year_threshold"] = excluded_claims
+        # Rewrite analysis.json with added fields
+        with open(analysis_file, "w", encoding="utf-8") as f:
+            json.dump(analysis_data, f, indent=2, ensure_ascii=False)
         
         # Compute summary fields from claims and header data
         years_set = set()
-        for claim in claims_only:
+        for claim in included_claims:
             year = claim.get("claim_year")
             if year:
                 years_set.add(year)
@@ -2062,7 +2128,7 @@ Return ONLY the JSON object for claim {target_claim_number}."""
         header_policy_number = schema_data.get("policy_number")
         if header_policy_number:
             policy_numbers_set.add(header_policy_number)
-        for claim in claims_only:
+        for claim in included_claims:
             policy_number = claim.get("policy_number")
             if policy_number:
                 policy_numbers_set.add(policy_number)
@@ -2074,7 +2140,7 @@ Return ONLY the JSON object for claim {target_claim_number}."""
         header_carrier_name = schema_data.get("carrier_name")
         if header_carrier_name:
             carrier_names_set.add(header_carrier_name)
-        for claim in claims_only:
+        for claim in included_claims:
             carrier_name = claim.get("carrier_name")
             if carrier_name:
                 carrier_names_set.add(carrier_name)
@@ -2093,7 +2159,7 @@ Return ONLY the JSON object for claim {target_claim_number}."""
             "carrier_names": carrier_name_scalar,
         }
         schema_output = {
-            "claims": claims_only,
+            "claims": included_claims,
             "SummaryLevel": summary_level,
         }
         schema_file = session_dir / "extracted_schema.json"

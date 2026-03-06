@@ -33,6 +33,28 @@ def _perform_extraction(file: UploadFile, request: Request):
 
     print(f"\n[Unified][API] Received request for: {safe_filename}")
 
+    # If monitoring is enabled, update the request record with real filename/size
+    try:
+        request_id = getattr(request.state, "monitoring_request_id", None)
+        if request_id:
+            from monitor.service import request_monitor
+            # Best-effort size: UploadFile doesn't always expose .size; use file obj if possible
+            file_size = None
+            try:
+                if hasattr(file, "size") and file.size is not None:
+                    file_size = int(file.size)
+            except Exception:
+                file_size = None
+
+            request_monitor.update_request_file_info(
+                request_id=request_id,
+                filename=safe_filename,
+                file_size=file_size
+            )
+            request_monitor.update_request_status(request_id=request_id, status="processing")
+    except Exception:
+        pass
+
     file_path = UPLOAD_DIR / safe_filename
     try:
         # Save the uploaded file

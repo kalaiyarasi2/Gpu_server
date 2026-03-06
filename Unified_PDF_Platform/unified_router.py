@@ -69,7 +69,7 @@ else:
 
 # Import Insurance extractor as module
 try:
-    from chunked_extractor import ChunkedInsuranceExtractor
+    from Insurance_pdf_extractor_main.backend.chunked_extractor import ChunkedInsuranceExtractor
     INSURANCE_MODULE_AVAILABLE = True
     print("[OK] Insurance extractor module loaded successfully")
 except Exception as e:
@@ -121,6 +121,10 @@ def get_extractor_class(backend_dir):
     Falls back gracefully so the router still starts if one backend is missing.
     """
     import sys
+    import importlib.util
+    import importlib
+    import pathlib as _pl
+    
     orig_path = sys.path.copy()
     # Capture current modules snapshot to restore after load
     modules_snapshot = set(sys.modules.keys())
@@ -143,8 +147,15 @@ def get_extractor_class(backend_dir):
             if mod in sys.modules:
                 del sys.modules[mod]
             
-        import chunked_extractor
-        cls = chunked_extractor.ChunkedInsuranceExtractor
+        # Use importlib.spec_from_file_location for explicit path-based import
+        # to avoid sys.modules collision with the Insurance backend's chunked_extractor
+        chunked_spec = importlib.util.spec_from_file_location(
+            f"_wc_chunked_extractor", backend_dir / "chunked_extractor.py"
+        )
+        chunked_mod = importlib.util.module_from_spec(chunked_spec)
+        chunked_spec.loader.exec_module(chunked_mod)
+        
+        cls = chunked_mod.ChunkedInsuranceExtractor
         print(f"[Extractor] Loaded ChunkedInsuranceExtractor from {backend_str}")
         return cls
     except ModuleNotFoundError as e:
@@ -155,6 +166,8 @@ def get_extractor_class(backend_dir):
         return None
     except Exception as e:
         print(f"[Extractor] Error loading extractor from {backend_dir}: {e}")
+        import traceback
+        traceback.print_exc()
         return None
     finally:
         sys.path = orig_path
@@ -729,8 +742,11 @@ class UnifiedRouter:
                 print("[OK] Work Compensation Extractor initialized")
             except Exception as e:
                 print(f"[ERR] Failed to init Work Comp Extractor: {e}")
+                import traceback
+                traceback.print_exc()
                 self.work_comp_extractor = None
         else:
+            print("[ERR] Work Compensation Extractor class not found")
             self.work_comp_extractor = None
 
     def _check_if_reversed(self, text: str) -> bool:
@@ -2401,6 +2417,8 @@ Return ONLY the company name or UNKNOWN:"""
             print("="*70 + "\n")
         
         return result
+    
+    
 
 if __name__ == "__main__":
     import sys
