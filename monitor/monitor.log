@@ -538,3 +538,6 @@
 2026-03-09 04:06:36,291 - monitor_db - INFO - Added output files for request 1348d7d7-b819-4848-b099-a3d29a235594: ['http://localhost:8007/api/download/Tacton Guardian 2.1-2.28 1_v2.xlsx', 'http://localhost:8007/api/download/Tacton Guardian 2.1-2.28 1_v2.json']
 2026-03-09 04:06:36,291 - monitor_service - INFO - Completed monitoring for request 1348d7d7-b819-4848-b099-a3d29a235594 in 6.39s
 2026-03-09 04:06:36,291 - monitor_middleware - INFO - Request 1348d7d7-b819-4848-b099-a3d29a235594 completed successfully in 6.39s
+2026-03-09 06:34:55,870 - monitor_db - INFO - Database initialized successfully
+2026-03-09 06:34:55,880 - monitor_middleware - INFO - Monitoring middleware added to FastAPI application
+2026-03-09 06:34:55,952 - monitor_middleware - INFO - Monitoring middleware added to FastAPI application
