@@ -494,3 +494,6 @@
 2026-03-09 18:55:22,914 - monitor_db - INFO - Database initialized successfully
 2026-03-09 18:55:22,943 - monitor_middleware - INFO - Monitoring middleware added to FastAPI application
 2026-03-09 18:55:23,054 - monitor_middleware - INFO - Monitoring middleware added to FastAPI application
+2026-03-09 18:58:28,473 - monitor_db - INFO - Database initialized successfully
+2026-03-09 18:58:28,510 - monitor_middleware - INFO - Monitoring middleware added to FastAPI application
+2026-03-09 18:58:28,682 - monitor_middleware - INFO - Monitoring middleware added to FastAPI application
