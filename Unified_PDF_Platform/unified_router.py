@@ -58,6 +58,14 @@ for d in [INSURANCE_BACKEND_DIR, WORK_COMPENSATION_BACKEND_DIR, GENERAL_INVOICE_
     if d.exists() and str(d) not in sys.path:
         sys.path.append(str(d))
 
+# Now that paths are set, import structured excel extractor
+try:
+    from structured_excel_extractor import StructuredExcelExtractor
+    print("[OK] StructuredExcelExtractor module loaded successfully")
+except ImportError:
+    StructuredExcelExtractor = None
+    print("[WARN] StructuredExcelExtractor not found in path.")
+
 # Configure Poppler PATH for pdf2image (OCR support)
 POPPLER_PATH = os.getenv("POPPLER_PATH")
 if POPPLER_PATH and os.path.exists(POPPLER_PATH):
@@ -578,130 +586,21 @@ RULES:
         return df.reindex(columns=REQUIRED_FIELDS)
 
     def process(self, excel_path):
-        """Main orchestration logic. Returns path to processed XLSX."""
+        """Main orchestration logic using the new StructuredExcelExtractor."""
         try:
-            file_ext = Path(excel_path).suffix.lower()
-            all_dfs = []
-            doc_metadata = {}
-            
-            print(f"[STEP] Reading {'CSV' if file_ext == '.csv' else 'Excel'} directly: {excel_path}")
-
-            if file_ext == ".csv":
-                try:
-                    df_raw = pd.read_csv(excel_path, header=None, engine='python', on_bad_lines='skip', encoding='utf-8-sig', names=list(range(100)))
-                except UnicodeDecodeError:
-                    print("[WARN] UTF-8 decode failed for CSV. Attempting latin-1 fallback...")
-                    df_raw = pd.read_csv(excel_path, header=None, engine='python', on_bad_lines='skip', encoding='latin-1', names=list(range(100)))
+            if StructuredExcelExtractor:
+                print(f"[ExcelExtractor] Using StructuredExcelExtractor for {excel_path}")
+                extractor = StructuredExcelExtractor(output_dir=str(self.output_base))
+                result_path = extractor.process_file(excel_path)
                 
-                doc_metadata.update(self.extract_global_metadata(df_raw.head(20)))
-                segments = self.scan_for_tables(df_raw)
-                all_dfs.extend(segments)
-            else:
-                # Robust Excel Reading: try openpyxl first, then fallback to xlrd 
-                try:
-                    print(f"[INFO] Attempting to read Excel with openpyxl engine...")
-                    xl = pd.ExcelFile(excel_path, engine='openpyxl')
-                    for sheet_name in xl.sheet_names:
-                        print(f"[INFO] Inspecting sheet: {sheet_name}")
-                        df_raw = pd.read_excel(xl, sheet_name=sheet_name, header=None, engine='openpyxl')
-                        doc_metadata.update(self.extract_global_metadata(df_raw.head(20)))
-                        segments = self.scan_for_tables(df_raw)
-                        all_dfs.extend(segments)
-                except Exception as openpyxl_err:
-                    print(f"[WARN] openpyxl failed: {openpyxl_err}. Attempting xlrd fallback...")
-                    try:
-                        xl = pd.ExcelFile(excel_path, engine='xlrd')
-                        for sheet_name in xl.sheet_names:
-                            print(f"[INFO] Inspecting sheet (xlrd): {sheet_name}")
-                            df_raw = pd.read_excel(xl, sheet_name=sheet_name, header=None, engine='xlrd')
-                            doc_metadata.update(self.extract_global_metadata(df_raw.head(20)))
-                            segments = self.scan_for_tables(df_raw)
-                            all_dfs.extend(segments)
-                    except Exception as xlrd_err:
-                        print(f"      xlrd error: {xlrd_err}. Attempting read_html fallback...")
-                        try:
-                            # Some "Excel" files are actually HTML tables
-                            dfs_html = pd.read_html(excel_path)
-                            if dfs_html:
-                                for i, df_html in enumerate(dfs_html):
-                                    print(f"[INFO] Inspecting HTML table {i}")
-                                    doc_metadata.update(self.extract_global_metadata(df_html.head(20)))
-                                    segments = self.scan_for_tables(df_html)
-                                    all_dfs.extend(segments)
-                            else:
-                                raise ValueError("No tables found in HTML")
-                        except Exception as html_err:
-                            print(f"      HTML error: {html_err}. Finally attempting read_csv fallback...")
-                            try:
-                                # Final fallback: some files are CSV with wrong extension
-                                df_raw = pd.read_csv(excel_path, header=None, engine='python', on_bad_lines='skip', names=list(range(100)), encoding='latin-1')
-                                doc_metadata.update(self.extract_global_metadata(df_raw.head(20)))
-                                segments = self.scan_for_tables(df_raw)
-                                all_dfs.extend(segments)
-                            except Exception as csv_err:
-                                print(f"      Final CSV fallback also failed: {csv_err}")
-                                raise xlrd_err
-
-            if not all_dfs:
-                print("[ERR] No valid data found in spreadsheet after all fallback attempts.")
-                return {"error": "No valid data found in spreadsheet. The file might be corrupted or in an unsupported format."}
-                
-            all_records = []
-            for seg in all_dfs:
-                if seg.columns.duplicated().any():
-                    seen_c = set()
-                    keep_c = []
-                    for c in seg.columns:
-                        if c not in seen_c:
-                            keep_c.append(c)
-                            seen_c.add(c)
-                    seg = seg[keep_c]
-                if not seg.empty:
-                    all_records.extend(seg.to_dict('records'))
+                if result_path and os.path.exists(result_path):
+                    return str(result_path)
+                else:
+                    print(f"[WARN] StructuredExcelExtractor failed: {result_path}")
             
-            if not all_records:
-                print("[ERR] Resulting record set is empty.")
-                return {"error": "No data rows could be extracted from the file."}
-                
-            df = pd.DataFrame(all_records)
-            df = self.clean_and_standardize(df, doc_metadata)
-            
-            # Layer 5: Explicit Audit Totals (Parity with PDF extractor)
-            try:
-                if 'CURRENT_PREMIUM' in df.columns:
-                    sum_current = df['CURRENT_PREMIUM'].sum()
-                    sum_adj = df['ADJUSTMENT_PREMIUM'].sum() if 'ADJUSTMENT_PREMIUM' in df.columns else 0.0
-                    combined_total = sum_current + sum_adj
-                    
-                    total_rows = []
-                    
-                    # Row 1: Total Current Premium
-                    row_curr = {col: None for col in df.columns}
-                    row_curr['PLAN_NAME'] = "TOTAL CURRENT PREMIUM"
-                    row_curr['CURRENT_PREMIUM'] = sum_current
-                    total_rows.append(row_curr)
-                    
-                    # Row 2: Total Adjustments (Only if non-zero)
-                    if abs(sum_adj) > 0.001:
-                        row_adj = {col: None for col in df.columns}
-                        row_adj['PLAN_NAME'] = "TOTAL ADJUSTMENTS"
-                        row_adj['ADJUSTMENT_PREMIUM'] = sum_adj
-                        total_rows.append(row_adj)
-                    
-                    # Row 3: Grand Total (Combined)
-                    row_grand = {col: None for col in df.columns}
-                    row_grand['PLAN_NAME'] = "GRAND TOTAL (COMBINED)"
-                    row_grand['CURRENT_PREMIUM'] = combined_total
-                    total_rows.append(row_grand)
-                    
-                    df = pd.concat([df, pd.DataFrame(total_rows)], ignore_index=True)
-                    print(f"  [INFO] Added explicit audit totals: Current=${sum_current:,.2f}, Combined=${combined_total:,.2f}")
-            except Exception as total_err:
-                print(f"  [WARN] Failed to add total row: {total_err}")
-
-            output_xlsx = self.output_base / f"{Path(excel_path).stem}_processed.xlsx"
-            df.to_excel(output_xlsx, index=False)
-            return str(output_xlsx)
+            # Fallback to legacy logic (simplified or returned as error)
+            print("[ExcelExtractor] Falling back to legacy spreadsheet logic is disabled. Please check structured_excel_extractor.py.")
+            return {"error": "Spreadsheet extraction failed with Structured extractor."}
             
         except Exception as e:
             print(f"\n[CRITICAL ERROR] Spreadsheet extraction failed: {e}")
