@@ -1,0 +1,44 @@
+{
+  "CARRIER_KEYWORDS": [
+    "Gunn-Creel & Associates",
+    "INVOICE W7068307",
+    "Dental Totals",
+    "Billing Coordinator"
+  ],
+  "EXAMPLES": [
+    {
+      "RAW_TEXT": "INVOICE DATE INVOICE MONTH DUE DATE INVOICE TOTAL",
+      "MAPPING": {
+        "LASTNAME": "INVOICE TOTAL",
+        "FIRSTNAME": "INVOICE TOTAL",
+        "MIDDLENAME": null,
+        "SSN": null,
+        "POLICYID": null,
+        "MEMBERID": null,
+        "PLAN_NAME": "TOTAL",
+        "PLAN_TYPE": null,
+        "COVERAGE": null,
+        "CURRENT_PREMIUM": 398.94,
+        "ADJUSTMENT_PREMIUM": null,
+        "PRICING_ADJUSTMENT": null
+      }
+    },
+    {
+      "RAW_TEXT": "INVOICE DATE INVOICE MONTH DUE DATE INVOICE TOTAL",
+      "MAPPING": {
+        "LASTNAME": "INVOICE TOTAL",
+        "FIRSTNAME": "INVOICE TOTAL",
+        "MIDDLENAME": null,
+        "SSN": null,
+        "POLICYID": null,
+        "MEMBERID": null,
+        "PLAN_NAME": "TOTAL",
+        "PLAN_TYPE": null,
+        "COVERAGE": null,
+        "CURRENT_PREMIUM": 398.94,
+        "ADJUSTMENT_PREMIUM": null,
+        "PRICING_ADJUSTMENT": null
+      }
+    }
+  ]
+}

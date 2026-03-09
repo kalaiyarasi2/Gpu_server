@@ -1,0 +1,3 @@
+type,excel,json,status,source_file,processed_at
+INVOICE,C:\Users\INT002\pdf_extractor\Unified_PDF_Platform\unified_outputs\APL- Securance- Dec 25_invoice.xlsx,C:\Users\INT002\pdf_extractor\Unified_PDF_Platform\unified_outputs\APL- Securance- Dec 25_invoice.json,extracted,APL- Securance- Dec 25.pdf,2026-03-09T10:48:23
+INVOICE,C:\Users\INT002\pdf_extractor\Unified_PDF_Platform\unified_outputs\APL- Specified Arch- Dec 25_invoice.xlsx,C:\Users\INT002\pdf_extractor\Unified_PDF_Platform\unified_outputs\APL- Specified Arch- Dec 25_invoice.json,extracted,APL- Specified Arch- Dec 25.pdf,2026-03-09T10:48:29

@@ -1068,10 +1068,16 @@ class UnifiedRouter:
             return "INSURANCE_CLAIMS", "Filename loss run keyword"
 
         # RULE F3: Explicit insurance billing keywords in filename
-        insurance_fn_kw = ["medlink", "medsupp", "cobra", "group benefit", "beneficiary", "uhc", "unitedhealthcare", "bcbs", "bluecross", "blueshield"]
+        insurance_fn_kw = ["medlink", "medsupp", "cobra", "group benefit", "beneficiary", "uhc", "unitedhealthcare", "bcbs", "bluecross", "blueshield", "anthem", "humana", "aetna", "cigna"]
         if any(kw in filename_lower for kw in insurance_fn_kw):
-            print("[Pre-Classify] Insurance billing filename → INVOICE")
-            return "INVOICE", "Filename insurance billing keyword"
+            # If it's an insurance carrier keyword and ALSO contains an invoice keyword, it's very likely an INVOICE
+            if any(ik in filename_lower for ik in ["inv", "invoice", "bill", "billing"]):
+                print(f"[Pre-Classify] Insurance carrier + Invoice keyword in filename → INVOICE")
+                return "INVOICE", "Filename insurance + invoice keyword"
+            
+            # If it has carrier name but NO invoice keyword, it MIGHT be a claim report,
+            # but we usually prefer sticking to INVOICE if it's not explicitly a loss run.
+            # However, for now, let's just make sure "Anthem...Inv" works.
         
         # RULE F4: Explicit vendor invoice keywords in filename
         vendor_fn_kw = ["internet", "subscription", "utility", "phone bill", "electricity"]
@@ -1258,10 +1264,11 @@ Classify the document type based ONLY on the filename.
 FILENAME: {filename}
 
 CRITICAL RULES (apply in order, first match wins):
-1. "Loss Run", "LossRun", "Loss Analysis", "Claim Summary", "Incurred", "Paid Losses" in filename -> INSURANCE_CLAIMS
+1. "Loss Run", "LossRun", "Loss Analysis", "Claim Summary", "Incurred", "Paid Losses", "Claim Report" in filename -> INSURANCE_CLAIMS
    NOTE: "Workers Compensation Loss Run" is INSURANCE_CLAIMS, NOT WORK_COMPENSATION.
 2. "Acord", "WC App", "Workers Comp Application" in filename -> WORK_COMPENSATION
-3. "Invoice", "Inv", "Bill", "Billing" in filename -> INVOICE
+3. "Invoice", "Inv", "Bill", "Billing", "Statement" in filename -> INVOICE
+   NOTE: Even if an insurance carrier name (like Anthem) is present, if "Inv" or "Invoice" is also there, pick INVOICE.
 4. "Passport", "Driver License", "ID Card", "SSN" in filename -> IDENTIFICATION
 5. Any insurance CARRIER or TPA name (Accident Fund, CCMSI, BerkleyNet, KeyRisk, Travelers,
    Zurich, CNA, AmTrust, Liberty Mutual, Markel, Stonetrust, FCBI, State Fund, Clear Springs,

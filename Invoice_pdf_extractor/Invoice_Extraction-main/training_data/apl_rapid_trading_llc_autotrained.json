@@ -1,0 +1,44 @@
+{
+  "CARRIER_KEYWORDS": [
+    "Dept.",
+    "MEDLINK9",
+    "Amount Billed",
+    "Premium Period"
+  ],
+  "EXAMPLES": [
+    {
+      "RAW_TEXT": "2480131 ARZENO, ALAN ***-**-1560 MEDLINK9 GROUP MED SUP $61.34 - $61.34",
+      "MAPPING": {
+        "LASTNAME": "ARZENO",
+        "FIRSTNAME": "ALAN",
+        "MIDDLENAME": null,
+        "SSN": "1560",
+        "POLICYID": null,
+        "MEMBERID": "2480131",
+        "PLAN_NAME": "MEDLINK9 GROUP MED SUP",
+        "PLAN_TYPE": null,
+        "COVERAGE": "EE",
+        "CURRENT_PREMIUM": 61.34,
+        "ADJUSTMENT_PREMIUM": null,
+        "PRICING_ADJUSTMENT": null
+      }
+    },
+    {
+      "RAW_TEXT": "2480128 CARRANZA, JAVIER ***-**-8855 MEDLINK9 GROUP MED SUP $128.93 - $128.93",
+      "MAPPING": {
+        "LASTNAME": "CARRANZA",
+        "FIRSTNAME": "JAVIER",
+        "MIDDLENAME": null,
+        "SSN": "8855",
+        "POLICYID": null,
+        "MEMBERID": "2480128",
+        "PLAN_NAME": "MEDLINK9 GROUP MED SUP",
+        "PLAN_TYPE": null,
+        "COVERAGE": "EE",
+        "CURRENT_PREMIUM": 128.93,
+        "ADJUSTMENT_PREMIUM": null,
+        "PRICING_ADJUSTMENT": null
+      }
+    }
+  ]
+}

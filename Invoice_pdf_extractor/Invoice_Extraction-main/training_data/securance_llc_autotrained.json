@@ -1,0 +1,44 @@
+{
+  "CARRIER_KEYWORDS": [
+    "DPS$$$PKG",
+    "FOURTH CHOICE BENEFITS",
+    "UHS Billing",
+    "Minimum Amount Due"
+  ],
+  "EXAMPLES": [
+    {
+      "RAW_TEXT": "1088991 | Burnley, Hannah P0157521 - Max Claims | *****359600 $584.43 $1 335.24",
+      "MAPPING": {
+        "LASTNAME": "BURNLEY",
+        "FIRSTNAME": "HANNAH",
+        "MIDDLENAME": null,
+        "SSN": "359600",
+        "POLICYID": "1088991",
+        "MEMBERID": "359600",
+        "PLAN_NAME": "P0157521 - Max Claims Liability",
+        "PLAN_TYPE": "MEDICAL",
+        "COVERAGE": "EE",
+        "CURRENT_PREMIUM": 584.43,
+        "ADJUSTMENT_PREMIUM": null,
+        "PRICING_ADJUSTMENT": null
+      }
+    },
+    {
+      "RAW_TEXT": "1088991 | Burnley, Hannah P0157521 - Max Claims | *****359600 $584.43 $1 335.24",
+      "MAPPING": {
+        "LASTNAME": "BURNLEY",
+        "FIRSTNAME": "HANNAH",
+        "MIDDLENAME": null,
+        "SSN": "359600",
+        "POLICYID": "1088991",
+        "MEMBERID": "359600",
+        "PLAN_NAME": "Admin/Excess Loss",
+        "PLAN_TYPE": "MEDICAL",
+        "COVERAGE": "EE",
+        "CURRENT_PREMIUM": 750.81,
+        "ADJUSTMENT_PREMIUM": null,
+        "PRICING_ADJUSTMENT": null
+      }
+    }
+  ]
+}

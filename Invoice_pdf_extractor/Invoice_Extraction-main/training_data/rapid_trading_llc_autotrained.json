@@ -1,0 +1,44 @@
+{
+  "CARRIER_KEYWORDS": [
+    "DPS$$$PKG",
+    "UHS Billing",
+    "Coverage Period",
+    "Minimum Amount Due"
+  ],
+  "EXAMPLES": [
+    {
+      "RAW_TEXT": "1368059 ARZENO, ALAN E6000i10021B - *****234900 E A $463.17 $745.36",
+      "MAPPING": {
+        "LASTNAME": "ARZENO",
+        "FIRSTNAME": "ALAN",
+        "MIDDLENAME": null,
+        "SSN": null,
+        "POLICYID": "1368059",
+        "MEMBERID": "234900",
+        "PLAN_NAME": "E6000i10021B - Admin/Excess Loss",
+        "PLAN_TYPE": "MEDICAL",
+        "COVERAGE": "EE",
+        "CURRENT_PREMIUM": 463.17,
+        "ADJUSTMENT_PREMIUM": null,
+        "PRICING_ADJUSTMENT": null
+      }
+    },
+    {
+      "RAW_TEXT": "1368059 ARZENO, ALAN E6000i10021B - *****234900 E A $463.17 $745.36",
+      "MAPPING": {
+        "LASTNAME": "ARZENO",
+        "FIRSTNAME": "ALAN",
+        "MIDDLENAME": null,
+        "SSN": null,
+        "POLICYID": "1368059",
+        "MEMBERID": "234900",
+        "PLAN_NAME": "E6000i10021B - Max Claims Liability",
+        "PLAN_TYPE": "MEDICAL",
+        "COVERAGE": "EE",
+        "CURRENT_PREMIUM": 282.19,
+        "ADJUSTMENT_PREMIUM": null,
+        "PRICING_ADJUSTMENT": null
+      }
+    }
+  ]
+}
