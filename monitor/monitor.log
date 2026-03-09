@@ -464,3 +464,77 @@
 2026-03-08 21:58:53,565 - monitor_db - INFO - Database initialized successfully
 2026-03-08 21:58:53,574 - monitor_middleware - INFO - Monitoring middleware added to FastAPI application
 2026-03-08 21:58:53,633 - monitor_middleware - INFO - Monitoring middleware added to FastAPI application
+2026-03-09 03:55:32,287 - monitor_db - INFO - Database initialized successfully
+2026-03-09 03:55:32,299 - monitor_middleware - INFO - Monitoring middleware added to FastAPI application
+2026-03-09 03:55:35,979 - monitor_db - INFO - Database initialized successfully
+2026-03-09 03:55:35,994 - monitor_middleware - INFO - Monitoring middleware added to FastAPI application
+2026-03-09 03:55:36,099 - monitor_middleware - INFO - Monitoring middleware added to FastAPI application
+2026-03-09 03:56:35,542 - monitor_db - INFO - Database initialized successfully
+2026-03-09 03:56:35,551 - monitor_middleware - INFO - Monitoring middleware added to FastAPI application
+2026-03-09 03:56:38,906 - monitor_db - INFO - Database initialized successfully
+2026-03-09 03:56:38,916 - monitor_middleware - INFO - Monitoring middleware added to FastAPI application
+2026-03-09 03:56:38,971 - monitor_middleware - INFO - Monitoring middleware added to FastAPI application
+2026-03-09 04:01:33,805 - monitor_db - INFO - Created request: f4016559-5c2d-4a1b-bd30-ecf41e3c1e62 - unknown
+2026-03-09 04:01:33,811 - monitor_service - INFO - Started monitoring request f4016559-5c2d-4a1b-bd30-ecf41e3c1e62
+2026-03-09 04:01:33,811 - monitor_middleware - INFO - Monitoring started for request f4016559-5c2d-4a1b-bd30-ecf41e3c1e62: unknown
+2026-03-09 04:01:33,831 - monitor_db - INFO - Updated request f4016559-5c2d-4a1b-bd30-ecf41e3c1e62 status to: processing
+2026-03-09 04:01:36,032 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-03-09 04:01:40,603 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-03-09 04:01:46,534 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-03-09 04:01:50,305 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-03-09 04:01:55,500 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-03-09 04:01:58,108 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-03-09 04:01:59,213 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-03-09 04:02:04,946 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-03-09 04:02:11,230 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-03-09 04:02:13,443 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-03-09 04:02:17,359 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-03-09 04:02:30,701 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-03-09 04:02:34,372 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-03-09 04:02:39,789 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-03-09 04:02:43,530 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-03-09 04:02:45,976 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-03-09 04:02:46,164 - monitor_db - INFO - Updated request f4016559-5c2d-4a1b-bd30-ecf41e3c1e62 status to: completed
+2026-03-09 04:02:46,171 - monitor_db - INFO - Added output files for request f4016559-5c2d-4a1b-bd30-ecf41e3c1e62: ['http://localhost:8007/api/download/extracted_schema.xlsx', 'http://localhost:8007/api/download/extracted_schema.json']
+2026-03-09 04:02:46,171 - monitor_service - INFO - Completed monitoring for request f4016559-5c2d-4a1b-bd30-ecf41e3c1e62 in 72.36s
+2026-03-09 04:02:46,171 - monitor_middleware - INFO - Request f4016559-5c2d-4a1b-bd30-ecf41e3c1e62 completed successfully in 72.36s
+2026-03-09 04:02:46,181 - monitor_db - INFO - Created request: 26a858fa-c16b-498b-81fd-ecb2051dbf18 - unknown
+2026-03-09 04:02:46,189 - monitor_service - INFO - Started monitoring request 26a858fa-c16b-498b-81fd-ecb2051dbf18
+2026-03-09 04:02:46,191 - monitor_middleware - INFO - Monitoring started for request 26a858fa-c16b-498b-81fd-ecb2051dbf18: unknown
+2026-03-09 04:02:46,205 - monitor_db - INFO - Updated request 26a858fa-c16b-498b-81fd-ecb2051dbf18 status to: processing
+2026-03-09 04:02:47,107 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-03-09 04:02:51,972 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-03-09 04:02:52,865 - monitor_db - INFO - Updated request 26a858fa-c16b-498b-81fd-ecb2051dbf18 status to: completed
+2026-03-09 04:02:52,881 - monitor_db - INFO - Added output files for request 26a858fa-c16b-498b-81fd-ecb2051dbf18: ['http://localhost:8007/api/download/Tacton Guardian 2.1-2.28 1_v2.xlsx', 'http://localhost:8007/api/download/Tacton Guardian 2.1-2.28 1_v2.json']
+2026-03-09 04:02:52,892 - monitor_service - INFO - Completed monitoring for request 26a858fa-c16b-498b-81fd-ecb2051dbf18 in 6.65s
+2026-03-09 04:02:52,896 - monitor_middleware - INFO - Request 26a858fa-c16b-498b-81fd-ecb2051dbf18 completed successfully in 6.65s
+2026-03-09 04:02:52,993 - monitor_db - INFO - Created request: 8d191c53-9617-4fa2-b766-83e0ac7fdd76 - unknown
+2026-03-09 04:02:53,004 - monitor_service - INFO - Started monitoring request 8d191c53-9617-4fa2-b766-83e0ac7fdd76
+2026-03-09 04:02:53,005 - monitor_middleware - INFO - Monitoring started for request 8d191c53-9617-4fa2-b766-83e0ac7fdd76: unknown
+2026-03-09 04:02:53,020 - monitor_db - INFO - Updated request 8d191c53-9617-4fa2-b766-83e0ac7fdd76 status to: processing
+2026-03-09 04:02:53,673 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-03-09 04:02:56,372 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-03-09 04:02:56,398 - monitor_db - INFO - Updated request 8d191c53-9617-4fa2-b766-83e0ac7fdd76 status to: completed
+2026-03-09 04:02:56,407 - monitor_db - INFO - Added output files for request 8d191c53-9617-4fa2-b766-83e0ac7fdd76: []
+2026-03-09 04:02:56,407 - monitor_service - INFO - Completed monitoring for request 8d191c53-9617-4fa2-b766-83e0ac7fdd76 in 3.40s
+2026-03-09 04:02:56,407 - monitor_middleware - INFO - Request 8d191c53-9617-4fa2-b766-83e0ac7fdd76 completed successfully in 3.40s
+2026-03-09 04:03:56,773 - monitor_db - INFO - Created request: ee42cf5b-d07a-4dd5-a55d-042d531b699a - unknown
+2026-03-09 04:03:56,783 - monitor_service - INFO - Started monitoring request ee42cf5b-d07a-4dd5-a55d-042d531b699a
+2026-03-09 04:03:56,783 - monitor_middleware - INFO - Monitoring started for request ee42cf5b-d07a-4dd5-a55d-042d531b699a: unknown
+2026-03-09 04:03:56,793 - monitor_db - INFO - Updated request ee42cf5b-d07a-4dd5-a55d-042d531b699a status to: processing
+2026-03-09 04:03:57,665 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-03-09 04:03:59,936 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-03-09 04:03:59,959 - monitor_db - INFO - Updated request ee42cf5b-d07a-4dd5-a55d-042d531b699a status to: completed
+2026-03-09 04:03:59,965 - monitor_db - INFO - Added output files for request ee42cf5b-d07a-4dd5-a55d-042d531b699a: []
+2026-03-09 04:03:59,967 - monitor_service - INFO - Completed monitoring for request ee42cf5b-d07a-4dd5-a55d-042d531b699a in 3.19s
+2026-03-09 04:03:59,967 - monitor_middleware - INFO - Request ee42cf5b-d07a-4dd5-a55d-042d531b699a completed successfully in 3.19s
+2026-03-09 04:06:29,899 - monitor_db - INFO - Created request: 1348d7d7-b819-4848-b099-a3d29a235594 - unknown
+2026-03-09 04:06:29,905 - monitor_service - INFO - Started monitoring request 1348d7d7-b819-4848-b099-a3d29a235594
+2026-03-09 04:06:29,905 - monitor_middleware - INFO - Monitoring started for request 1348d7d7-b819-4848-b099-a3d29a235594: unknown
+2026-03-09 04:06:29,918 - monitor_db - INFO - Updated request 1348d7d7-b819-4848-b099-a3d29a235594 status to: processing
+2026-03-09 04:06:31,212 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-03-09 04:06:36,105 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-03-09 04:06:36,285 - monitor_db - INFO - Updated request 1348d7d7-b819-4848-b099-a3d29a235594 status to: completed
+2026-03-09 04:06:36,291 - monitor_db - INFO - Added output files for request 1348d7d7-b819-4848-b099-a3d29a235594: ['http://localhost:8007/api/download/Tacton Guardian 2.1-2.28 1_v2.xlsx', 'http://localhost:8007/api/download/Tacton Guardian 2.1-2.28 1_v2.json']
+2026-03-09 04:06:36,291 - monitor_service - INFO - Completed monitoring for request 1348d7d7-b819-4848-b099-a3d29a235594 in 6.39s
+2026-03-09 04:06:36,291 - monitor_middleware - INFO - Request 1348d7d7-b819-4848-b099-a3d29a235594 completed successfully in 6.39s
