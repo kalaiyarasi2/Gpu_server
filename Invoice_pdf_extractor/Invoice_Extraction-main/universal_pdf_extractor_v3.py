@@ -742,6 +742,39 @@ Extract data from the document text provided below.
         - You MUST concatenate these into a single string: "MEDLINKSELECT GROUP MED SUP".
     - **COVERAGE INFERENCE**: If "Product" contains "MED", set **PLAN_TYPE** to **MEDICAL**. If it contains "SUP", it is typically a supplemental medical plan.
 - **TG PLAN PREFIX (CRITICAL)**: If a plan name starts with 'TG' (like TG LIFE or TG AD&D), there MUST be a space between 'TG' and the rest of the name. Never extract it as 'TGLife' or 'TGAD&D'.
+- **Guardian**:
+    - **Current Premiums Table – STRICT COLUMN RULES**:
+      - The table header row is: `Employee | BasicTermLife Premium | Dental Premium | Dental Ins. | Std Premium | Vision Premium | Vision Ins. | TotalPremium`
+      - **COLUMN POSITION IS THE ONLY SOURCE OF TRUTH** for plan type. The table has exactly 4 benefit columns in this fixed order:
+        1. **Column 1 – LIFE**: BasicTermLife. A bare number with NO tier label (e.g. `Emp`). Example: `2.50`
+        2. **Column 2 – DENTAL**: followed by a tier label immediately (e.g. `17.31Emp`, `35.14Emp/Sp`).
+        3. **Column 3 – STD**: Short Term Disability. A bare number with NO tier label after it (e.g. `9.50`, `6.60`, `19.03`). STD always comes after Dental.
+        4. **Column 4 – VISION**: followed by a tier label immediately (e.g. `7.42Emp`, `13.48Emp/Sp`).
+        5. **Row Total (TotalPremium)**: The final token on the line, ALWAYS preceded by a `$` character (e.g. `$36.73`, `$51.65`). **ABSOLUTELY IGNORE THIS VALUE. It is NOT a benefit premium.** Never assign it to any plan.
+      - **⚠️ CRITICAL – DOLLAR SIGN = STOP TOKEN**: When parsing a Guardian row left-to-right, the MOMENT you encounter a `$`, you have reached the Row Total. **Stop extracting benefits at that point.** The `$` value is discarded.
+        - WRONG: `Anand,Arjun 40.19Emp 11.46Emp $51.65` → Vision=63.11 (❌ DO NOT ADD $51.65 TO 11.46)
+        - CORRECT: `Anand,Arjun 40.19Emp 11.46Emp $51.65` → Dental=40.19, Vision=11.46, ignore $51.65.
+      - **SPARSE ROW DISAMBIGUATION RULES**:
+        - A number with a tier label (Emp/Fam/Emp/Sp) is either Dental (comes first) or Vision (comes second among labeled values).
+        - A bare number (no tier label) is either Life (first bare number) or Std (second bare number).
+        - Example: `AcevedoHilario,Maricruz 4.00 $4.00` → 4.00 is **LIFE** only.
+        - Example: `Crouch,TherralR 5.25 9.50 $14.75` → 5.25 is **LIFE**, 9.50 is **STD** (bare number, second position).
+        - Example: `Bonsack,Bryce 4.00 17.31Emp 19.03 $40.34` → 4.00 is **LIFE**, 17.31 is **DENTAL**, 19.03 is **STD**.
+        - Example: `Feld,StephonL 2.50 17.31Emp 9.50 7.42Emp $36.73` → 2.50=**LIFE**, 17.31=**DENTAL**, 9.50=**STD**, 7.42=**VISION**.
+        - Example: `Lopez,Katerina 4.00 17.31Emp 6.86 $28.17` → 4.00=**LIFE**, 17.31=**DENTAL**, 6.86=**STD**. No Vision.
+      - **Specified Arch / Dental+Vision only variant** (no BasicTermLife or Std columns):
+        - Table header row is: `Employee | Dental Premium | Ins. | Vision Premium | Ins. | TotalPremium`
+        - First labeled number → **DENTAL**. Second labeled number → **VISION**. `$XXX` at end → **IGNORE**.
+        - Example: `Anand,Arjun 40.19Emp 11.46Emp $51.65` → Dental=40.19 (EE), Vision=11.46 (EE). Ignore $51.65.
+        - Example: `Berg,ChaneL 158.17Fam 19.33Emp/Sp $177.50` → Dental=158.17 (FAM), Vision=19.33 (ES). Ignore $177.50.
+        - Example: `Darden,Demerick 40.19Emp $40.19` → Dental=40.19 (EE). No Vision. Ignore $40.19.
+      - **COVERAGE TIER MAPPING**: "Emp"→**EE**, "Emp/Sp"→**ES**, "Emp/Ch"→**EC**, "Fam"→**FAM**.
+      - **PLAN NAME SPLITTING**: Split full string on comma: `Anderson,TylerA` → LASTNAME=`Anderson`, FIRSTNAME=`TylerA`.
+      - Each non-zero benefit MUST be a separate line item with the correct `PLAN_TYPE`.
+    - **Adjustment Table (GUARDIAN)**:
+      - If you see **"New Premium"** and **"New Premium Adjustment"**:
+        - `New Premium` (e.g., 2.50) -> `CURRENT_PREMIUM`.
+        - `New Premium Adjustment` (e.g., 7.50) -> `ADJUSTMENT_PREMIUM`.
 - **GENERAL MAPPING (IF CARRIER UNKNOWN)**:
     - "Invoice Date" / "Date" -> `INV_DATE`
     - "Invoice #" / "Inv #" -> `INV_NUMBER`

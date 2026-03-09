@@ -1,44 +1,196 @@
 {
   "CARRIER_KEYWORDS": [
-    "PlanholderReference",
-    "TotalPaymentDue",
-    "GroupID",
-    "DivisionID"
+    "guardian",
+    "GuardianAnytime",
+    "ROCCA TAMPA LLC",
+    "CHOICEHR"
   ],
   "EXAMPLES": [
     {
-      "RAW_TEXT": "Feld,StephonL 01/01/26 BasicTermLife 25,000 1.75 1.75",
-      "MAPPING": {
-        "LASTNAME": "Feld",
-        "FIRSTNAME": "Stephon",
-        "MIDDLENAME": "L",
-        "SSN": null,
-        "POLICYID": null,
-        "MEMBERID": null,
-        "PLAN_NAME": "BasicTermLife",
-        "PLAN_TYPE": "LIFE",
-        "COVERAGE": "EE",
-        "CURRENT_PREMIUM": 27.229999999999997,
-        "ADJUSTMENT_PREMIUM": 36.73,
-        "PRICING_ADJUSTMENT": null
-      }
+      "RAW_TEXT": "AcevedoHilario,Maricruz 4.00 $4.00",
+      "NOTES": "Only Life present. Bare number = LIFE.",
+      "MAPPING": [
+        {
+          "LASTNAME": "AcevedoHilario",
+          "FIRSTNAME": "Maricruz",
+          "PLAN_NAME": "Basic Term Life",
+          "PLAN_TYPE": "LIFE",
+          "COVERAGE": "",
+          "CURRENT_PREMIUM": 4.00
+        }
+      ]
     },
     {
-      "RAW_TEXT": "Hetzel,Zacharyzachary 01/01/26 BasicTermLife 25,000 1.75 1.75",
-      "MAPPING": {
-        "LASTNAME": "Hetzel",
-        "FIRSTNAME": "Zacharyzachary",
-        "MIDDLENAME": null,
-        "SSN": null,
-        "POLICYID": null,
-        "MEMBERID": null,
-        "PLAN_NAME": "BasicTermLife",
-        "PLAN_TYPE": "LIFE",
-        "COVERAGE": "EE",
-        "CURRENT_PREMIUM": 19.81,
-        "ADJUSTMENT_PREMIUM": 26.409999999999997,
-        "PRICING_ADJUSTMENT": null
-      }
+      "RAW_TEXT": "Crouch,TherralR 5.25 9.50 $14.75",
+      "NOTES": "Life + Std. Two bare numbers: first=LIFE, second=STD.",
+      "MAPPING": [
+        {
+          "LASTNAME": "Crouch",
+          "FIRSTNAME": "TherralR",
+          "PLAN_NAME": "Basic Term Life",
+          "PLAN_TYPE": "LIFE",
+          "COVERAGE": "",
+          "CURRENT_PREMIUM": 5.25
+        },
+        {
+          "LASTNAME": "Crouch",
+          "FIRSTNAME": "TherralR",
+          "PLAN_NAME": "Short Term Disability",
+          "PLAN_TYPE": "STD",
+          "COVERAGE": "",
+          "CURRENT_PREMIUM": 9.50
+        }
+      ]
+    },
+    {
+      "RAW_TEXT": "Bonsack,Bryce 4.00 17.31Emp 19.03 $40.34",
+      "NOTES": "Life + Dental + Std. First bare=LIFE, labeled=DENTAL, third bare=STD.",
+      "MAPPING": [
+        {
+          "LASTNAME": "Bonsack",
+          "FIRSTNAME": "Bryce",
+          "PLAN_NAME": "Basic Term Life",
+          "PLAN_TYPE": "LIFE",
+          "COVERAGE": "",
+          "CURRENT_PREMIUM": 4.00
+        },
+        {
+          "LASTNAME": "Bonsack",
+          "FIRSTNAME": "Bryce",
+          "PLAN_NAME": "Dental",
+          "PLAN_TYPE": "DENTAL",
+          "COVERAGE": "EE",
+          "CURRENT_PREMIUM": 17.31
+        },
+        {
+          "LASTNAME": "Bonsack",
+          "FIRSTNAME": "Bryce",
+          "PLAN_NAME": "Short Term Disability",
+          "PLAN_TYPE": "STD",
+          "COVERAGE": "",
+          "CURRENT_PREMIUM": 19.03
+        }
+      ]
+    },
+    {
+      "RAW_TEXT": "Feld,StephonL 2.50 17.31Emp 9.50 7.42Emp $36.73",
+      "NOTES": "All 4 columns. LIFE + DENTAL + STD + VISION.",
+      "MAPPING": [
+        {
+          "LASTNAME": "Feld",
+          "FIRSTNAME": "StephonL",
+          "PLAN_NAME": "Basic Term Life",
+          "PLAN_TYPE": "LIFE",
+          "COVERAGE": "",
+          "CURRENT_PREMIUM": 2.50
+        },
+        {
+          "LASTNAME": "Feld",
+          "FIRSTNAME": "StephonL",
+          "PLAN_NAME": "Dental",
+          "PLAN_TYPE": "DENTAL",
+          "COVERAGE": "EE",
+          "CURRENT_PREMIUM": 17.31
+        },
+        {
+          "LASTNAME": "Feld",
+          "FIRSTNAME": "StephonL",
+          "PLAN_NAME": "Short Term Disability",
+          "PLAN_TYPE": "STD",
+          "COVERAGE": "",
+          "CURRENT_PREMIUM": 9.50
+        },
+        {
+          "LASTNAME": "Feld",
+          "FIRSTNAME": "StephonL",
+          "PLAN_NAME": "Vision",
+          "PLAN_TYPE": "VISION",
+          "COVERAGE": "EE",
+          "CURRENT_PREMIUM": 7.42
+        }
+      ]
+    },
+    {
+      "RAW_TEXT": "Gonzalez,AngelF 5.25 35.14Emp/Sp 3.76 13.48Emp/Sp $57.63",
+      "NOTES": "Emp/Sp tiers. DENTAL=35.14, STD=3.76, VISION=13.48.",
+      "MAPPING": [
+        {
+          "LASTNAME": "Gonzalez",
+          "FIRSTNAME": "AngelF",
+          "PLAN_NAME": "Basic Term Life",
+          "PLAN_TYPE": "LIFE",
+          "COVERAGE": "",
+          "CURRENT_PREMIUM": 5.25
+        },
+        {
+          "LASTNAME": "Gonzalez",
+          "FIRSTNAME": "AngelF",
+          "PLAN_NAME": "Dental",
+          "PLAN_TYPE": "DENTAL",
+          "COVERAGE": "ES",
+          "CURRENT_PREMIUM": 35.14
+        },
+        {
+          "LASTNAME": "Gonzalez",
+          "FIRSTNAME": "AngelF",
+          "PLAN_NAME": "Short Term Disability",
+          "PLAN_TYPE": "STD",
+          "COVERAGE": "",
+          "CURRENT_PREMIUM": 3.76
+        },
+        {
+          "LASTNAME": "Gonzalez",
+          "FIRSTNAME": "AngelF",
+          "PLAN_NAME": "Vision",
+          "PLAN_TYPE": "VISION",
+          "COVERAGE": "ES",
+          "CURRENT_PREMIUM": 13.48
+        }
+      ]
+    },
+    {
+      "RAW_TEXT": "Anand,Arjun 40.19Emp 11.46Emp $51.65",
+      "NOTES": "Specified Arch: No Life column. DENTAL + VISION only.",
+      "MAPPING": [
+        {
+          "LASTNAME": "Anand",
+          "FIRSTNAME": "Arjun",
+          "PLAN_NAME": "Dental",
+          "PLAN_TYPE": "DENTAL",
+          "COVERAGE": "EE",
+          "CURRENT_PREMIUM": 40.19
+        },
+        {
+          "LASTNAME": "Anand",
+          "FIRSTNAME": "Arjun",
+          "PLAN_NAME": "Vision",
+          "PLAN_TYPE": "VISION",
+          "COVERAGE": "EE",
+          "CURRENT_PREMIUM": 11.46
+        }
+      ]
+    },
+    {
+      "RAW_TEXT": "Berg,ChaneL 158.17Fam 19.33Emp/Sp $177.50",
+      "NOTES": "Specified Arch: No Life or Std. FAM dental + ES vision.",
+      "MAPPING": [
+        {
+          "LASTNAME": "Berg",
+          "FIRSTNAME": "ChaneL",
+          "PLAN_NAME": "Dental",
+          "PLAN_TYPE": "DENTAL",
+          "COVERAGE": "FAM",
+          "CURRENT_PREMIUM": 158.17
+        },
+        {
+          "LASTNAME": "Berg",
+          "FIRSTNAME": "ChaneL",
+          "PLAN_NAME": "Vision",
+          "PLAN_TYPE": "VISION",
+          "COVERAGE": "ES",
+          "CURRENT_PREMIUM": 19.33
+        }
+      ]
     }
   ]
 }

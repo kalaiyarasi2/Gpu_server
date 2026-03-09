@@ -45,8 +45,7 @@ def filter_claims_by_claim_year(
             unknown.append(c)
             if keep_unknown_year:
                 included.append(c)
-            else:
-                excluded.append(c)
+            # If keep_unknown_year=False, don't add to included OR excluded
             continue
 
         try:
@@ -2065,22 +2064,6 @@ Return ONLY the JSON object for claim {target_claim_number}."""
         }
         schema_data['extraction_metadata'] = extraction_metadata
         
-        # Create analysis.json with metadata and policy details (without claims)
-        analysis_data = {
-            "extraction_metadata": extraction_metadata,
-            "report_date": schema_data.get("report_date"),
-            "policy_number": schema_data.get("policy_number"),
-            "insured_name": schema_data.get("insured_name"),
-            "policy_period": schema_data.get("policy_period"),
-            "total_claims": len(schema_data.get("claims", []))
-        }
-        
-        # Save analysis.json (metadata only, no claims data)
-        analysis_file = session_dir / "analysis.json"
-        with open(analysis_file, 'w', encoding='utf-8') as f:
-            json.dump(analysis_data, f, indent=2, ensure_ascii=False)
-        print(f"✓ Analysis saved: {analysis_file}")
-        
         # Prepare claims array for schema output (strip internal validation fields)
         raw_claims = schema_data.get("claims", []) or []
         claims_only = []
@@ -2095,24 +2078,35 @@ Return ONLY the JSON object for claim {target_claim_number}."""
             else:
                 claims_only.append(claim)
 
+        # Apply year filter BEFORE writing anything so analysis.json always reflects the filter
         included_claims, excluded_claims, unknown_year_claims = filter_claims_by_claim_year(
             claims_only,
             min_year_inclusive=MIN_INCLUDED_CLAIM_YEAR,
             keep_unknown_year=True,
         )
+        print(f"\n🗓️  Year filter (>= {MIN_INCLUDED_CLAIM_YEAR}): {len(included_claims)} included, {len(excluded_claims)} excluded, {len(unknown_year_claims)} unknown year")
 
-        # Add filter audit info + excluded claims to analysis.json
-        analysis_data["year_filter"] = {
-            "min_claim_year_inclusive": MIN_INCLUDED_CLAIM_YEAR,
-            "keep_unknown_year": True,
-            "included_claims_count": len(included_claims),
-            "excluded_claims_count": len(excluded_claims),
-            "unknown_year_claims_count": len(unknown_year_claims),
+        # Create and save analysis.json in a single write with all fields
+        analysis_data = {
+            "extraction_metadata": extraction_metadata,
+            "report_date": schema_data.get("report_date"),
+            "policy_number": schema_data.get("policy_number"),
+            "insured_name": schema_data.get("insured_name"),
+            "policy_period": schema_data.get("policy_period"),
+            "total_claims": len(raw_claims),
+            "year_filter": {
+                "min_claim_year_inclusive": MIN_INCLUDED_CLAIM_YEAR,
+                "keep_unknown_year": True,
+                "included_claims_count": len(included_claims),
+                "excluded_claims_count": len(excluded_claims),
+                "unknown_year_claims_count": len(unknown_year_claims),
+            },
+            "excluded_claims_before_year_threshold": excluded_claims,
         }
-        analysis_data["excluded_claims_before_year_threshold"] = excluded_claims
-        # Rewrite analysis.json with added fields
-        with open(analysis_file, "w", encoding="utf-8") as f:
+        analysis_file = session_dir / "analysis.json"
+        with open(analysis_file, 'w', encoding='utf-8') as f:
             json.dump(analysis_data, f, indent=2, ensure_ascii=False)
+        print(f"✓ Analysis saved: {analysis_file}")
         
         # Compute summary fields from claims and header data
         years_set = set()

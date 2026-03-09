@@ -92,6 +92,58 @@ def favicon():
     return '', 204
 
 
+@app.route('/api/extract', methods=['POST'])
+def extract_document_unified():
+    """
+    Unified Platform Compatibility Alias
+    """
+    res_full = extract_full()
+    
+    # If it's a tuple (response, status_code), unpack it
+    if isinstance(res_full, tuple):
+        res, status = res_full
+        if status != 200:
+            return res_full
+    else:
+        res = res_full
+        status = 200
+
+    # Extract data from the Response object if needed
+    if hasattr(res, 'get_json'):
+        data = res.get_json()
+    else:
+        data = res
+
+    if not data.get('success'):
+        return res_full
+
+    # Map the insurance extraction result to the format the Unified UI expects
+    # The Unified UI expects: { type: "INSURANCE_CLAIMS", output_json: "path/to/json", ... }
+    # Our extract_full returns: { success: true, data: { extracted_schema: {...}, files: [...] } }
+    
+    internal_data = data.get('data', {})
+    files = internal_data.get('files', [])
+    
+    # Find the JSON file in the results
+    json_filename = None
+    excel_filename = None
+    for f in files:
+        if f.endswith('.json'):
+            json_filename = f
+        elif f.endswith('.xlsx'):
+            excel_filename = f
+
+    unified_response = {
+        "type": "INSURANCE_CLAIMS",
+        "output_json": json_filename,
+        "output_file": excel_filename,
+        "insurer": internal_data.get('extraction_metadata', {}).get('source_file', 'Insurance Document'),
+        "success": True
+    }
+    
+    return jsonify(unified_response)
+
+
 @app.route('/api/extract-full', methods=['POST'])
 def extract_full():
     """

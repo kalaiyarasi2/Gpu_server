@@ -63,7 +63,7 @@ def should_trigger_refinement(extracted_data: Dict, raw_text: str) -> tuple:
         
     # Heuristic 2: Financial Reconciliation (Sum of items vs Total in Text)
     # Find total in text - using expanded list of common labels
-    total_labels = r'(?:AMOUNT DUE|AMOUNTDUE|BALANCEDUE|BALANCE DUE|TOTAL DUE|INVOICE TOTAL|GRAND TOTAL|GRANDTOTAL|TOTAL PREMIUM)'
+    total_labels = r'(?:AMOUNT DUE|AMOUNTDUE|BALANCEDUE|BALANCE DUE|TOTAL DUE|INVOICE TOTAL|GRAND TOTAL|GRANDTOTAL|TOTAL PREMIUM|TOTALCURRENTPREMIUM|CURRENT PREMIUM)'
     total_matches = re.findall(fr'{total_labels}\s*[:$]*\s*([0-9,]+\.[0-9]{2})', raw_text.upper())
     
     # [UNUM] Mirrored Total Check
@@ -242,6 +242,11 @@ def generate_refinement_prompt(extracted_data: Dict, raw_text: str, target_total
 3. **CHECK COLUMN MAPPING**: Ensure "Total" column values are mapped to `CURRENT_PREMIUM`.
 4. **MEMBER RECOVERY**: If the sum is too low, you likely missed rows. If too high, you likely captured summary rows.
 {multi_col_msg}
+
+### GUARDIAN SPECIFIC REFINEMENT (IF APPLICABLE):
+- Look for the "Current Premiums" table (usually starts on Page 5 or 6).
+- If you see columns like `BasicTermLife`, `Dental`, `Std`, `Vision`, you MUST extract each non-zero benefit as a SEPARATE line item.
+- Do NOT just extract the "Total Premium" column. The sum of the benefit columns should equal the "Total Premium" for that row.
 
 ### REFINEMENT INSTRUCTIONS:
 1. **CHECK EVERY PREMIUM**: Do NOT assume a standard rate. Look at EACH member's line in the raw text. 
