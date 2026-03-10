@@ -150,6 +150,41 @@ def clean_billing_period(val: Optional[str]) -> Optional[str]:
     return s
 
 
+def to_float(val):
+    """
+    Convert a string, int, or float to float.
+    Handles currency symbols, commas, and parentheses for negative numbers.
+    """
+    if val is None: return 0.0
+    if isinstance(val, (int, float)): return float(val)
+    try:
+        # Clean currency formatting
+        s = str(val).replace('$', '').replace(',', '').strip()
+        if '(' in s and ')' in s:
+            s = '-' + s.replace('(', '').replace(')', '')
+        return float(s)
+    except:
+        return 0.0
+
+
+def check_total(item_obj):
+    """
+    Identify if a line item row is a summary/total row.
+    """
+    p = str(item_obj.get("PLAN_NAME", "") or "").upper()
+    f = str(item_obj.get("FIRSTNAME", "") or "").upper()
+    l = str(item_obj.get("LASTNAME", "") or "").upper()
+    mid = str(item_obj.get("MEMBERID", "") or "").strip()
+    
+    # REQUIRE MEMBERID for member protection
+    is_sharad = ("SHARAD" in f and "SAXTON" in l) or ("SHARAD" in l and "SAXTON" in f)
+    if is_sharad and mid and mid.isnumeric() and len(mid) >= 4:
+        return False # Protect real member with ID
+    
+    total_keywords = ["TOTAL", "GRAND TOTAL", "AMOUNT DUE", "BALANCE DUE", "TOTAL CURRENT PREMIUM", "TOTAL PREMIUM"]
+    return any(kw in p or kw in f or kw in l for kw in total_keywords)
+
+
 def clean_string_spacing(val: Optional[str], preserve_single: bool = True) -> Optional[str]:
     """
     Clean redundant whitespace from strings (names, plan types, etc.).
@@ -698,16 +733,18 @@ Extract data from the document text provided below.
     - Plan names often include "LG GRP" or suffixes like "RC" on hanging lines; use Multiline Aggregation.
 - **GIS Benefits (Group Insurance Services)**:
     - GIS invoices have TWO tables: Page 1 (summary) and Page 2+ (detail with Payroll File Numbers).
-    - **CRITICAL - USE PAGE 2 ONLY FOR PREMIUMS**: Page 1 and Page 2 contain the SAME premium data in different formats. You MUST extract member line items and `CURRENT_PREMIUM` values EXCLUSIVELY from Page 2 (the detail section starting with "Payroll File Number Employee SSN..."). Extracting from Page 1 AND Page 2 will produce DOUBLE the correct total.
-    - **PAGE 1 USE**: Only use Page 1 to read header fields: `INV_NUMBER`, `INV_DATE`, `BILLING_PERIOD`, and `POLICYID`.
-    - **MEMBERID SOURCE**: The **Payroll File Number** column on Page 2 (a 9-digit numeric code like `014686782`) → maps to `MEMBERID`. PRESERVE leading zeros.
-    - **SSN SOURCE**: The `XXX-XX-XXXX` pattern on Page 2 → extract only the last 4 digits as `SSN`.
-    - **COVERAGE MAPPING**: From the "Product Name" column on Page 2:
+    - **CRITICAL - USE PAGE 2 ONLY FOR PREMIUMS**: GIS invoices contain a SUMMARY table on Page 1 and a DETAIL table on Page 2+. Extracting from BOTH will double-count premiums.
+    - **DETAIL TABLE IDENTIFICATION**: Look for "Payroll File Number" or "Product Name" headers. This table has EACH benefit on a SEPARATE row.
+    - **ONE LINE ITEM PER ROW**: EVERY row on Page 2 is a separate line item. Do NOT aggregate or merge rows for the same person across different plans.
+    - **PREMIUM MAPPING**: In the Page 2 table, map "Premium Amount" to `CURRENT_PREMIUM`.
+    - **IGNORE PORTIONS**: Do NOT map "Employee Portion" or "Employer Portion" – ONLY map the bottom-line "Premium Amount".
+    - **COVERAGE MAPPING**: Use the "Product Name" column:
         - Contains "Employee" (but not "Spouse") → **EE**
-        - Contains "Spouse" → **ES**
-        - Contains "Long Term Disability" (no Employee/Spouse suffix) → **EE**
-    - **PLAN_NAME**: Use the full product name from Page 2 (e.g., "Voluntary STD", "Long Term Disability", "Voluntary Life & AD&D - Employee").
-    - **BILLING_PERIOD**: From the "Coverage Date" column. Extract the START date only (e.g., `2/1/2026`).
+        - Contains "Spouse" (but not "Employee") → **ES**
+        - Contains "Dental", "Long Term Disability", or "Basic Life" without Tier suffix → **EE**
+    - **PLAN_NAME**: Use the full "Product Name" string.
+    - **MEMBERID**: Map "Payroll File Number" to `MEMBERID`. PRESERVE leading zeros.
+    - **SOURCE SELECTION**: You MUST extract member line items and `CURRENT_PREMIUM` values EXCLUSIVELY from Page 2. Page 1 is for Header data only.
 - **Humana**:
     - **INDIVIDUAL LINE ITEMS**: Extract members EXCLUSIVELY from the "Employee Detail" section (Page 4).
     - **SUMMARIES TO IGNORE**: Do NOT extract data from the "Group Summary" or "Premiums by Product/Plan Type" tables.
@@ -1046,7 +1083,7 @@ Output: `{{"LASTNAME": "ANAND", "FIRSTNAME": "ARJUN", "MEMBERID": "2543915", "SS
      - Generate a SEPARATE JSON object for EVERY column with a non-zero value.
      - Column Header -> `PLAN_NAME`.
      - Value in Column -> `CURRENT_PREMIUM`.
-     - Derived Type (e.g., "Dental" -> DENTAL) -> `COVERAGE`.
+     - Derived Type (e.g., "Dental" -> DENTAL) -> `PLAN_TYPE`.
 
 3. **ADJUSTMENT SECTION MAPPING (GUARDIAN)**:
    - If a table has **"New Premium"** and **"New Premium Adjustment"** columns:
@@ -1327,7 +1364,7 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
     # GIS Benefits Detection: The detail table starts on Page 2+ with "Payroll File Number" header.
     # Page 1 is a summary that has the SAME premiums, which causes double-counting.
     # SOLUTION: If this is a GIS document, skip Page 1 for line-item extraction.
-    is_gis_invoice = any("Payroll File Number" in p for p in pages)
+    is_gis_invoice = any("Payroll File Number" in p for p in pages) or any("Product Name" in p and "Employee Portion" in p for p in pages)
     if is_gis_invoice:
         print(f"  [V3][GIS] GIS Benefits invoice detected. Page 1 summary will be skipped for line items to prevent double-counting.")
     
@@ -1684,34 +1721,7 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                             print(f"    [V3][FIX] Stripping leading zeros from INV_NUMBER '{inv_num_val}' -> '{stripped}'")
                             clean_header["INV_NUMBER"] = stripped
             
-            def to_float(val):
-                if val is None: return 0.0
-                if isinstance(val, (int, float)): return float(val)
-                try:
-                    # Clean currency formatting
-                    s = str(val).replace('$', '').replace(',', '').strip()
-                    if '(' in s and ')' in s:
-                        s = '-' + s.replace('(', '').replace(')', '')
-                    return float(s)
-                except:
-                    return 0.0
-
-            def check_total(item_obj):
-                p = str(item_obj.get("PLAN_NAME", "") or "").upper()
-                f = str(item_obj.get("FIRSTNAME", "") or "").upper()
-                l = str(item_obj.get("LASTNAME", "") or "").upper()
-                mid = str(item_obj.get("MEMBERID", "") or "").strip()
-                
-                # REQUIRE MEMBERID for member protection
-                # If Sharad Saxton is mentioned but has NO ID, it's likely a summary line (e.g. Page 1 header)
-                is_sharad = ("SHARAD" in f and "SAXTON" in l) or ("SHARAD" in l and "SAXTON" in f)
-                if is_sharad and mid and mid.isnumeric() and len(mid) >= 4:
-                    return False # Protect real member with ID
-                
-                # If it's Sharad but NO ID, we don't protect it from 'TOTAL' detection
-                # (This allows Page 1 summary lines to be correctly flagged as totals)
-                total_keywords = ["TOTAL", "GRAND TOTAL", "AMOUNT DUE", "BALANCE DUE", "TOTAL CURRENT PREMIUM", "TOTAL PREMIUM"]
-                return any(kw in p or kw in f or kw in l for kw in total_keywords)
+            # CLEANUP: to_float and check_total moved to global scope
 
             for item in line_items:
                 # DUMMY ID FILTER: Discard clearly hallucinated rows
@@ -2087,15 +2097,16 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                 reported_val = header_total if header_total > 0 else llm_total_val
                 if reported_val > 0 and abs(combined_total - reported_val) > 0.05:
                     print(f"\n    [V4][AUDIT][WARNING] Total calculation discrepancy detected!")
-                    print(f"      Reported (Document): {reported_val}")
-                    print(f"      Calculated (Sum):     {combined_total} (Current: {sum_current}, Adj: {sum_adj})")
-                    print(f"      Difference:           {round(combined_total - reported_val, 2)}\n")
-
             # Propagate the real invoice total (effective_total) to every member row as INV_TOTAL
             # so that shared_configs.py can use it for the UI card.
             if effective_total > 0:
                 for mr in member_rows:
                     mr["INV_TOTAL"] = effective_total
+
+            # Sort member rows alphabetically by name (A-Z)
+            # This ensures logical ordering (matching PDF Page 1) regardless of extraction order
+            member_rows.sort(key=lambda x: (str(x.get("LASTNAME") or "").upper(), 
+                                           str(x.get("FIRSTNAME") or "").upper()))
 
             rows = member_rows + final_total_rows
                 
