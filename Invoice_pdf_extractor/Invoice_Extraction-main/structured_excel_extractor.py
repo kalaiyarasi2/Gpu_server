@@ -158,9 +158,22 @@ class StructuredExcelExtractor:
         # 4. Forward Fill identifiers for multi-line records
         # Identify columns that are likely identifiers to fill
         id_cols = [c for c, t in mapping.items() if t in ["MEMBER_NAME", "MEMBERID", "EMPLOYEE_ID", "BILLING_PERIOD"]]
-        # Standard keywords if AI missed them
-        id_cols += [c for c in df.columns if any(k in c.lower() for k in ["name", "id", "period", "date", "type"])]
+        
+        # Standard keywords if AI missed them - using more specific matching
+        # Avoid matching 'id' inside 'Accident' or other premium columns
+        target_id_keywords = ["name", "id", "period", "date", "type", "ssn", "policy"]
+        for col in df.columns:
+            col_lower = col.lower()
+            # Explicitly exclude premium and amount columns from being used as identifiers for ffill
+            if "premium" in col_lower or "amount" in col_lower:
+                continue
+            
+            # Check for identifiers using word boundaries or specific checks
+            if any(re.search(rf"\b{re.escape(k)}\b", col_lower) for k in target_id_keywords):
+                id_cols.append(col)
+        
         id_cols = list(set(id_cols))
+        print(f"  [DEBUG] ID Columns for ffill: {id_cols}")
         
         for col in id_cols:
             if col in df.columns:
