@@ -1,0 +1,44 @@
+{
+  "CARRIER_KEYWORDS": [
+    "DPS$$$PKG",
+    "UHS Billing",
+    "Total Balance Due",
+    "Bill Group No"
+  ],
+  "EXAMPLES": [
+    {
+      "RAW_TEXT": "1327367 | BERWIG, MONICA E6000i6021 - Max Claims | *****303700",
+      "MAPPING": {
+        "LASTNAME": "BERWIG",
+        "FIRSTNAME": "MONICA",
+        "MIDDLENAME": null,
+        "SSN": null,
+        "POLICYID": "1327367",
+        "MEMBERID": "303700",
+        "PLAN_NAME": "E6000i6021 - Max Claims",
+        "PLAN_TYPE": "MEDICAL",
+        "COVERAGE": "EE",
+        "CURRENT_PREMIUM": 616.59,
+        "ADJUSTMENT_PREMIUM": null,
+        "PRICING_ADJUSTMENT": null
+      }
+    },
+    {
+      "RAW_TEXT": "1327367 | BERWIG, MONICA E6000i6021 - Max Claims | *****303700",
+      "MAPPING": {
+        "LASTNAME": "BERWIG",
+        "FIRSTNAME": "MONICA",
+        "MIDDLENAME": null,
+        "SSN": null,
+        "POLICYID": "1327367",
+        "MEMBERID": "303700",
+        "PLAN_NAME": "E6000i6021 - Admin/Excess Loss",
+        "PLAN_TYPE": "MEDICAL",
+        "COVERAGE": "EE",
+        "CURRENT_PREMIUM": 950.85,
+        "ADJUSTMENT_PREMIUM": null,
+        "PRICING_ADJUSTMENT": null
+      }
+    }
+  ]
+}

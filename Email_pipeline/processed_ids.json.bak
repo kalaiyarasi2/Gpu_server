@@ -1,0 +1,74 @@
+{
+  "batch_20260304_132128": {
+    "filenames": [
+      "BCBS RI Revival Hotels Feb-25 Inv.pdf"
+    ],
+    "processed_at": "2026-03-04T13:21:28"
+  },
+  "batch_20260304_132813": {
+    "filenames": [
+      "APL MGSI Feb-25 Inv.pdf"
+    ],
+    "processed_at": "2026-03-04T13:28:13"
+  },
+  "batch_20260304_144856": {
+    "filenames": [
+      "Pet Benefit Solutions Feb-25 Inv.pdf"
+    ],
+    "processed_at": "2026-03-04T14:48:56"
+  },
+  "batch_20260304_145346": {
+    "filenames": [
+      "Pet Benefit Solutions Feb-25 Inv.pdf"
+    ],
+    "processed_at": "2026-03-04T14:53:46"
+  },
+  "batch_20260304_151359": {
+    "filenames": [
+      "Pet Benefit Solutions Feb-25 Inv.pdf"
+    ],
+    "processed_at": "2026-03-04T15:13:59"
+  },
+  "batch_20260304_152517": {
+    "filenames": [
+      "APL MGSI Feb-25 Inv.pdf",
+      "Pet Benefit Solutions Feb-25 Inv.pdf"
+    ],
+    "processed_at": "2026-03-04T15:25:17"
+  },
+  "batch_20260304_154411": {
+    "filenames": [
+      "APL- Securance- Dec 25_ANGjdJ.pdf",
+      "APL- Specified Arch- Dec 25_ANGjdJ.pdf"
+    ],
+    "processed_at": "2026-03-04T15:44:11"
+  },
+  "batch_20260304_160547": {
+    "filenames": [
+      "APL- Urban Stillhouse- Dec 25.pdf",
+      "APL- VU Tech- Dec 25.pdf",
+      "BCBC- 23 Restaurants- div003- Dec 25 (1).pdf"
+    ],
+    "processed_at": "2026-03-04T16:05:47"
+  },
+  "batch_20260304_161755": {
+    "filenames": [
+      "APL- Rapid Trading- Dec 25.pdf",
+      "UHC- MGSI- Feb 26.pdf",
+      "UHC- Rapid Trading- Feb 26.pdf",
+      "UHC- SEFL- Feb 26_ANGjdJ.pdf",
+      "UHC- Securance- Feb 26 (1) (1)_ANGjdJ.pdf",
+      "UHC- Securance- Feb 26 (1).pdf",
+      "UHC- Specified Arch- Feb 26 (1).pdf"
+    ],
+    "processed_at": "2026-03-04T16:17:55"
+  },
+  "batch_20260304_164206": {
+    "filenames": [
+      "BCBS- Rocca- Streetlight Taco- div003- Dec 25.pdf",
+      "BCBS- Rocca- Streetlight Taco- div004- Dec 25.pdf",
+      "BCBS- Rocca- div001- Dec 25.pdf"
+    ],
+    "processed_at": "2026-03-04T16:42:06"
+  }
+}

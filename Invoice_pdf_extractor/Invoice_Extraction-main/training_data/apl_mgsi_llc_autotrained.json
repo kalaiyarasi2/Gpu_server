@@ -1,0 +1,44 @@
+{
+  "CARRIER_KEYWORDS": [
+    "Dept. 960641",
+    "MEDLINK9",
+    "Total Billed",
+    "Invoice No."
+  ],
+  "EXAMPLES": [
+    {
+      "RAW_TEXT": "2509979 BYRD, SARAH ***-**-6030 MEDLINK9 GROUP MED SUP 93.48 - $93.48",
+      "MAPPING": {
+        "LASTNAME": "BYRD",
+        "FIRSTNAME": "SARAH",
+        "MIDDLENAME": null,
+        "SSN": "6030",
+        "POLICYID": null,
+        "MEMBERID": "2509979",
+        "PLAN_NAME": "MEDLINK9 GROUP MED SUP",
+        "PLAN_TYPE": null,
+        "COVERAGE": "EE",
+        "CURRENT_PREMIUM": 93.48,
+        "ADJUSTMENT_PREMIUM": null,
+        "PRICING_ADJUSTMENT": null
+      }
+    },
+    {
+      "RAW_TEXT": "2509977 CABRERA, BRINA ***-**-2032 MEDLINK9 GROUP MED SUP 167.15 - $167.15",
+      "MAPPING": {
+        "LASTNAME": "CABRERA",
+        "FIRSTNAME": "BRINA",
+        "MIDDLENAME": null,
+        "SSN": "2032",
+        "POLICYID": null,
+        "MEMBERID": "2509977",
+        "PLAN_NAME": "MEDLINK9 GROUP MED SUP",
+        "PLAN_TYPE": null,
+        "COVERAGE": "EE",
+        "CURRENT_PREMIUM": 167.15,
+        "ADJUSTMENT_PREMIUM": null,
+        "PRICING_ADJUSTMENT": null
+      }
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+
+[[PAGE_1]]
+Invoice Date 12/1/2025
+IMPORTANT NOTE
+The address to return your payments to APL
+RAPID TRADING LLC
+has changed. Please update your records
+3400 NW 113TH CT
+and/or systems accordingly.
+MIAMI, FL 33178
+To ensure prompt attention, please email changes, additions or corrections to
+billingcoll@ampublic.com or call 800-256-8606 to speak with a member of our Care Team.
+Please include a copy of this statement with your payment.
+Master No. Group No. Invoice No.
+26432 6406508
+Premium Period December 2025
+Amount Billed 666.41
+Amount Due 666.41
+Amount Paid
+
+[[PAGE_2]]
+Check # Dept. 960641
+APL
+Date
+P.O. Box 269071
+Oklahoma City, OK 73126-9071
+Invoice Details
+Invoice 6406508
+Bill Date 12/1/2025 - (Month 202512)
+RAPID TRADING LLC Dept. 960641
+3400 NW 113TH CT APL
+MIAMI, FL 33178 P.O. BOX 269071
+Oklahoma City, OK 73126-9071
+Billed
+Policy Name EE # SSN Product Billed Adj. Due Comments
+2480131 ARZENO, ALAN ***-**-1560 MEDLINK9 GROUP MED SUP $61.34 - $61.34
+2480128 CARRANZA, JAVIER ***-**-8855 MEDLINK9 GROUP MED SUP $128.93 - $128.93
+2480132 FIGUEROA, MARISOL ***-**-1486 MEDLINK9 GROUP MED SUP $101.85 - $101.85
+2480130 MOLINA, LUCY ***-**-4279 MEDLINK9 GROUP MED SUP $61.34 - $61.34
+2480129 PELAEZ, MICHAEL ***-**-9511 MEDLINK9 GROUP MED SUP $61.34 - $61.34
+2480127 PERLMAN, ROBERT ***-**-5214 MEDLINK9 GROUP MED SUP $128.93 - $128.93
+2559492 PERLMAN, ZACHARY ***-**-0016 MEDLINK9 GROUP MED SUP $61.34 - $61.34
+2480133 SAGER, CARLOS ***-**-3439 MEDLINK9 GROUP MED SUP $61.34 - $61.34
+Total Billed $666.41 - $666.41
+Total $666.41 - $666.41
+Page: 2

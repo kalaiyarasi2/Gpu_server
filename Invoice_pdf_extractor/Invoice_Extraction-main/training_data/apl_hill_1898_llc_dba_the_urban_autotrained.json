@@ -1,0 +1,44 @@
+{
+  "CARRIER_KEYWORDS": [
+    "Master No.",
+    "Premium Period",
+    "Amount Billed",
+    "Dept."
+  ],
+  "EXAMPLES": [
+    {
+      "RAW_TEXT": "2670089 CORDES, LUKE ***-**-6257 MEDLINK9 GROUP MED SUP $51.00 - $51.00",
+      "MAPPING": {
+        "LASTNAME": "CORDES",
+        "FIRSTNAME": "LUKE",
+        "MIDDLENAME": null,
+        "SSN": "6257",
+        "POLICYID": null,
+        "MEMBERID": "2670089",
+        "PLAN_NAME": "MEDLINK9 GROUP MED SUP",
+        "PLAN_TYPE": null,
+        "COVERAGE": "EE",
+        "CURRENT_PREMIUM": 51.0,
+        "ADJUSTMENT_PREMIUM": null,
+        "PRICING_ADJUSTMENT": null
+      }
+    },
+    {
+      "RAW_TEXT": "2670106 EDWARDS, JORDAN ***-**-8940 MEDLINK9 GROUP MED SUP $51.00 - $51.00",
+      "MAPPING": {
+        "LASTNAME": "EDWARDS",
+        "FIRSTNAME": "JORDAN",
+        "MIDDLENAME": null,
+        "SSN": "8940",
+        "POLICYID": null,
+        "MEMBERID": "2670106",
+        "PLAN_NAME": "MEDLINK9 GROUP MED SUP",
+        "PLAN_TYPE": null,
+        "COVERAGE": "EE",
+        "CURRENT_PREMIUM": 51.0,
+        "ADJUSTMENT_PREMIUM": null,
+        "PRICING_ADJUSTMENT": null
+      }
+    }
+  ]
+}

@@ -1,0 +1,153 @@
+
+[[PAGE_1]]
+000000000024542 000000002905 12012025 6
+PROVIDESCOVERAGEFROM12/1/2025-12/31/2025
+Group Number: 24542 AmountDue: $29.05
+PaymentDueDate: 12/1/2025 AmountEnclosed:
+BLANK
+Pleasesendpaymentalongwithremittancestubto:
+UniqueTool&Die,LLC Blank
+DonnaTalley KCLGROUPBENEFITS
+9007BrittanyWay POBOX219846
+Tampa,FL33619 KANSASCITY,MO64121-9846
+Pleasedetachandreturnthisportionwithyourpaymenttoensureproperpaymentposting
+____ ____ ____ ____ ____ ____ ____ ____ ____ ____ ____ ____ ____ ____ ____ ____ ____ ____ ____ ____ ____ ____ ____ ____ ____ ____ ____ ____ ____ ____ ____ ____ ____ ____ ____ ____
+REMITTANCESTUB
+Pleasesendallcorrespondence(EmployeeAdds,Terms,Changes)to:
+KCLGroupBenefits
+ATTN:TakeshiaGriffin
+POBOX219425
+KANSASCITY,MO64121-9425
+Email:GRPAdmin@kclife.com
+Pleasesendpaymentalongwithremittancestubto:
+KCLGroupBenefits
+POBOX219846
+KANSASCITY,MO64121-9846
+Page1
+
+[[PAGE_2]]
+Page Intentionally Left Blank
+Page2
+
+[[PAGE_3]]
+UniqueTool&Die,LLC
+GroupNumber: 24542
+DueDate: 12/1/2025
+DatePrepared: 11/11/2025
+PROVIDESCOVERAGEFROM12/1/2025-12/31/2025
+Group Number: 24542 AmountDue: $29.05
+BLANK
+PaymentDueDate: 12/1/2025 AmountEnclosed:
+GroupContact KansasCityLifeContact
+UniqueTool&Die,LLC KCLGROUPBENEFITS
+ATTN:DonnaTalley ATTN:TakeshiaGriffin-24542
+9007BrittanyWay POBOX219425
+Tampa,FL33619 KANSASCITY,MO64121-9425
+KCLGroupBenefitsContactInformation
+GroupCustomerAccountTeam TakeshiaGriffin Phone: 877-266-6767x8002
+POBOX219425 Takeshia.Griffin@kclife.com Blank 816-753-7299x8002
+KANSASCITY,MO64121-9425 www.kclgroupbenefits.com Fax: 816-753-2964
+MonthlyPremiumStatementSummary
+LastMonthsCharges $31.54
+Payments ($29.05)
+ExcessPremium $0.00
+Blank
+PastDue/Credit $2.49
+CurrentPremiumDue $29.05
+Adjustments/Fees ($2.49)
+EAPFee $0.00
+BalanceDue $29.05
+BASICADMINISTRATIVEINSTRUCTIONS
+-PLEASEPAYASBILLED
+-VERIFYYOURSTATEMENTFORACCURACY,VERIFYINGALLELIGIBLEEMPLOYEESARECOVERED
+-ENROLLMENTCARD(S)FORNEWEMPLOYEESMUSTBEPROVIDEDWITHIN31DAYSOFELIGIBILITYDATE
+-REPORTEMPLOYEESWHOHAVEDISCONTINUEDEMPLOYMENTIMMEDIATELYGIVINGDATEOFTERMINATION
+-REPORTALLSALARYANDCLASSCHANGESIMMEDIATELYPROVIDINGEFFECTIVEDATEOFCHANGE
+-ADJUSTMENTSWILLBEREFLECTEDONBILLINGSUMMARY
+-ADJUSTMENTSDETAILMAYBEVIEWEDAT:http://www.kclgroupbenefits.com
+Page3
+
+[[PAGE_4]]
+UniqueTool&Die,LLC
+CoverageCode Notes Cobra
+EE-EmployeeOnly 1-RateChange CE-CobraEmployee(EE)
+GroupNumber: 24542
+EF-Employee+Family 2-CoverageChange CF-CobraEE+Family
+DueDate: 12/1/2025
+SP-Spouse 3-Both CS-CobraEE+Spouse
+DatePrepared: 11/11/2025
+DE-Dependent(s) Thesechangeswill CD-CobraEE+Child(ren)
+EM-Employee+Member appearonthenextbill Blank
+ES-Employee+Spouse Blank
+Blank
+PROVIDESCOVERAGEFROM12/1/2025-12/31/2025
+Name Code Premium Volume Name Code Premium Volume
+AllenCameron PatelNavin
+TGLife EE $3.50 $10,000 TGLife EE $2.28 $6,500
+TGAD&D EE $0.32 $10,000 TGAD&D EE $0.21 $6,500
+Total $3.82 Total $2.49
+BradleyKevin StJohnFred
+TGLife EE $1.05 $3,000 TGLife EE $2.28 $6,500
+TGAD&D EE $0.10 $3,000 TGAD&D EE $0.21 $6,500
+Total $1.15 Total $2.49
+ClothierSuzette
+GroupTotals
+TGLife EE $3.50 $10,000
+TGAD&D EE $0.32 $10,000 Product Premium Enrollees Volume
+Total $3.82 Dental $0.00 0
+DesirRochener
+TGLife $26.61 9 $76,000
+TGLife EE $3.50 $10,000
+TGAD&D EE $0.32 $10,000 TGAD&D $2.44 9 $76,000
+Total $3.82 VOLLife $0.00 0 $0
+GatesWilliam
+VOLAD&D $0.00 0 $0
+TGLife EE $3.50 $10,000
+STD $0.00 0 $0
+TGAD&D EE $0.32 $10,000
+Total $3.82 LTD $0.00 0 $0
+LaneMichelle Vision $0.00 0
+TGLife EE $3.50 $10,000
+Accident $0.00 0
+TGAD&D EE $0.32 $10,000
+Total $3.82 Critical $0.00 0 $0
+Illness
+MillerChristopher
+TGLife EE $3.50 $10,000 GrandTotal $29.05
+TGAD&D EE $0.32 $10,000
+Total $3.82
+Page4
+
+[[PAGE_5]]
+UniqueTool&Die,LLC
+CoverageCode Notes Cobra
+EE-EmployeeOnly 1-RateChange CE-CobraEmployee(EE)
+GroupNumber: 24542
+EF-Employee+Family 2-CoverageChange CF-CobraEE+Family
+DueDate: 12/1/2025
+SP-Spouse 3-Both CS-CobraEE+Spouse
+DatePrepared: 11/11/2025
+DE-Dependent(s) Thesechangeswill CD-CobraEE+Child(ren)
+EM-Employee+Member appearonthenextbill Blank
+ES-Employee+Spouse Blank
+Blank
+ADJUSTMENTDETAIL12/1/2025-12/31/2025
+Name Code Premium Volume
+DaniKarlo
+11/1/2025 TGLife EE ($2.28) $0
+11/1/2025 TGAD&D EE ($0.21) $0
+Total ($2.49) $0
+AdjustmentTotals
+Product Premium Volume
+Dental $0.00
+TGLife ($2.28) $0
+TGAD&D ($0.21) $0
+VOLLife $0.00 $0
+VOLAD&D $0.00 $0
+STD $0.00
+LTD $0.00
+Vision $0.00
+Accident $0.00
+CriticalIllness $0.00
+GrandTotal ($2.49)
+Page5

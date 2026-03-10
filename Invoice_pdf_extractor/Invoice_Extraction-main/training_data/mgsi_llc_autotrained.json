@@ -1,0 +1,44 @@
+{
+  "CARRIER_KEYWORDS": [
+    "DPS$$$PKG",
+    "UHS Billing",
+    "Bill Group No",
+    "Coverage Period"
+  ],
+  "EXAMPLES": [
+    {
+      "RAW_TEXT": "1166219 BYRD DIAZ, SARAH P5000i80LX21B - *****389300 E A $433.95 $699.81",
+      "MAPPING": {
+        "LASTNAME": "BYRD DIAZ",
+        "FIRSTNAME": "SARAH",
+        "MIDDLENAME": null,
+        "SSN": null,
+        "POLICYID": "1166219",
+        "MEMBERID": "389300",
+        "PLAN_NAME": "P5000i80LX21B - Admin/Excess Loss",
+        "PLAN_TYPE": "MEDICAL",
+        "COVERAGE": "EE",
+        "CURRENT_PREMIUM": 433.95,
+        "ADJUSTMENT_PREMIUM": null,
+        "PRICING_ADJUSTMENT": null
+      }
+    },
+    {
+      "RAW_TEXT": "1166219 BYRD DIAZ, SARAH P5000i80LX21B - *****389300 E A $433.95 $699.81",
+      "MAPPING": {
+        "LASTNAME": "BYRD DIAZ",
+        "FIRSTNAME": "SARAH",
+        "MIDDLENAME": null,
+        "SSN": null,
+        "POLICYID": "1166219",
+        "MEMBERID": "389300",
+        "PLAN_NAME": "P5000i80LX21B - Max Claims Liability",
+        "PLAN_TYPE": "MEDICAL",
+        "COVERAGE": "EE",
+        "CURRENT_PREMIUM": 265.86,
+        "ADJUSTMENT_PREMIUM": null,
+        "PRICING_ADJUSTMENT": null
+      }
+    }
+  ]
+}

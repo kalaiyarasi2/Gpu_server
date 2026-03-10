@@ -1,0 +1,44 @@
+{
+  "CARRIER_KEYWORDS": [
+    "SPECIFIED ARCHITECTURAL SYSTEMS",
+    "MEDLINKSELECT",
+    "Dept.",
+    "P.O. Box"
+  ],
+  "EXAMPLES": [
+    {
+      "RAW_TEXT": "2543915 ANAND, ARJUN ***-**-7635 MEDLINKSELECT GROUP MED SUP $85.27 - $85.27",
+      "MAPPING": {
+        "LASTNAME": "ANAND",
+        "FIRSTNAME": "ARJUN",
+        "MIDDLENAME": null,
+        "SSN": "7635",
+        "POLICYID": null,
+        "MEMBERID": "2543915",
+        "PLAN_NAME": "MEDLINKSELECT GROUP MED SUP",
+        "PLAN_TYPE": null,
+        "COVERAGE": "EE",
+        "CURRENT_PREMIUM": 85.27,
+        "ADJUSTMENT_PREMIUM": null,
+        "PRICING_ADJUSTMENT": null
+      }
+    },
+    {
+      "RAW_TEXT": "2408923 BERG, CHANE ***-**-6006 MEDLINKSELECT GROUP MED SUP $260.28 - $260.28",
+      "MAPPING": {
+        "LASTNAME": "BERG",
+        "FIRSTNAME": "CHANE",
+        "MIDDLENAME": null,
+        "SSN": "6006",
+        "POLICYID": null,
+        "MEMBERID": "2408923",
+        "PLAN_NAME": "MEDLINKSELECT GROUP MED SUP",
+        "PLAN_TYPE": null,
+        "COVERAGE": "EE",
+        "CURRENT_PREMIUM": 260.28,
+        "ADJUSTMENT_PREMIUM": null,
+        "PRICING_ADJUSTMENT": null
+      }
+    }
+  ]
+}
