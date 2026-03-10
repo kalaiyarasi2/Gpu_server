@@ -185,6 +185,8 @@ def process_with_structural_layer(pdf_path, output_excel=None):
             # Just extract header fields from summary part
             # We use a smaller context for summary to avoid confusion
             page_data = v3.extract_fields_with_llm(chunk_text, client, f"summary_page_{page_num}")
+            # [FIX] Never extract line items from summary chunks (Page 1) to avoid mis-mapped wide-table values
+            page_data["LINE_ITEMS"] = []
         else:
             # Refined prompt hint for Guardian and GIS 23
             prompt_hint = ""
@@ -197,18 +199,14 @@ def process_with_structural_layer(pdf_path, output_excel=None):
                 )
             elif "GIS 23" in pdf_path or "Restaurant Services" in pdf_path or "Payroll File Number" in chunk_text:
                 prompt_hint = (
-                    "\n[CRITICAL INSTRUCTIONS FOR MULTI-BENEFIT EXTRACTION]"
-                    "\n1. This is a GIS 23 Restaurant Services invoice with PAYROLL FILE detail pages."
-                    "\n2. Each employee has MULTIPLE benefit types (Dental, Vision, STD, LTD, Life Insurance, etc.)."
-                    "\n3. EXTRACT EACH BENEFIT AS A SEPARATE LINE ITEM - do NOT consolidate or aggregate."
-                    "\n4. The 'Product Name' column contains the benefit type - map this to PLAN_NAME exactly as shown."
-                    "\n5. The 'Premium Amount' column is the premium for THAT SPECIFIC benefit only."
-                    "\n6. If you see columns like 'Employee Portion' and 'Employer Portion', use 'Employee Portion' for CURRENT_PREMIUM."
-                    "\n7. Extract EVERY row in the table - each row is a separate benefit enrollment."
-                    "\n8. The 'Volume' column may contain coverage amounts for life insurance."
-                    "\n9. Do NOT skip rows, do NOT aggregate rows, do NOT consolidate different benefit types."
-                    "\n10. Typical structure: One employee may have 5-8 separate rows for different benefits."
-                    "\n11. CRITICAL: To save space, do NOT include null or empty fields in the JSON object for each line item."
+                    "\n[CRITICAL INSTRUCTIONS FOR GIS EXTRACTION]"
+                    "\n1. This document has a SUMMARY on Page 1 and DETAIL on Page 2+."
+                    "\n2. YOU MUST extract each benefit as a SEPARATE row. Do NOT aggregate or consolidate."
+                    "\n3. 'Product Name' -> PLAN_NAME. 'Premium Amount' -> CURRENT_PREMIUM."
+                    "\n4. If a member lacks a certain benefit (e.g. Dental premium is 0 or empty), do NOT invent a row for it."
+                    "\n5. COVERAGE MAPPING: 'Employee' (no Spouse) -> EE, 'Spouse' -> ES. "
+                    "\n6. If Product is 'Dental' or 'Long Term Disability' without a tier suffix -> EE."
+                    "\n7. Map ONLY explicit values. If Chaitra has LTD $10.31 but NO Dental, do NOT put $10.31 in Dental."
                 )
             elif "Aetna" in pdf_path:
                 prompt_hint = (

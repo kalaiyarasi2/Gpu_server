@@ -497,3 +497,66 @@
 2026-03-09 18:58:28,473 - monitor_db - INFO - Database initialized successfully
 2026-03-09 18:58:28,510 - monitor_middleware - INFO - Monitoring middleware added to FastAPI application
 2026-03-09 18:58:28,682 - monitor_middleware - INFO - Monitoring middleware added to FastAPI application
+2026-03-10 12:13:25,076 - monitor_db - INFO - Database initialized successfully
+2026-03-10 12:13:25,089 - monitor_middleware - INFO - Monitoring middleware added to FastAPI application
+2026-03-10 12:13:29,207 - monitor_db - INFO - Database initialized successfully
+2026-03-10 12:13:29,220 - monitor_middleware - INFO - Monitoring middleware added to FastAPI application
+2026-03-10 12:13:29,321 - monitor_middleware - INFO - Monitoring middleware added to FastAPI application
+2026-03-10 12:13:47,905 - monitor_db - INFO - Created request: e63adb1c-366b-44b9-b6da-cb4f54e79af5 - unknown
+2026-03-10 12:13:47,913 - monitor_service - INFO - Started monitoring request e63adb1c-366b-44b9-b6da-cb4f54e79af5
+2026-03-10 12:13:47,913 - monitor_middleware - INFO - Monitoring started for request e63adb1c-366b-44b9-b6da-cb4f54e79af5: unknown
+2026-03-10 12:13:47,935 - monitor_db - INFO - Updated request e63adb1c-366b-44b9-b6da-cb4f54e79af5 status to: processing
+2026-03-10 12:13:50,154 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-03-10 12:14:49,426 - monitor_db - INFO - Updated request e63adb1c-366b-44b9-b6da-cb4f54e79af5 status to: completed
+2026-03-10 12:14:49,433 - monitor_db - INFO - Added output files for request e63adb1c-366b-44b9-b6da-cb4f54e79af5: ['http://localhost:8007/api/download/GIS- MGSI- Feb 26_invoice.xlsx', 'http://localhost:8007/api/download/GIS- MGSI- Feb 26_invoice.json']
+2026-03-10 12:14:49,433 - monitor_service - INFO - Completed monitoring for request e63adb1c-366b-44b9-b6da-cb4f54e79af5 in 61.52s
+2026-03-10 12:14:49,434 - monitor_middleware - INFO - Request e63adb1c-366b-44b9-b6da-cb4f54e79af5 completed successfully in 61.52s
+2026-03-10 12:27:28,966 - monitor_db - INFO - Database initialized successfully
+2026-03-10 12:27:28,978 - monitor_middleware - INFO - Monitoring middleware added to FastAPI application
+2026-03-10 12:27:29,046 - monitor_middleware - INFO - Monitoring middleware added to FastAPI application
+2026-03-10 12:29:23,389 - monitor_db - INFO - Database initialized successfully
+2026-03-10 12:29:23,399 - monitor_middleware - INFO - Monitoring middleware added to FastAPI application
+2026-03-10 12:29:23,461 - monitor_middleware - INFO - Monitoring middleware added to FastAPI application
+2026-03-10 12:35:20,820 - monitor_db - INFO - Database initialized successfully
+2026-03-10 12:35:20,832 - monitor_middleware - INFO - Monitoring middleware added to FastAPI application
+2026-03-10 12:35:25,517 - monitor_db - INFO - Database initialized successfully
+2026-03-10 12:35:25,526 - monitor_middleware - INFO - Monitoring middleware added to FastAPI application
+2026-03-10 12:35:25,594 - monitor_middleware - INFO - Monitoring middleware added to FastAPI application
+2026-03-10 12:35:29,287 - monitor_db - INFO - Created request: e7a90fed-e6d1-408e-a72b-dac41c1c6961 - unknown
+2026-03-10 12:35:29,291 - monitor_service - INFO - Started monitoring request e7a90fed-e6d1-408e-a72b-dac41c1c6961
+2026-03-10 12:35:29,291 - monitor_middleware - INFO - Monitoring started for request e7a90fed-e6d1-408e-a72b-dac41c1c6961: unknown
+2026-03-10 12:35:29,338 - monitor_db - INFO - Updated request e7a90fed-e6d1-408e-a72b-dac41c1c6961 status to: processing
+2026-03-10 12:35:31,540 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-03-10 12:36:48,969 - monitor_db - INFO - Updated request e7a90fed-e6d1-408e-a72b-dac41c1c6961 status to: completed
+2026-03-10 12:36:48,975 - monitor_db - INFO - Added output files for request e7a90fed-e6d1-408e-a72b-dac41c1c6961: ['http://localhost:8007/api/download/GIS- MGSI- Feb 26_invoice.xlsx', 'http://localhost:8007/api/download/GIS- MGSI- Feb 26_invoice.json']
+2026-03-10 12:36:48,975 - monitor_service - INFO - Completed monitoring for request e7a90fed-e6d1-408e-a72b-dac41c1c6961 in 79.71s
+2026-03-10 12:36:48,975 - monitor_middleware - INFO - Request e7a90fed-e6d1-408e-a72b-dac41c1c6961 completed successfully in 79.71s
+2026-03-10 12:45:33,085 - monitor_db - INFO - Database initialized successfully
+2026-03-10 12:45:33,098 - monitor_middleware - INFO - Monitoring middleware added to FastAPI application
+2026-03-10 12:45:37,311 - monitor_db - INFO - Database initialized successfully
+2026-03-10 12:45:37,324 - monitor_middleware - INFO - Monitoring middleware added to FastAPI application
+2026-03-10 12:45:37,397 - monitor_middleware - INFO - Monitoring middleware added to FastAPI application
+2026-03-10 12:45:41,770 - monitor_db - INFO - Created request: 6165bfda-1c89-4d11-8876-9d7b84e10463 - unknown
+2026-03-10 12:45:41,780 - monitor_service - INFO - Started monitoring request 6165bfda-1c89-4d11-8876-9d7b84e10463
+2026-03-10 12:45:41,784 - monitor_middleware - INFO - Monitoring started for request 6165bfda-1c89-4d11-8876-9d7b84e10463: unknown
+2026-03-10 12:45:41,838 - monitor_db - INFO - Updated request 6165bfda-1c89-4d11-8876-9d7b84e10463 status to: processing
+2026-03-10 12:45:44,015 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-03-10 12:47:49,501 - monitor_db - INFO - Updated request 6165bfda-1c89-4d11-8876-9d7b84e10463 status to: completed
+2026-03-10 12:47:49,506 - monitor_db - INFO - Added output files for request 6165bfda-1c89-4d11-8876-9d7b84e10463: ['http://localhost:8007/api/download/GIS- MGSI- Feb 26_invoice.xlsx', 'http://localhost:8007/api/download/GIS- MGSI- Feb 26_invoice.json']
+2026-03-10 12:47:49,507 - monitor_service - INFO - Completed monitoring for request 6165bfda-1c89-4d11-8876-9d7b84e10463 in 127.73s
+2026-03-10 12:47:49,507 - monitor_middleware - INFO - Request 6165bfda-1c89-4d11-8876-9d7b84e10463 completed successfully in 127.73s
+2026-03-10 12:55:06,763 - monitor_db - INFO - Database initialized successfully
+2026-03-10 12:55:06,774 - monitor_middleware - INFO - Monitoring middleware added to FastAPI application
+2026-03-10 12:55:06,841 - monitor_middleware - INFO - Monitoring middleware added to FastAPI application
+2026-03-10 12:55:20,574 - monitor_db - INFO - Database initialized successfully
+2026-03-10 12:55:20,583 - monitor_middleware - INFO - Monitoring middleware added to FastAPI application
+2026-03-10 12:55:20,647 - monitor_middleware - INFO - Monitoring middleware added to FastAPI application
+2026-03-10 12:59:12,690 - monitor_db - INFO - Database initialized successfully
+2026-03-10 12:59:12,699 - monitor_middleware - INFO - Monitoring middleware added to FastAPI application
+2026-03-10 12:59:16,305 - monitor_db - INFO - Database initialized successfully
+2026-03-10 12:59:16,314 - monitor_middleware - INFO - Monitoring middleware added to FastAPI application
+2026-03-10 12:59:16,382 - monitor_middleware - INFO - Monitoring middleware added to FastAPI application
+2026-03-10 12:59:26,344 - monitor_db - INFO - Created request: 12ca1faf-49cd-40aa-a398-31ef237c55be - unknown
+2026-03-10 12:59:26,348 - monitor_service - INFO - Started monitoring request 12ca1faf-49cd-40aa-a398-31ef237c55be
+2026-03-10 12:59:26,348 - monitor_middleware - INFO - Monitoring started for request 12ca1faf-49cd-40aa-a398-31ef237c55be: unknown
+2026-03-10 12:59:26,391 - monitor_db - INFO - Updated request 12ca1faf-49cd-40aa-a398-31ef237c55be status to: processing
