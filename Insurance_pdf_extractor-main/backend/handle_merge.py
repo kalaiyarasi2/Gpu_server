@@ -272,8 +272,55 @@ def process_any_pdf_with_merge(
     combined = dict(first)  # shallow copy base structure
 
     # Combined schema
-    base_schema = (first.get("extracted_schema") or {}) if isinstance(first.get("extracted_schema"), dict) else {}
-    summary_level = base_schema.get("SummaryLevel") or {}
+    summary_records: List[dict] = []
+    for res in per_invoice_results:
+        schema = (res.get("extracted_schema") or {}) if isinstance(res.get("extracted_schema"), dict) else {}
+        sl = schema.get("SummaryLevel")
+        if isinstance(sl, list):
+            summary_records.extend([r for r in sl if isinstance(r, dict)])
+        elif isinstance(sl, dict):
+            # Backward compatibility: older outputs stored a single object with comma-separated years
+            years_raw = sl.get("years")
+            years_list: List[str] = []
+            if isinstance(years_raw, (int, float)):
+                years_list = [str(int(years_raw))]
+            elif isinstance(years_raw, str):
+                years_list = [y.strip() for y in years_raw.split(",") if y.strip()]
+
+            est = sl.get("estimated_annual")
+            pol = sl.get("policy_numbers")
+            car = sl.get("carrier_names")
+            for y in years_list:
+                summary_records.append(
+                    {
+                        "estimated_annual": est,
+                        "year": str(y),
+                        "policy_number": pol,
+                        "carrier_name": car,
+                    }
+                )
+
+    # Dedupe to one record per year (first record wins)
+    by_year: dict = {}
+    for r in summary_records:
+        y = str(r.get("year")).strip() if r.get("year") is not None else ""
+        if not y:
+            continue
+        if y not in by_year:
+            by_year[y] = {
+                "estimated_annual": r.get("estimated_annual"),
+                "year": y,
+                "policy_number": r.get("policy_number"),
+                "carrier_name": r.get("carrier_name"),
+            }
+
+    def _year_sort_key(y: str):
+        try:
+            return (0, int(y))
+        except Exception:
+            return (1, y)
+
+    summary_level = [by_year[y] for y in sorted(by_year.keys(), key=_year_sort_key)]
 
     combined_schema = {
         "claims": all_claims,
