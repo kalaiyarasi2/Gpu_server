@@ -5,6 +5,7 @@ import tempfile
 from pathlib import Path
 from typing import Dict
 from fastapi import UploadFile, HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
 from unified_router import UnifiedRouter
 
 # Shared directories
@@ -16,7 +17,7 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 router_engine = UnifiedRouter()
 file_path_cache: Dict[str, str] = {}
 
-def _perform_extraction(file: UploadFile, request: Request):
+async def _perform_extraction(file: UploadFile, request: Request):
     import traceback
     import re
 
@@ -62,9 +63,9 @@ def _perform_extraction(file: UploadFile, request: Request):
             shutil.copyfileobj(file.file, buffer)
         print(f"[Unified][API] Saved to: {file_path}")
 
-        # Run the unified router (sync)
+        # Run the unified router (async via threadpool)
         print(f"[Unified][API] Routing document...")
-        result = router_engine.process(str(file_path))
+        result = await run_in_threadpool(router_engine.process, str(file_path))
 
         if "error" in result:
             print(f"[Unified][WARN] Extraction returned error: {result['error']}")

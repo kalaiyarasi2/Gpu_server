@@ -4,6 +4,8 @@ import sys
 import subprocess
 import json
 import re
+import threading
+from contextlib import contextmanager
 from pathlib import Path
 import pandas as pd
 from openai import OpenAI
@@ -180,19 +182,22 @@ def get_extractor_class(backend_dir):
     finally:
         sys.path = orig_path
 
-from contextlib import contextmanager
+# ── Global Lock for Thread-Safe sys.path Modification ──────────────────
+path_lock = threading.Lock()
+# ───────────────────────────────────────────────────────────────────
 
 @contextmanager
 def backend_context(backend_dir):
     """Context manager to temporarily set sys.path for extractor execution."""
     import sys
-    orig_path = sys.path.copy()
-    try:
-        if str(backend_dir) not in sys.path:
-            sys.path.insert(0, str(backend_dir))
-        yield
-    finally:
-        sys.path = orig_path
+    with path_lock:
+        orig_path = sys.path.copy()
+        try:
+            if str(backend_dir) not in sys.path:
+                sys.path.insert(0, str(backend_dir))
+            yield
+        finally:
+            sys.path = orig_path
 
 class ExcelExtractor:
     """Layer 4: Direct Excel extraction without OCR."""
@@ -1372,6 +1377,80 @@ Return ONLY the company name or UNKNOWN:"""
         except Exception as e:
             raise e
 
+    def _split_pdf_for_processing(self, pdf_path, chunk_size=15):
+        """Helper to split PDF into chunks for reliable extraction."""
+        try:
+            doc = fitz.open(pdf_path)
+            total_pages = len(doc)
+            chunks = []
+            
+            temp_dir = OUTPUT_BASE / "temp_splits"
+            temp_dir.mkdir(parents=True, exist_ok=True)
+            
+            print(f"  [Chunking] Splitting {total_pages} pages into chunks of {chunk_size}...")
+            
+            for i in range(0, total_pages, chunk_size):
+                start = i
+                end = min(i + chunk_size, total_pages)
+                chunk_pdf_path = temp_dir / f"{Path(pdf_path).stem}_chunk_{i//chunk_size + 1}.pdf"
+                
+                new_doc = fitz.open()
+                new_doc.insert_pdf(doc, from_page=start, to_page=end-1)
+                new_doc.save(str(chunk_pdf_path))
+                new_doc.close()
+                chunks.append(chunk_pdf_path)
+            
+            doc.close()
+            return chunks
+        except Exception as e:
+            print(f"  [Chunking] Error splitting PDF: {e}")
+            return [Path(pdf_path)]
+
+    def _merge_invoice_results(self, processed_files, final_output):
+        """Helper to merge Excel results from multiple chunks into one final report."""
+        print(f"  [Merge] Attempting to merge {len(processed_files)} chunks...")
+        try:
+            import pandas as pd
+            all_dfs = []
+            for f in processed_files:
+                f_path = Path(f)
+                if f_path.exists():
+                    print(f"  [Merge] Adding: {f_path.name} ({f_path.stat().st_size} bytes)")
+                    try:
+                        df = pd.read_excel(f_path)
+                        if not df.empty:
+                            all_dfs.append(df)
+                    except Exception as e:
+                        print(f"  [Merge] Warning: Could not read chunk result {f_path.name}: {e}")
+                else:
+                    print(f"  [Merge] WARNING: File missing: {f_path}")
+            
+            if not all_dfs:
+                print("  [Merge] [ERR] No data found in any processed chunks.")
+                return False
+                
+            combined_df = pd.concat(all_dfs, ignore_index=True)
+            print(f"  [Merge] Combined rows before filtering: {len(combined_df)}")
+            
+            # Filter out intermediate TOTAL rows to prevent double-counting
+            if 'PLAN_NAME' in combined_df.columns:
+                combined_df = combined_df[~combined_df['PLAN_NAME'].str.contains("TOTAL", case=False, na=False)]
+            if 'FIRSTNAME' in combined_df.columns:
+                combined_df = combined_df[~combined_df['FIRSTNAME'].str.contains("TOTAL", case=False, na=False)]
+            
+            print(f"  [Merge] Combined rows after filtering: {len(combined_df)}")
+            
+            # Sort members alphabetically
+            if 'LASTNAME' in combined_df.columns and 'FIRSTNAME' in combined_df.columns:
+                combined_df = combined_df.sort_values(by=['LASTNAME', 'FIRSTNAME'], na_position='last')
+                
+            combined_df.to_excel(final_output, index=False)
+            print(f"  [Merge] Successfully merged results into {final_output.name} ({final_output.stat().st_size} bytes)")
+            return True
+        except Exception as e:
+            print(f"  [Merge] Error merging results: {e}")
+            return False
+
     def run_invoice_extractor(self, pdf_path, use_structural=False):
         """Run the invoice extractor on the PDF.
         
@@ -1399,16 +1478,61 @@ Return ONLY the company name or UNKNOWN:"""
         
         print("\n[INFO] Processing... (this may take 30-60 seconds)\n")
 
+        # ── Step A: Auto-Chunking for Large Files ────────────────────────────
+        try:
+            doc = fitz.open(pdf_path)
+            page_count = len(doc)
+            doc.close()
+        except Exception as e:
+            print(f"  [WARN] Could not determine page count: {e}")
+            page_count = 1
+
+        # Only chunk if file is large AND not already a chunk (prevent infinite recursion)
+        is_already_chunk = "_chunk_" in str(pdf_path)
+        if page_count > 15 and not is_already_chunk:
+            print(f"  [Auto-Chunking] Document has {page_count} pages. Processing in chunks of 15 for stability...")
+            chunks = self._split_pdf_for_processing(pdf_path, chunk_size=15)
+            processed_excels = []
+            
+            for i, chunk in enumerate(chunks):
+                print(f"\n  {'─'*10} Processing Chunk {i+1} of {len(chunks)} {'─'*10}")
+                # Process each small chunk using the standard pipeline
+                chunk_res = self.run_invoice_extractor(str(chunk), use_structural=use_structural)
+                if "excel" in chunk_res:
+                    processed_excels.append(chunk_res["excel"])
+                else:
+                    print(f"  [ERR] Chunk {i+1} failed: {chunk_res.get('error')}")
+            
+            if not processed_excels:
+                return {"error": "All document chunks failed to process."}
+                
+            # Merge results into a final unified report
+            final_output_xlsx = OUTPUT_BASE / f"{Path(pdf_path).stem}_merged_report.xlsx"
+            if self._merge_invoice_results(processed_excels, final_output_xlsx):
+                # Use standard xlsx_to_json for the final merged result
+                json_path = self.xlsx_to_json(final_output_xlsx)
+                print(f"  [OK] Large file processing complete. Merged result: {final_output_xlsx.name}")
+                return {
+                    "type": "INVOICE", 
+                    "excel": str(final_output_xlsx), 
+                    "json": json_path,
+                    "is_merged_report": True,
+                    "chunk_count": len(chunks)
+                }
+            else:
+                return {"error": "Failed to merge chunked extraction results."}
+        # ──────────────────────────────────────────────────────────────────
+
         try:
             # For structural extractor, output file is auto-named
             if use_structural and script_to_use == STRUCTURAL_INVOICE_SCRIPT:
                 import asyncio
-                result = self._run_with_logging([sys.executable, str(script_to_use), str(pdf_path)], 900)
+                result = self._run_with_logging([sys.executable, str(script_to_use), str(pdf_path)], 3600)
                 # Structural extractor creates its own output file
                 output_xlsx = Path(pdf_path).parent / "extracted_data_structural.xlsx"
             else:
                 import asyncio
-                result = self._run_with_logging([sys.executable, str(script_to_use), str(pdf_path), str(output_xlsx)], 900)
+                result = self._run_with_logging([sys.executable, str(script_to_use), str(pdf_path), str(output_xlsx)], 3600)
             
             if result.returncode != 0:
                 print(f"\n[ERR] Extraction Failed (Exit Code: {result.returncode})")
@@ -1443,7 +1567,7 @@ Return ONLY the company name or UNKNOWN:"""
             return {"type": "INVOICE", "excel": str(output_xlsx), "json": json_for_metadata}
 
         except subprocess.TimeoutExpired:
-            print(f"\n[ERR] Invoice Extraction Failed: Timeout after 900 seconds.")
+            print(f"\n[ERR] Invoice Extraction Failed: Timeout after 3600 seconds.")
             return {"error": "Invoice extraction timed out."}
         except Exception as e:
             print(f"\n[ERR] Invoice Extraction Error: {e}")
@@ -1492,7 +1616,7 @@ Return ONLY the company name or UNKNOWN:"""
                 import asyncio
                 result = self._run_with_logging(
                     [sys.executable, str(GENERAL_INVOICE_SCRIPT), str(pdf_path)],
-                    900
+                    3600
                 )
                 if result.returncode != 0:
                     print(f"\n[ERR] General Invoice Extraction Failed (Exit Code: {result.returncode})")

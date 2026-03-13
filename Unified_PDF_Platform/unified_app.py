@@ -97,7 +97,7 @@ else:
 
 @app.post("/api/extract", include_in_schema=False)
 async def extract_document(request: Request, file: UploadFile = File(...)):
-    return _perform_extraction(file, request)
+    return await _perform_extraction(file, request)
 
 @app.get("/api/health")
 async def health_check():
