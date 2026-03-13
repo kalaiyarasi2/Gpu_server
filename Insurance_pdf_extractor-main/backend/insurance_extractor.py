@@ -2115,43 +2115,47 @@ Return ONLY the JSON object for claim {target_claim_number}."""
             if year:
                 years_set.add(year)
         years_sorted = sorted(years_set)
-        # Join all unique years as comma-separated string, e.g. "2020, 2022"
-        year_scalar = ", ".join(str(y) for y in years_sorted) if years_sorted else None
-        
-        policy_numbers_set = set()
         header_policy_number = schema_data.get("policy_number")
-        if header_policy_number:
-            policy_numbers_set.add(header_policy_number)
-        for claim in included_claims:
-            policy_number = claim.get("policy_number")
-            if policy_number:
-                policy_numbers_set.add(policy_number)
-        policy_numbers_sorted = sorted(policy_numbers_set)
-        # Join all unique policy numbers as comma-separated string
-        policy_number_scalar = ", ".join(policy_numbers_sorted) if policy_numbers_sorted else None
-        
-        carrier_names_set = set()
         header_carrier_name = schema_data.get("carrier_name")
-        if header_carrier_name:
-            carrier_names_set.add(header_carrier_name)
-        for claim in included_claims:
-            carrier_name = claim.get("carrier_name")
-            if carrier_name:
-                carrier_names_set.add(carrier_name)
-        carrier_names_sorted = sorted(carrier_names_set)
-        # Join all unique carrier names as comma-separated string
-        carrier_name_scalar = ", ".join(carrier_names_sorted) if carrier_names_sorted else None
         
         # Parse Estimated Annual amount from combined text
         estimated_annual_value, _ = self._parse_estimated_annual(all_text)
         
         # Build final schema object with claims array and SummaryLevel
-        summary_level = {
-            "estimated_annual": estimated_annual_value,
-            "years": year_scalar,
-            "policy_numbers": policy_number_scalar,
-            "carrier_names": carrier_name_scalar,
-        }
+        summary_level = []
+        for y in years_sorted:
+            y_str = str(y)
+
+            year_policy_numbers = set()
+            if header_policy_number:
+                year_policy_numbers.add(header_policy_number)
+            for claim in included_claims:
+                if str(claim.get("claim_year")) != y_str:
+                    continue
+                policy_number = claim.get("policy_number")
+                if policy_number:
+                    year_policy_numbers.add(policy_number)
+            policy_number_value = sorted(year_policy_numbers)[0] if year_policy_numbers else None
+
+            year_carrier_names = set()
+            if header_carrier_name:
+                year_carrier_names.add(header_carrier_name)
+            for claim in included_claims:
+                if str(claim.get("claim_year")) != y_str:
+                    continue
+                carrier_name = claim.get("carrier_name")
+                if carrier_name:
+                    year_carrier_names.add(carrier_name)
+            carrier_name_value = sorted(year_carrier_names)[0] if year_carrier_names else None
+
+            summary_level.append(
+                {
+                    "estimated_annual": estimated_annual_value,
+                    "year": y_str,
+                    "policy_number": policy_number_value,
+                    "carrier_name": carrier_name_value,
+                }
+            )
         schema_output = {
             "claims": included_claims,
             "SummaryLevel": summary_level,

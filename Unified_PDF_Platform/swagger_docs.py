@@ -43,54 +43,61 @@ CUSTOM_SWAGGER_JS = """
 <script>
 window.addEventListener('load', function() {
     console.log("Standard Swagger UI Enhancements Loaded");
-    const observer = new MutationObserver(() => {
-        const blocks = document.querySelectorAll('.response-col_description, .response-body, .microlight, pre');
+    
+    const observeOptions = { childList: true, subtree: true };
+    const observer = new MutationObserver((mutations) => {
+        // Only target the innermost code elements to avoid matching parent + child (duplicate buttons)
+        const blocks = document.querySelectorAll('pre, .microlight');
         blocks.forEach((container) => {
             const textContent = container.textContent || '';
-            if ((textContent.includes('"excel": "http') || textContent.includes('"json": "http')) && !container.querySelector('.cognethro-dl-btns')) {
-                try {
-                    const match = textContent.match(/\{[\s\S]*\}/);
-                    if (!match) return;
-                    
-                    const data = JSON.parse(match[0]);
-                    const btnContainer = document.createElement('div');
-                    btnContainer.className = 'cognethro-dl-btns';
-                    btnContainer.style = 'margin-top: 20px; display: flex; gap: 12px; padding: 15px; background: #111; border-radius: 10px; border: 1px solid #333; box-shadow: 0 4px 15px rgba(0,0,0,0.5);';
-                    
-                    if (data.excel) {
-                        const xlBtn = document.createElement('a');
-                        xlBtn.href = data.excel;
-                        xlBtn.innerHTML = '⚡  <b>Download Excel</b>';
-                        xlBtn.style = 'background: linear-gradient(135deg, #064e3b 0%, #065f46 100%); color: #6ee7b7; border: 1px solid #059669; padding: 12px 22px; border-radius: 8px; text-decoration: none; font-size: 14px; cursor: pointer; transition: transform 0.1s;';
-                        xlBtn.onmouseover = () => xlBtn.style.transform = 'scale(1.02)';
-                        xlBtn.onmouseout = () => xlBtn.style.transform = 'scale(1)';
-                        xlBtn.setAttribute('download', data.output_file || 'result.xlsx');
-                        btnContainer.appendChild(xlBtn);
+            
+            // Check if it contains the target URLs
+            if (textContent.includes('"excel": "http') || textContent.includes('"json": "http')) {
+                // Always attach to the parent element
+                const targetElement = container.parentElement;
+                
+                if (targetElement && !targetElement.querySelector('.cognethro-dl-btns')) {
+                    try {
+                        const match = textContent.match(/\{[\s\S]*\}/);
+                        if (!match) return;
+                        
+                        const data = JSON.parse(match[0]);
+                        const btnContainer = document.createElement('div');
+                        btnContainer.className = 'cognethro-dl-btns';
+                        btnContainer.style = 'margin-top: 20px; display: flex; gap: 12px; padding: 15px; background: #111; border-radius: 10px; border: 1px solid #333; box-shadow: 0 4px 15px rgba(0,0,0,0.5);';
+                        
+                        if (data.excel) {
+                            const xlBtn = document.createElement('a');
+                            xlBtn.href = data.excel;
+                            xlBtn.innerHTML = '⚡  <b>Download Excel</b>';
+                            xlBtn.style = 'background: linear-gradient(135deg, #064e3b 0%, #065f46 100%); color: #6ee7b7; border: 1px solid #059669; padding: 12px 22px; border-radius: 8px; text-decoration: none; font-size: 14px; cursor: pointer; transition: transform 0.1s;';
+                            xlBtn.onmouseover = () => xlBtn.style.transform = 'scale(1.02)';
+                            xlBtn.onmouseout = () => xlBtn.style.transform = 'scale(1)';
+                            xlBtn.setAttribute('download', data.output_file || 'result.xlsx');
+                            btnContainer.appendChild(xlBtn);
+                        }
+                        
+                        if (data.json) {
+                            const jsBtn = document.createElement('a');
+                            jsBtn.href = data.json;
+                            jsBtn.innerHTML = '📂  <b>Download JSON</b>';
+                            jsBtn.style = 'background: linear-gradient(135deg, #0c1a33 0%, #112244 100%); color: #93c5fd; border: 1px solid #1e40af; padding: 12px 22px; border-radius: 8px; text-decoration: none; font-size: 14px; cursor: pointer; transition: transform 0.1s;';
+                            jsBtn.onmouseover = () => jsBtn.style.transform = 'scale(1.02)';
+                            jsBtn.onmouseout = () => jsBtn.style.transform = 'scale(1)';
+                            jsBtn.setAttribute('download', data.output_json || 'result.json');
+                            btnContainer.appendChild(jsBtn);
+                        }
+                        
+                        targetElement.appendChild(btnContainer);
+                    } catch (e) {
+                        // Silent fail for non-JSON or partial text
                     }
-                    
-                    if (data.json) {
-                        const jsBtn = document.createElement('a');
-                        jsBtn.href = data.json;
-                        jsBtn.innerHTML = '📂  <b>Download JSON</b>';
-                        jsBtn.style = 'background: linear-gradient(135deg, #0c1a33 0%, #112244 100%); color: #93c5fd; border: 1px solid #1e40af; padding: 12px 22px; border-radius: 8px; text-decoration: none; font-size: 14px; cursor: pointer; transition: transform 0.1s;';
-                        jsBtn.onmouseover = () => jsBtn.style.transform = 'scale(1.02)';
-                        jsBtn.onmouseout = () => jsBtn.style.transform = 'scale(1)';
-                        jsBtn.setAttribute('download', data.output_json || 'result.json');
-                        btnContainer.appendChild(jsBtn);
-                    }
-                    
-                    if (container.classList.contains('microlight') || container.tagName === 'PRE') {
-                        container.parentElement.appendChild(btnContainer);
-                    } else {
-                        container.appendChild(btnContainer);
-                    }
-                } catch (e) {
-                    console.log("Standard Injection Support Error:", e);
                 }
             }
         });
     });
-    observer.observe(document.body, { childList: true, subtree: true });
+    
+    observer.observe(document.body, observeOptions);
 });
 </script>
 """
@@ -100,58 +107,60 @@ WORK_COMP_SWAGGER_JS = """
 <script>
 window.addEventListener('load', function() {
     console.log("WC Swagger UI Enhancements Loaded");
-    const observer = new MutationObserver(() => {
-        // Broad search for response blocks or description columns
-        const blocks = document.querySelectorAll('.response-col_description, .response-body, .microlight, pre');
+    
+    const observeOptions = { childList: true, subtree: true };
+    const observer = new MutationObserver((mutations) => {
+        // Only target the innermost code elements to avoid matching parent + child (duplicate buttons)
+        const blocks = document.querySelectorAll('pre, .microlight');
         blocks.forEach((container) => {
             const textContent = container.textContent || '';
             
-            // Look for JSON markers
-            if ((textContent.includes('"json": "http') || textContent.includes('"excel": "http')) && !container.querySelector('.wc-dl-btns')) {
-                try {
-                    const match = textContent.match(/\{[\s\S]*\}/);
-                    if (!match) return;
-                    
-                    const data = JSON.parse(match[0]);
-                    const btnContainer = document.createElement('div');
-                    btnContainer.className = 'wc-dl-btns';
-                    btnContainer.style = 'margin-top: 20px; display: flex; gap: 12px; padding: 15px; background: #111; border-radius: 10px; border: 1px solid #333; box-shadow: 0 4px 15px rgba(0,0,0,0.5);';
-                    
-                    if (data.excel) {
-                        const xlBtn = document.createElement('a');
-                        xlBtn.href = data.excel;
-                        xlBtn.innerHTML = '⚡  <b>Download Excel</b>';
-                        xlBtn.style = 'background: linear-gradient(135deg, #064e3b 0%, #065f46 100%); color: #6ee7b7; border: 1px solid #059669; padding: 12px 22px; border-radius: 8px; text-decoration: none; font-size: 14px; cursor: pointer; transition: transform 0.1s;';
-                        xlBtn.onmouseover = () => xlBtn.style.transform = 'scale(1.02)';
-                        xlBtn.onmouseout = () => xlBtn.style.transform = 'scale(1)';
-                        xlBtn.setAttribute('download', data.output_file || 'result.xlsx');
-                        btnContainer.appendChild(xlBtn);
+            if (textContent.includes('"json": "http') || textContent.includes('"excel": "http')) {
+                // Always attach to the parent element
+                const targetElement = container.parentElement;
+                
+                if (targetElement && !targetElement.querySelector('.wc-dl-btns')) {
+                    try {
+                        const match = textContent.match(/\{[\s\S]*\}/);
+                        if (!match) return;
+                        
+                        const data = JSON.parse(match[0]);
+                        const btnContainer = document.createElement('div');
+                        btnContainer.className = 'wc-dl-btns';
+                        btnContainer.style = 'margin-top: 20px; display: flex; gap: 12px; padding: 15px; background: #111; border-radius: 10px; border: 1px solid #333; box-shadow: 0 4px 15px rgba(0,0,0,0.5);';
+                        
+                        if (data.excel) {
+                            const xlBtn = document.createElement('a');
+                            xlBtn.href = data.excel;
+                            xlBtn.innerHTML = '⚡  <b>Download Excel</b>';
+                            xlBtn.style = 'background: linear-gradient(135deg, #064e3b 0%, #065f46 100%); color: #6ee7b7; border: 1px solid #059669; padding: 12px 22px; border-radius: 8px; text-decoration: none; font-size: 14px; cursor: pointer; transition: transform 0.1s;';
+                            xlBtn.onmouseover = () => xlBtn.style.transform = 'scale(1.02)';
+                            xlBtn.onmouseout = () => xlBtn.style.transform = 'scale(1)';
+                            xlBtn.setAttribute('download', data.output_file || 'result.xlsx');
+                            btnContainer.appendChild(xlBtn);
+                        }
+                        
+                        if (data.json) {
+                            const jsBtn = document.createElement('a');
+                            jsBtn.href = data.json;
+                            jsBtn.innerHTML = '📂  <b>Download JSON</b>';
+                            jsBtn.style = 'background: linear-gradient(135deg, #0c1a33 0%, #112244 100%); color: #93c5fd; border: 1px solid #1e40af; padding: 12px 22px; border-radius: 8px; text-decoration: none; font-size: 14px; cursor: pointer; transition: transform 0.1s;';
+                            jsBtn.onmouseover = () => jsBtn.style.transform = 'scale(1.02)';
+                            jsBtn.onmouseout = () => jsBtn.style.transform = 'scale(1)';
+                            jsBtn.setAttribute('download', data.output_json || 'result.json');
+                            btnContainer.appendChild(jsBtn);
+                        }
+                        
+                        targetElement.appendChild(btnContainer);
+                    } catch (e) {
+                        // Silent fail
                     }
-                    
-                    if (data.json) {
-                        const jsBtn = document.createElement('a');
-                        jsBtn.href = data.json;
-                        jsBtn.innerHTML = '📂  <b>Download JSON</b>';
-                        jsBtn.style = 'background: linear-gradient(135deg, #0c1a33 0%, #112244 100%); color: #93c5fd; border: 1px solid #1e40af; padding: 12px 22px; border-radius: 8px; text-decoration: none; font-size: 14px; cursor: pointer; transition: transform 0.1s;';
-                        jsBtn.onmouseover = () => jsBtn.style.transform = 'scale(1.02)';
-                        jsBtn.onmouseout = () => jsBtn.style.transform = 'scale(1)';
-                        jsBtn.setAttribute('download', data.output_json || 'result.json');
-                        btnContainer.appendChild(jsBtn);
-                    }
-                    
-                    // Append to the closest suitable parent if container is tiny
-                    if (container.classList.contains('microlight') || container.tagName === 'PRE') {
-                        container.parentElement.appendChild(btnContainer);
-                    } else {
-                        container.appendChild(btnContainer);
-                    }
-                } catch (e) {
-                    console.log("WC Injection Support Error:", e);
                 }
             }
         });
     });
-    observer.observe(document.body, { childList: true, subtree: true });
+    
+    observer.observe(document.body, observeOptions);
 });
 </script>
 """

@@ -275,7 +275,7 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
         with open(analysis_file, 'w', encoding='utf-8') as f:
             json.dump(analysis_data, f, indent=2, ensure_ascii=False)
             
-        # Save schema (claims array + SummaryLevel object)
+        # Save schema (claims array + SummaryLevel array)
         claims_only = included_claims or []
 
         # Compute summary fields from claims and header data
@@ -285,32 +285,8 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
             if year:
                 years_set.add(year)
         years_sorted = sorted(years_set)
-        # Join all unique years as comma-separated string, e.g. "2020, 2023"
-        year_scalar = ", ".join(str(y) for y in years_sorted) if years_sorted else None
-
-        policy_numbers_set = set()
         header_policy_number = schema_data.get("policy_number")
-        if header_policy_number:
-            policy_numbers_set.add(header_policy_number)
-        for claim in claims_only:
-            policy_number = claim.get("policy_number")
-            if policy_number:
-                policy_numbers_set.add(policy_number)
-        policy_numbers_sorted = sorted(policy_numbers_set)
-        # Join all unique policy numbers as comma-separated string
-        policy_number_scalar = ", ".join(policy_numbers_sorted) if policy_numbers_sorted else None
-
-        carrier_names_set = set()
         header_carrier_name = schema_data.get("carrier_name")
-        if header_carrier_name:
-            carrier_names_set.add(header_carrier_name)
-        for claim in claims_only:
-            carrier_name = claim.get("carrier_name")
-            if carrier_name:
-                carrier_names_set.add(carrier_name)
-        carrier_names_sorted = sorted(carrier_names_set)
-        # Join all unique carrier names as comma-separated string
-        carrier_name_scalar = ", ".join(carrier_names_sorted) if carrier_names_sorted else None
 
         # Parse Estimated Annual from combined text (default to 0.0 if missing)
         estimated_annual_value = 0.0
@@ -329,12 +305,40 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
                     except ValueError:
                         estimated_annual_value = 0.0
 
-        summary_level = {
-            "estimated_annual": estimated_annual_value,
-            "years": year_scalar,
-            "policy_numbers": policy_number_scalar,
-            "carrier_names": carrier_name_scalar,
-        }
+        summary_level = []
+        for y in years_sorted:
+            y_str = str(y)
+
+            year_policy_numbers = set()
+            if header_policy_number:
+                year_policy_numbers.add(header_policy_number)
+            for claim in claims_only:
+                if str(claim.get("claim_year")) != y_str:
+                    continue
+                policy_number = claim.get("policy_number")
+                if policy_number:
+                    year_policy_numbers.add(policy_number)
+            policy_number_value = sorted(year_policy_numbers)[0] if year_policy_numbers else None
+
+            year_carrier_names = set()
+            if header_carrier_name:
+                year_carrier_names.add(header_carrier_name)
+            for claim in claims_only:
+                if str(claim.get("claim_year")) != y_str:
+                    continue
+                carrier_name = claim.get("carrier_name")
+                if carrier_name:
+                    year_carrier_names.add(carrier_name)
+            carrier_name_value = sorted(year_carrier_names)[0] if year_carrier_names else None
+
+            summary_level.append(
+                {
+                    "estimated_annual": estimated_annual_value,
+                    "year": y_str,
+                    "policy_number": policy_number_value,
+                    "carrier_name": carrier_name_value,
+                }
+            )
 
         schema_output = {
             "claims": claims_only,
@@ -588,11 +592,20 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
             if res.get("carrier_name"):
                 chunk_carriers.add(res["carrier_name"])
             # Check inside SummaryLevel if present
-            if res.get("SummaryLevel") and res["SummaryLevel"].get("carrier_names"):
-                # carrier_names might be a comma-separated string
-                names = [n.strip() for n in str(res["SummaryLevel"]["carrier_names"]).split(",")]
-                for n in names:
-                    if n: chunk_carriers.add(n)
+            sl = res.get("SummaryLevel")
+            if isinstance(sl, list):
+                for rec in sl:
+                    if isinstance(rec, dict) and rec.get("carrier_name"):
+                        chunk_carriers.add(rec["carrier_name"])
+            elif isinstance(sl, dict):
+                # Backward compatibility: older outputs stored comma-separated carrier_names
+                if sl.get("carrier_names"):
+                    names = [n.strip() for n in str(sl["carrier_names"]).split(",")]
+                    for n in names:
+                        if n:
+                            chunk_carriers.add(n)
+                if sl.get("carrier_name"):
+                    chunk_carriers.add(sl["carrier_name"])
             # Check individual claims
             if "claims" in res and isinstance(res["claims"], list):
                 for c in res["claims"]:
