@@ -207,6 +207,53 @@ def clean_string_spacing(val: Optional[str], preserve_single: bool = True) -> Op
     return s.strip()
 
 
+# UHC coverage type legend (from official UHC invoice reference)
+UHC_COVERAGE_MAP = {
+    # Code → standard output
+    "E":   "EE",
+    "ES":  "ES",
+    "ESC": "ESC",
+    "EC":  "EC",
+    "E1D": "EC",
+    "E2D": "EC",
+    "E3D": "EC",
+    "E4D": "EC",
+    "E5D": "EC",
+    "E6D": "EC",
+    "E7D": "EC",
+    "E8D": "EC",
+    "E9D": "EC",
+    # Full-text equivalents
+    "EMPLOYEE ONLY":               "EE",
+    "EMPLOYEE AND SPOUSE":         "ES",
+    "EMPLOYEE AND FAMILY":         "ESC",
+    "EMPLOYEE AND CHILD":          "EC",
+    "EMPLOYEE AND CHILD(REN)":     "EC",
+    "EMPLOYEE & ONE OR MORE DEPENDENT":   "EC",
+    "EMPLOYEE & TWO OR MORE DEPENDENTS":  "EC",
+    "EMPLOYEE & THREE OR MORE DEPENDENTS": "EC",
+    "EMPLOYEE & FOUR OR MORE DEPENDENTS": "EC",
+    "EMPLOYEE & FIVE OR MORE DEPENDENTS": "EC",
+    # Legacy single-letter fallbacks
+    "EE":  "EE",
+    "FAM": "ESC",
+}
+
+
+def normalize_uhc_coverage(items: list) -> list:
+    """
+    Post-process UHC line items: map raw COVERAGE codes to standard values
+    using the official UHC coverage type legend.
+    E.g. 'ESC' -> 'ESC', 'EC' -> 'EC', 'E2D' -> 'EC'.
+    """
+    for item in items:
+        raw = item.get("COVERAGE")
+        if raw and isinstance(raw, str):
+            key = raw.strip().upper()
+            if key in UHC_COVERAGE_MAP:
+                item["COVERAGE"] = UHC_COVERAGE_MAP[key]
+    return items
+
 def format_date_clean(val: Optional[str]) -> Optional[str]:
     """
     Standardize dates to M/D/YYYY format, stripping leading zeros.
@@ -817,15 +864,46 @@ Extract data from the document text provided below.
 
 ### CARRIER-SPECIFIC IDENTIFIER PROFILES (PRIORITY):
 - **UHC (UnitedHealthcare)**: 
+    - **UHC MGSI MANDATE (GLOBAL PRIORITY)**: If the document mentions "MGSI" (e.g., MGSI, L.L.C. or similar), YOU MUST ENSURE there is **NO SPACE** after the 'P' in EVERY `PLAN_NAME` and code (e.g., `P5000i80LX21B`). This rule is ABSOLUTE for MGSI and OVERRIDES any other general UHC instruction below.
     - **Header Identifier**: Look for "Policy No." (e.g., `1400021`). This is the **POLICYID**.
-    - **Member Identification**: Look for the unique masked string (e.g., `*****557900`). This is the **MEMBERID**.
-    - **NULL-SSN Mandate**: For carrier UHC, you MUST set `SSN` to **NULL** for all rows. **NEVER** use Member ID parts for SSN.
-    - **Sectional Awareness (CRITICAL)**: ONLY extract data from tables under the "Details" or "Current Detail" headers. **IGNORE** any tables under the "Summary" header (e.g., lines that say "Employee | 14" or "Total Volume").
-    - **Coverage Recovery**: Look for single-letter codes: `E` -> **EE**, `S` -> **ES**, `F` -> **FAM**, `C` -> **EC**. If the letter is alone (e.g., `| E` or `Sarah A`), map it accordingly.
-    - **Plan Name Capture**: Capture the FULL plan name (e.g., `FL P CHC +NG 20/30/500/100 POS 25 DYYY`). If the prefix is missing on a row, use the prefix from the previous member.
+    - **Member Identification (CRITICAL)**: Look for the unique masked string (e.g., `*****557900`). This is the **MEMBERID**. You MUST preserve the FULL value exactly as it appears in the PDF — do NOT truncate, do NOT convert to a number, preserve it as a STRING. Similarly, **POLICYID** must be captured as the exact full string (e.g., `1426169`) from the "Policy No." field.
+    - **NULL-SSN Mandate (CRITICAL)**: For carrier UHC, `SSN` MUST **always** be set to **NULL** for every single row — no exceptions. **NEVER** copy the Member ID, the masked ID string, or any other numeric value into the `SSN` field. If in doubt, set `SSN` to NULL.
+    - **Sectional Awareness (CRITICAL)**: ONLY extract data from tables under the "Details" or "Current Detail" headers. **IGNORE** any tables under the "Summary" header (e.g., lines that say "Employee | 14" or "Total Volume" or plan subtotals like "FL B NHP HMO NG..."). If the "LASTNAME" would be a plan name or description, DO NOT extract it as a member row.
+    - **Coverage Recovery (FULL UHC MAPPING)**: Map coverage type codes using the following legend for ALL UHC documents:
+        - `E` or "Employee Only" → **EE**
+        - `ES` or "Employee and Spouse" → **ES**
+        - `ESC` or "Employee and Family" → **FAM**
+        - `EC` or "Employee and Child(ren)" → **EC**
+        - `E1D` or "Employee and One Dependent" → **EC**
+        - `E2D` or "Employee and Two Dependents" → **EC**
+        - `E3D` or "Employee and Three Dependents" → **EC**
+        - `E4D` or "Employee and Four Dependents" → **EC**
+        - `E5D` or "Employee & One or More Dependent" → **EC**
+        - `E6D` or "Employee & Two or More Dependents" → **EC**
+        - `E7D` or "Employee & Three or More Dependents" → **EC**
+        - `E8D` or "Employee & Four or More Dependents" → **EC**
+        - `E9D` or "Employee & Five or More Dependents" → **EC**
+        - Single-letter codes only (when alone): `E` → **EE**, `S` → **ES**, `F` → **FAM**, `C` → **EC**
+    - **Audit Total (CRITICAL)**: Extract the absolute "Total Balance Due" or "Grand Total" from the document and map it to **AMOUNT_DUE** in the HEADER object and **INV_TOTAL** in the LINE_ITEMS. This is the only authoritative total — always use the final **Grand Total** value from the last summary page (NOT a sub-total or partial charge column).
+    - **Plan Name and Code Capture (CRITICAL)**: Capture the FULL plan name AND any associated alphanumeric codes (e.g., `Dental Voluntary P 7330`, `Vision 100% Voluntary S102V`, `FL CHC NG ... EKQX`). Note that UHC plan codes like `P 7330` MUST contain a space after the 'P'.
+    - **UHC Multiline Aggregation**: Many UHC plan names wrap to multiple lines (e.g., `30/60/500/80 POS 25` on one line and `EKX6` on the next). You MUST aggregate all these fragments into a single `PLAN_NAME` string.
+    - **Row Context Awareness**: Some members (like those just before a "Total" line) may have their plan details split across lines. Ensure you capture the full context for every member row.
     - **ID Handling**: Never use parts of the Member ID as a fallback for SSN.
     - **Forbidden String**: In UHC, "IND AGE RATED" or "FAM AGE RATED" are often labels; do NOT let them override explicit coverage tiers like `EE` or `FAM`.
-    - **Audit Total**: Ensure every member listed in the detail table is captured.
+    - **Audit Total Capture (CRITICAL)**: For UHC documents, use the **Grand Total** or **Total Amount Due** from the LAST summary page of the invoice as the AMOUNT_DUE. For multi-bill-group documents (with multiple "Bill Group" sections), the Grand Total on the final page is the ONLY authoritative total. DO NOT sum individual bill group sub-totals — use only the Grand Total line (e.g., `$5,095.75`).
+    - **PLAN_TYPE Identification**: Extract or infer the PLAN_TYPE from the plan name or section. 
+        - If "Dental" is in the plan name -> **DENTAL**
+        - If "Vision" is in the plan name -> **VISION**
+        - If "POS", "EPO", "PPO", "NHP", or "CHC" is in the plan name -> **MEDICAL**
+        - If "Life" or "AD&D" is in the name -> **LIFE** or **AD&D**
+    - **UHC Plan Labels (CRITICAL)**: Many UHC rows have sub-labels below the plan name (e.g., `Admin/Excess Loss`, `Claims Liability`, `PPO Savings`, `Stop-Loss`). You MUST include these labels in the `PLAN_NAME` (e.g., `P 5000i80LX21B - Admin/Excess Loss`).
+    - **Fees and Adjustments (CRITICAL)**: Capture ALL fee and adjustment rows. 
+        - **Member Adjustments**: If an adjustment (e.g., "Current Adjustments" or "Retroactive Adjustment") appears immediately below a member row in the detail table, you MUST associate it with that member. Set its amount into **ADJUSTMENT_PREMIUM** for that member row (merging it if a row already exists).
+        - **Global Fees**: Capture standalone group-level fees (e.g., `Billing Fee`, `Management Fee`, `Packaged Savings Credit`) from the summary pages as separate line items. Set `LASTNAME` to the description and `CURRENT_PREMIUM` to the amount (use a negative value if it is a credit). 
+        - **MANDATORY EXCEPTION**: Even when a page contains summary totals (Subtotal Plan Charges, Grand Total), you MUST still extract any named fee/credit rows on that same page. These are NOT sub-totals.
+    - **STRICT PLAN_TYPE MANDATE (UHC)**: Every member row MUST have a non-null `PLAN_TYPE`. You MUST strictly infer it from the plan name or description. Use **MEDICAL** for names containing "POS", "EPO", "PPO", "NHP", "CHC", or "Health". Use **DENTAL** or **VISION** as appropriate. Do NOT leave this blank or NULL.
+    - **Audit Total Integrity**: Ensure every member listed in the detail table is captured. Include their full plan names (with labels), codes, AND plan types.
+    - **UHC STRICT SPACING FIDELITY (HIGHEST PRIORITY)**: You MUST maintain 100% accuracy to the spacing in the source PDF for all plan names and codes. If the PDF shows a value like `P5000` (no space), you MUST NOT output it as `P 5000`. This rule overrides any previous UHC instructions or examples that mention a "mandatory space". For groups like MGSI where the file structure requires no space, this is CRITICAL for 100% accuracy.
     - **BCBS (BlueCross BlueShield)**: 
     - **Subscriber ID** or **Member ID** -> maps to `MEMBERID`.
     - **Coverage Mapping**: 
@@ -962,6 +1040,7 @@ Extract data from the document text provided below.
 - **IGNORE** all rows that are grand totals, invoice summaries, or sub-totals.
 - ONLY extract individual member/employee line-items.
 - If a row contains "Total", "Amount Due", or "Balance Due", skip it completely.
+- **UHC EXCEPTION (CRITICAL)**: For UHC documents, named fee/credit rows (such as "Packaged Savings Credit", "Billing Fee", "Management Fee") that appear on the last summary page ALONGSIDE grand total/sub-total rows MUST STILL BE EXTRACTED as individual line items. These are not sub-totals — they are explicit named charges or credits. Only skip rows whose description IS "Subtotal Plan Charges", "Grand Total", "Subtotal", or similar aggregate summary labels.
 
 4. **Leading Zeros**: Preserve every single zero.
 5. **Aggressive Row Capture**: You MUST extract EVERY individual listed in the main table. Even if the name contains symbols (e.g., "#27411" or "“6078") or looks like garbage, extract it as-is. Do not skip any rows.
@@ -1521,6 +1600,14 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
     if is_humana_invoice:
         print(f"  [V3][HUMANA] Humana invoice detected. Pages 1, 2, 3, 5 will be skipped for line items.")
 
+    # UHC Detection: Skip summary page (typically Page 3 or search for "Summary" + "Description")
+    is_uhc_invoice = any("uhceservices.com" in p.lower() for p in pages) or \
+                     any("Consolidated Customer No:" in p for p in pages) or \
+                     any("United HealthCare Services" in p for p in pages)
+    
+    if is_uhc_invoice:
+        print(f"  [V3][UHC] UnitedHealthcare invoice detected. Checking for summary pages to skip...")
+
     # Unum Detection
     _unum_mirrored_signature = "ACIREMA FO YNAPMOC ECNARUSNI EFIL MUNU"
     _unum_normal_signature = "UNUM LIFE INSURANCE COMPANY OF AMERICA"
@@ -1602,11 +1689,18 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
         is_already_chunk = "_chunk_" in str(pdf_path)
         is_first_chunk = "_chunk_1." in str(pdf_path)
         
+        is_uhc_summary = is_uhc_invoice and i > 0 and (
+            ("Summary" in page_text and "Description" in page_text and "Total Volume" in page_text) or
+            ("Summary" in page_text and "Net Amount" in page_text and "Employee Count" in page_text)
+        )
+
         is_skip_page = (is_gis_invoice and i == 0 and (not is_already_chunk or is_first_chunk)) or \
-                       (is_humana_invoice and (i == 0 or i == 1 or i == 2 or i == 4))
+                       (is_humana_invoice and (i == 0 or i == 1 or i == 2 or i == 4)) or \
+                       is_uhc_summary
         
         if is_skip_page:
-            reason = "GIS" if is_gis_invoice else "Humana"
+            reason = "GIS" if is_gis_invoice else ("Humana" if is_humana_invoice else "UHC Summary")
+            print(f"  [V3][THREAD] Chunk {i+1} is a {reason} page. Extracting header only.")
             header_only_data = extract_fields_with_llm(page_text, client, f"{os.path.basename(pdf_path)}_page_{i+1}_header", mode="standard") or {}
             return {"index": i, "header": header_only_data.get("HEADER", {}), "items": [], "refinement_info": None}
         
@@ -1705,8 +1799,9 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
                 "PLAN_TYPE": None  # Ensure no default for synthetic row
             })
     
+    # [V4][COVERAGE NORMALIZE] Programmatic fix for UHC coverage tier mapping
+    all_line_items = normalize_uhc_coverage(all_line_items)
 
-        
     return data
 
 
@@ -1905,6 +2000,10 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                             clean_header["INV_NUMBER"] = stripped
             
             # CLEANUP: to_float and check_total moved to global scope
+            def is_keyword_match(text, keywords):
+                t = str(text or "").upper()
+                # Check for exact matches of total keywords as standalone words
+                return any(re.search(fr'\b{kw}\b', t) for kw in keywords)
 
             for item in line_items:
                 # DUMMY ID FILTER: Discard clearly hallucinated rows
@@ -1944,9 +2043,13 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                 is_weak_name = not fname and not lname
                 
                 if is_weak_id and is_weak_ssn and is_weak_name:
-                    # Skip empty/noise items that have no identifier and no name
-                    print(f"    [V3][INFO] Skipping likely empty/noise line item (no ID/SSN/Name)")
-                    continue
+                    # [V4][ADJUSTMENT ALLOW] Allow orphan adjustments through the filter
+                    is_adjustment_label = is_keyword_match(item.get("PLAN_NAME"), ["ADJUSTMENT", "ADJUSTMENTS", "RETRO"])
+                    has_premium = to_float(item.get("CURRENT_PREMIUM")) != 0 or to_float(item.get("ADJUSTMENT_PREMIUM")) != 0
+                    if not (is_adjustment_label and has_premium):
+                        # Skip empty/noise items that have no identifier and no name
+                        print(f"    [V3][INFO] Skipping likely empty/noise line item (no ID/SSN/Name)")
+                        continue
                 
                 # Possible match keys
                 # PRIMARY KEY: Name + ID + Plan (Strict match for multi-plan differentiation)
@@ -2086,6 +2189,34 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                          if key_id_loose: index_by_id[key_id_loose] = match_index
                          if key_ssn_loose: index_by_ssn[key_ssn_loose] = match_index
                 else:
+                    # [V4][ADJUSTMENT MERGE] Handle Orphan Adjustments
+                    # If this is a row with no name but has an adjustment amount/label,
+                    # try to merge it into the LAST member row we just added.
+                    is_adjustment_label = is_keyword_match(item.get("PLAN_NAME"), ["ADJUSTMENT", "ADJUSTMENTS", "RETRO"])
+                    has_premium = to_float(item.get("CURRENT_PREMIUM")) != 0 or to_float(item.get("ADJUSTMENT_PREMIUM")) != 0
+                    
+                    if is_weak_name and is_adjustment_label and has_premium and merged_items:
+                        # Find the last member row (skip nested total rows if any)
+                        last_member_idx = None
+                        for i in range(len(merged_items)-1, -1, -1):
+                            if not check_total(merged_items[i]):
+                                last_member_idx = i
+                                break
+                        
+                        if last_member_idx is not None:
+                            last_member = merged_items[last_member_idx]
+                            print(f"    [V4][MERGE] Merging orphan adjustment '{item.get('PLAN_NAME')}' into member {last_member.get('FIRSTNAME')} {last_member.get('LASTNAME')}")
+                            
+                            # Move CURRENT_PREMIUM to ADJUSTMENT_PREMIUM if the label is "Adjustment"
+                            adj_val = to_float(item.get("CURRENT_PREMIUM")) + to_float(item.get("ADJUSTMENT_PREMIUM"))
+                            existing_adj = to_float(last_member.get("ADJUSTMENT_PREMIUM"))
+                            last_member["ADJUSTMENT_PREMIUM"] = round(existing_adj + adj_val, 2)
+                            
+                            # Update plan name if relevant (optional)
+                            # last_member["PLAN_NAME"] = f"{last_member.get('PLAN_NAME')} (incl. {item.get('PLAN_NAME')})"
+                            
+                            continue # Successfully merged, do not add as new record
+
                     # New record
                     new_item = item.copy()
                     current_idx = len(merged_items)
@@ -2099,6 +2230,7 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
             # PHASE 1: Separate member rows from total rows
             member_rows = []
             total_rows = []
+            adjustment_rows = []
             
             for item in merged_items:
                 row = {"SOURCE_FILE": source_filename}
@@ -2120,7 +2252,12 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                         row[f] = clean_string_spacing(row[f], preserve_single=True)
                         # Fix "TG" prefix missing space (e.g., TGAD&D -> TG AD&D, TGLife -> TG Life)
                         if f == "PLAN_NAME" and row[f]:
+                            # Fix "TG" prefix missing space (e.g., TGAD&D -> TG AD&D, TGLife -> TG Life)
                             row[f] = re.sub(r'^TG([A-Za-z&])', r'TG \1', str(row[f]), flags=re.IGNORECASE)
+                            
+                            # UHC Fix: Ensure space in plan codes like "P 7330" (User request)
+                            # Matches 'P' followed immediately by 4 digits, but only if preceded by a space or start of string
+                            row[f] = re.sub(r'(\bP)(\d{4})', r'\1 \2', str(row[f]))
                 
                 # Normalize Coverage and Plan Type
                 if row.get("COVERAGE"):
@@ -2132,9 +2269,21 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                 fn_upper = str(row.get("SOURCE_FILE") or "").upper()
                 is_bcbs = "BLUE" in pn_upper or "BLUE" in fn_upper or "BCBS" in fn_upper
                 
-                if not is_bcbs and row.get("PLAN_TYPE") and str(row["PLAN_TYPE"]).upper() in ["EE", "FAM", "SP", "CH", "DEP"]:
-                    # Likely a mapping error - try to infer from PLAN_NAME
-                    pn = str(row.get("PLAN_NAME") or "").upper()
+                if not is_bcbs:
+                    pt_val = str(row.get("PLAN_TYPE") or "").upper()
+                    if pt_val in ["", "NONE", "NOT FOUND", "EE", "FAM", "SP", "CH", "DEP", "NAN", "UNKNOWN"]:
+                        # Try to infer from PLAN_NAME
+                        pn = str(row.get("PLAN_NAME") or "").upper()
+                        if "DENTAL" in pn:
+                            row["PLAN_TYPE"] = "DENTAL"
+                        elif "VISION" in pn:
+                            row["PLAN_TYPE"] = "VISION"
+                        elif "LIFE" in pn:
+                            row["PLAN_TYPE"] = "LIFE"
+                        elif "AD&D" in pn:
+                            row["PLAN_TYPE"] = "AD&D"
+                        elif any(kw in pn for kw in ["POS", "EPO", "PPO", "HMO", "CHC", "NHP", "MEDICAL", "HEALTH"]):
+                            row["PLAN_TYPE"] = "MEDICAL"
                 # Default PLAN_TYPE for BCBS if missing
                 # Removed default to MEDICAL per user request: "if plan type have in the pdf get it otherwise dont need"
                 
@@ -2182,14 +2331,9 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                 idx_f = str(row.get("FIRSTNAME", "") or "").upper()
                 idx_l = str(row.get("LASTNAME", "") or "").upper()
                 
-                # Enhanced detection for summary rows misclassified as members
-                # Refined keyword list: Use word boundaries or whole string checks to avoid "Total Pet" becoming "TOTAL"
-                def is_keyword_match(text, keywords):
-                    t = str(text or "").upper()
-                    # Check for exact matches of total keywords as standalone words
-                    return any(re.search(fr'\b{kw}\b', t) for kw in keywords)
-
                 total_keywords = ["TOTAL", "GRAND TOTAL", "SUBTOTAL", "SUB TOTAL", "INVOICE TOTAL"]
+                adj_keywords = ["FEE", "ADJUSTMENT", "CREDIT", "CHARGE"]
+                
                 is_total = is_keyword_match(idx_p, total_keywords) or \
                            is_keyword_match(idx_f, total_keywords) or \
                            is_keyword_match(idx_l, total_keywords)
@@ -2197,6 +2341,9 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                 # If "TOTAL" is part of a plan name like "TOTAL PET", it's NOT a total row
                 if "TOTAL PET" in idx_p:
                     is_total = False
+                
+                is_adjustment = not is_total and (is_keyword_match(idx_p, adj_keywords) or \
+                                                  is_keyword_match(idx_l, adj_keywords))
                 
                 # Sharad Saxton Protection (requires MEMBERID to distinguish real member from Page 1 summary header)
                 idx_mid = str(row.get("MEMBERID", "") or "").strip()
@@ -2206,9 +2353,10 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                 if is_sharad_with_id:
                     is_total = False  # Only protect real member row
                 
-                # UHC specific: any single row > $4,000 is a summary/error unless it's Sharad with real ID
+                # UHC specific: any single row > $6,000 is a summary/error unless it's Sharad with real ID
+                # Increased threshold from 4000 to 6000 to handle larger legitimate premium rows.
                 prem_val = to_float(row.get("CURRENT_PREMIUM"))
-                if prem_val > 4000 and not is_sharad_with_id:
+                if prem_val > 6000 and not is_sharad_with_id:
                     is_total = True
                 
                 # If FIRSTNAME/LASTNAME exist but PLAN_NAME and MEMBERID are missing,
@@ -2221,7 +2369,7 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                     if has_names and not has_mid and not has_plan:
                         # Case: Sharad Saxton appearing without ID/Plan (Account Header)
                         is_total = True
-                    elif not has_names and not has_plan:
+                    elif not has_names and not has_plan and not is_adjustment:
                         # Entity name or random header text
                         is_total = True
                 
@@ -2236,6 +2384,9 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                         if field in row:
                             row[field] = None
                     total_rows.append(row)
+                elif is_adjustment:
+                    row["PLAN_TYPE"] = "FEES"
+                    adjustment_rows.append(row)
                 else:
                     member_rows.append(row)
             
@@ -2245,9 +2396,13 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
             #   2. Provide separate rows for each sum + a combined final total.
             #   3. This makes the math explicit and auditable in the spreadsheet.
 
+            # Strategy: Calculate combined total including member premiums and standalone adjustments (fees/credits)
             sum_current = sum(to_float(mr.get("CURRENT_PREMIUM")) for mr in member_rows)
-            sum_adj = sum(to_float(mr.get("ADJUSTMENT_PREMIUM")) for mr in member_rows)
-            combined_total = sum_current + sum_adj
+            sum_adj_members = sum(to_float(mr.get("ADJUSTMENT_PREMIUM")) for mr in member_rows)
+            # [V4][FIX] Include standalone adjustment_rows in the calculated total
+            sum_standalone_adj = sum(to_float(ar.get("CURRENT_PREMIUM")) + to_float(ar.get("ADJUSTMENT_PREMIUM")) for ar in adjustment_rows)
+            
+            combined_total = round(sum_current + sum_adj_members + sum_standalone_adj, 2)
 
             # Build audit-ready total rows
             final_total_rows = []
@@ -2339,10 +2494,20 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                 if abs(computed_from_billed - header_total) > 0.05 and computed_from_billed > header_total:
                     header_total = computed_from_billed
             
-            effective_total = header_total if header_total != 0 else (llm_total_val if llm_total_val != 0 else combined_total)
+            effective_total = header_total
+            if combined_total > header_total + 0.05:
+                # If calculated sum is larger, the reported total was likely a sub-total
+                effective_total = combined_total
+            elif header_total == 0:
+                # Fallback to LLM reported total or calculated sum
+                effective_total = llm_total_val if llm_total_val != 0 else combined_total
             
             if effective_total != 0:
+                # Build row starting with header data
                 row_report = {field: None for field in REQUIRED_FIELDS}
+                row_report.update(clean_header)
+                row_report["SOURCE_FILE"] = source_filename
+                
                 # Label based on whether it was explicitly reported or just calculated by us
                 # If we have a header total or llm reported total, it's REPORTED.
                 source_is_reported = (header_total > 0 or llm_total_val > 0)
@@ -2350,24 +2515,28 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                 row_report["PLAN_NAME"] = f"{label} (FOR AUDIT)"
                 row_report["CURRENT_PREMIUM"] = effective_total
                 
+                # Ensure date fields are formatted correctly if they were just added via update(clean_header)
+                for f in ["INV_DATE", "BILLING_PERIOD"]:
+                    if row_report.get(f): row_report[f] = format_date_clean(row_report[f])
+                
                 final_total_rows.append(row_report)
                 
                 # Enhanced Validation Logging
                 reported_val = header_total if header_total > 0 else llm_total_val
                 if reported_val > 0 and abs(combined_total - reported_val) > 0.05:
                     print(f"\n    [V4][AUDIT][WARNING] Total calculation discrepancy detected!")
-            # Propagate the real invoice total (effective_total) to every member row as INV_TOTAL
+            # Propagate the real invoice total (effective_total) to every row as INV_TOTAL
             # so that shared_configs.py can use it for the UI card.
             if effective_total != 0:
-                for mr in member_rows:
-                    mr["INV_TOTAL"] = effective_total
+                for r in (member_rows + adjustment_rows + final_total_rows):
+                    r["INV_TOTAL"] = effective_total
 
             # Sort member rows alphabetically by name (A-Z)
             # This ensures logical ordering (matching PDF Page 1) regardless of extraction order
             member_rows.sort(key=lambda x: (str(x.get("LASTNAME") or "").upper(), 
                                            str(x.get("FIRSTNAME") or "").upper()))
 
-            rows = member_rows + final_total_rows
+            rows = member_rows + adjustment_rows + final_total_rows
                 
     else:
         # Fallback for legacy/error case
