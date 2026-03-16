@@ -897,8 +897,16 @@ Extract data from the document text provided below.
         - If "POS", "EPO", "PPO", "NHP", or "CHC" is in the plan name -> **MEDICAL**
         - If "Life" or "AD&D" is in the name -> **LIFE** or **AD&D**
     - **UHC Plan Labels (CRITICAL)**: Many UHC rows have sub-labels below the plan name (e.g., `Admin/Excess Loss`, `Claims Liability`, `PPO Savings`, `Stop-Loss`). You MUST include these labels in the `PLAN_NAME` (e.g., `P 5000i80LX21B - Admin/Excess Loss`).
-    - **Fees and Adjustments (CRITICAL)**: Capture ALL fee and adjustment rows. 
-        - **Member Adjustments**: If an adjustment (e.g., "Current Adjustments" or "Retroactive Adjustment") appears immediately below a member row in the detail table, you MUST associate it with that member. Set its amount into **ADJUSTMENT_PREMIUM** for that member row (merging it if a row already exists).
+    - **Fees and Adjustments (CRITICAL)**:
+        - Capture standalone global fees or 'Prior Period' adjustments as regular rows with PLAN_NAME 'FEES' or 'ADJUSTMENTS'.
+        - UHC often has INLINE adjustments for members (e.g. retroactive additions/terminations).
+        - CRITICAL FOR ADJUSTMENTS: Do NOT extract a number as ADJUSTMENT_PREMIUM unless the row EXPLICITLY contains a date period and a 3-letter adjustment code like 'ADD', 'TRM', 'CHG'.
+        - If a row simply has two numbers (e.g., '$658.51 $696.27') with NO adjustment period/code, the second number is the 'Total Billed' for the employee. Do NOT capture the Total Billed as an adjustment! Leave ADJUSTMENT_PREMIUM as null.
+        - Extract the member's current charge into `CURRENT_PREMIUM`
+        - If a row has BOTH a current charge and a VALID adjustment (with code like ADD/TRM): Put the current charge in CURRENT_PREMIUM and the adjustment amount in ADJUSTMENT_PREMIUM.
+        - If a row has ONLY an adjustment (starts with Period and Code, no current charge): Put the amount in ADJUSTMENT_PREMIUM and capture CURRENT_PREMIUM as 0 or null.
+        - DO NOT put any final row `Total` column into `ADJUSTMENT_PREMIUM` or `CURRENT_PREMIUM`.
+        - **Member Adjustments (Separate Rows)**: If marked by "Current Adjustments" or "Retroactive Adjustment" below a member row, merge its amount into that member's `ADJUSTMENT_PREMIUM`.
         - **Global Fees**: Capture standalone group-level fees (e.g., `Billing Fee`, `Management Fee`, `Packaged Savings Credit`) from the summary pages as separate line items. Set `LASTNAME` to the description and `CURRENT_PREMIUM` to the amount (use a negative value if it is a credit). 
         - **MANDATORY EXCEPTION**: Even when a page contains summary totals (Subtotal Plan Charges, Grand Total), you MUST still extract any named fee/credit rows on that same page. These are NOT sub-totals.
     - **STRICT PLAN_TYPE MANDATE (UHC)**: Every member row MUST have a non-null `PLAN_TYPE`. You MUST strictly infer it from the plan name or description. Use **MEDICAL** for names containing "POS", "EPO", "PPO", "NHP", "CHC", or "Health". Use **DENTAL** or **VISION** as appropriate. Do NOT leave this blank or NULL.
