@@ -1412,6 +1412,8 @@ Return ONLY the company name or UNKNOWN:"""
         try:
             import pandas as pd
             all_dfs = []
+            reported_totals = []  # Track reported totals across chunks
+            
             for f in processed_files:
                 f_path = Path(f)
                 if f_path.exists():
@@ -1419,6 +1421,12 @@ Return ONLY the company name or UNKNOWN:"""
                     try:
                         df = pd.read_excel(f_path)
                         if not df.empty:
+                            # Look for reported total in this chunk
+                            if 'PLAN_NAME' in df.columns and 'CURRENT_PREMIUM' in df.columns:
+                                t_rows = df[df['PLAN_NAME'].str.contains("REPORTED INVOICE TOTAL", case=False, na=False)]
+                                for v in t_rows['CURRENT_PREMIUM'].dropna():
+                                    try: reported_totals.append(float(v))
+                                    except: pass
                             all_dfs.append(df)
                     except Exception as e:
                         print(f"  [Merge] Warning: Could not read chunk result {f_path.name}: {e}")
@@ -1443,6 +1451,30 @@ Return ONLY the company name or UNKNOWN:"""
             # Sort members alphabetically
             if 'LASTNAME' in combined_df.columns and 'FIRSTNAME' in combined_df.columns:
                 combined_df = combined_df.sort_values(by=['LASTNAME', 'FIRSTNAME'], na_position='last')
+            
+            # Recompute Grand Total and append at the bottom
+            try:
+                sum_current = combined_df['CURRENT_PREMIUM'].sum() if 'CURRENT_PREMIUM' in combined_df.columns else 0.0
+                sum_adjust = combined_df['ADJUSTMENT_PREMIUM'].sum() if 'ADJUSTMENT_PREMIUM' in combined_df.columns else 0.0
+                total_calculated = round(float(sum_current) + float(sum_adjust), 2)
+                
+                max_reported = max(reported_totals) if reported_totals else 0.0
+                
+                # Trust the REPORTED TOTAL from the summary pages as the absolute source of truth
+                effective_total = max_reported if max_reported > 0 else total_calculated
+                
+                label = "REPORTED INVOICE TOTAL (FOR AUDIT)" if max_reported > 0 else "CALCULATED INVOICE TOTAL (FOR AUDIT)"
+                
+                if effective_total != 0:
+                    total_row = {col: None for col in combined_df.columns}
+                    if 'PLAN_NAME' in combined_df.columns:
+                        total_row['PLAN_NAME'] = label
+                    if 'CURRENT_PREMIUM' in combined_df.columns:
+                        total_row['CURRENT_PREMIUM'] = effective_total
+                    
+                    combined_df = pd.concat([combined_df, pd.DataFrame([total_row])], ignore_index=True)
+            except Exception as sum_err:
+                print(f"  [Merge] Warning: Could not append grand total row: {sum_err}")
                 
             combined_df.to_excel(final_output, index=False)
             print(f"  [Merge] Successfully merged results into {final_output.name} ({final_output.stat().st_size} bytes)")
