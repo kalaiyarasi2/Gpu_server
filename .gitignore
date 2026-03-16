@@ -13,3 +13,18 @@ work_compenstaion/sources
 
 unified_PDF_Platform/uploads/
 unified_PDF_Platform/unified_outputs
+
+bank statement/outputs
+bank statement/backend/outputs
+
+bank statement/backend/__pycache__/
+bank statement/backend/venv/
+bank statement/backend/.env
+bank statement/Bank statememts/
+bank statement/Bank statememts/*
+
+monitor/monitor.log
+monitor/requests.db
+
+
+

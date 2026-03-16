@@ -53,7 +53,7 @@ export interface DocumentMetadata {
   confidence: number;
   claims_count?: number;
   total_value?: number;
-  documentType?: "INSURANCE" | "INSURANCE_CLAIMS" | "INVOICE" | "VENDOR_INVOICE" | "WORK_COMPENSATION" | "IDENTIFICATION" | "UNKNOWN";
+  documentType?: "INSURANCE" | "INSURANCE_CLAIMS" | "INVOICE" | "VENDOR_INVOICE" | "WORK_COMPENSATION" | "IDENTIFICATION" | "BANK_STATEMENT" | "UNKNOWN";
   work_comp_metadata?: {
     form_type: string;
     total_premium: number;

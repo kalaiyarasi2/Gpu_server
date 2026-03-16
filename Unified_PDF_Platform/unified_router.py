@@ -48,6 +48,7 @@ INSURANCE_BACKEND_DIR = BASE_DIR.parent / "Insurance_pdf_extractor-main/backend"
 INVOICE_BACKEND_DIR = BASE_DIR.parent / "Invoice_pdf_extractor/Invoice_Extraction-main"
 GENERAL_INVOICE_BACKEND_DIR = BASE_DIR.parent / "invoice/backend"
 WORK_COMPENSATION_BACKEND_DIR = BASE_DIR.parent / "work_compenstaion/backend"
+BANK_STATEMENT_BACKEND_DIR = BASE_DIR.parent / "bank statement/backend"
 
 # Import Insurance extractor as module
 try:
@@ -731,6 +732,36 @@ class UnifiedRouter:
             print("[ERR] Work Compensation Extractor class not found")
             self.work_comp_extractor = None
 
+        # Initialize Bank Statement extractor
+        print("[STEP] Initializing Bank Statement Extractor...")
+        StatementClass = self._get_bank_extractor_class(BANK_STATEMENT_BACKEND_DIR)
+        if StatementClass:
+            try:
+                self.bank_extractor = StatementClass(
+                    output_dir=str(BANK_STATEMENT_BACKEND_DIR / "outputs")
+                )
+                print("[OK] Bank Statement Extractor initialized")
+            except Exception as e:
+                print(f"[ERR] Failed to init Bank Statement Extractor: {e}")
+                self.bank_extractor = None
+        else:
+            print("[ERR] Bank Statement Extractor class not found")
+            self.bank_extractor = None
+
+    def _get_bank_extractor_class(self, backend_dir):
+        """Dynamic loader for StatementExtractor."""
+        import importlib.util
+        try:
+            spec = importlib.util.spec_from_file_location(
+                "statement_extractor", backend_dir / "statement_extractor.py"
+            )
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            return mod.StatementExtractor
+        except Exception as e:
+            print(f"[Extractor] Error loading bank extractor: {e}")
+            return None
+
     def _check_if_reversed(self, text: str) -> bool:
         """Detect PDFs with 180°-rotated text where each line is stored reversed.
         Common reversed markers: 'tropeR'=Report, 'ssoL'=Loss, 'diap'=paid, 'mialC'=Claim.
@@ -1065,6 +1096,39 @@ class UnifiedRouter:
         if not text_lower:
             return None, None   # No text available → defer to LLM
 
+        # RULE C0: BANK STATEMENT (Weighted unique keyword scoring)
+        bank_signals = {
+            # High-weight unique markers (3 pts)
+            "account summary": 3,
+            "beginning balance": 3,
+            "ending balance": 3,
+            "routing number": 3,
+            "deposits and other credits": 3,
+            "checks and other debits": 3,
+            "daily balance summary": 3,
+            "statement period": 3,
+            # Medium-weight markers (1 pt)
+            "transaction date": 1,
+            "withdrawal": 1,
+            "deposit": 1,
+            "checking account": 1,
+            "savings account": 1,
+            "overdraft": 1,
+            "item description": 1,
+            "account number": 1,
+        }
+        
+        bank_score = 0
+        matched_bank_keywords = []
+        for kw, weight in bank_signals.items():
+            if kw in text_lower:
+                bank_score += weight
+                matched_bank_keywords.append(kw)
+        
+        if bank_score >= 5:
+            print(f"[Pre-Classify] BANK STATEMENT score {bank_score} (Matches: {matched_bank_keywords})")
+            return "BANK_STATEMENT", f"Bank scoring threshold met ({bank_score})"
+
         # RULE C1: ACORD form content signals → Work Comp
         acord_content_signals = [
             "workers compensation application",
@@ -1312,9 +1376,15 @@ IDENTIFICATION
   -> Government-issued ID documents: Passport, Driver License, SSN Card, State ID.
   -> Key signals: date of birth, expiration date, document number, photo ID indicators.
 
+BANK_STATEMENT
+  -> Monthly bank or financial statements.
+  -> Key signals: Account Summary, Beginning/Ending Balance, Routing Number, 
+     Deposits, Withdrawals, Checking/Savings Account.
+
 ======================================================
 PRIORITY TIEBREAKER RULES:
 ======================================================
+- "Account Summary" + "Balance" -> BANK_STATEMENT
 - "Loss Run" keyword ALWAYS -> INSURANCE_CLAIMS (overrides WC context)
 - "Amount Billed / Amount Due / Premium Period" -> INVOICE (even if carrier name present)
 - ACORD 130/133 form -> WORK_COMPENSATION
@@ -1365,6 +1435,8 @@ OUTPUT:"""
             return "WORK_COMPENSATION"
         if "IDENTIFICATION" in raw:
             return "IDENTIFICATION"
+        if "BANK_STATEMENT" in raw:
+            return "BANK_STATEMENT"
         if "VENDOR_INVOICE" in raw or "INVOICE_POC_EXTRACTOR" in raw:
             return "invoice_poc_extractor"
         if "BENEFIT_INVOICE" in raw or "INVOICE" in raw:
@@ -1863,6 +1935,41 @@ Return ONLY the company name or UNKNOWN:"""
             print("\n[ERR] Error: Work Comp Extractor not initialized.")
             return {"error": "Work Comp Extractor not available"}
 
+    def run_bank_statement_extractor(self, pdf_path):
+        """Run the bank statement extractor using direct module import."""
+        print("\n" + "="*70)
+        print("[STEP] RUNNING BANK STATEMENT EXTRACTOR")
+        print("="*70)
+        print(f"📂 Input: {pdf_path}")
+        
+        if self.bank_extractor:
+            print(f"🔧 Method: Direct Module Import (StatementExtractor)")
+            print("\n⏳ Processing... (this may take 1-2 minutes)\n")
+            
+            try:
+                # Need to add bank statement dir to sys.path for internal imports inside statement_extractor
+                if str(BANK_STATEMENT_BACKEND_DIR) not in sys.path:
+                    sys.path.insert(0, str(BANK_STATEMENT_BACKEND_DIR))
+                
+                result = self.bank_extractor.process_pdf(pdf_path)
+                
+                print("[OK] Bank Statement extractor completed successfully!")
+                
+                return {
+                    "type": "BANK_STATEMENT",
+                    "json": result.get("json_file"),
+                    "excel": result.get("excel_file"),
+                    "session_dir": result.get("session_dir")
+                }
+            except Exception as e:
+                print(f"\n❌ Bank Statement Extraction Error: {e}")
+                import traceback
+                traceback.print_exc()
+                return {"error": f"Bank Statement extraction failed: {str(e)}"}
+        else:
+            print("\n[ERR] Error: Bank Statement Extractor not initialized.")
+            return {"error": "Bank Statement Extractor not available"}
+
     def extract_snippet_for_id(self, pdf_path, max_pages=1):
         """Optimized OCR extraction for ID documents (Passport, DL, SSN).
         
@@ -2296,6 +2403,8 @@ Return ONLY the company name or UNKNOWN:"""
                  return {"error": "Insurance extraction (Loss Runs/Claims) currently only supports PDF or common spreadsheet formats (XLSX, CSV)."}
         elif doc_type == "WORK_COMPENSATION":
             result = self.run_work_compensation_extractor(file_path)
+        elif doc_type == "BANK_STATEMENT":
+            result = self.run_bank_statement_extractor(file_path)
         elif doc_type == "IDENTIFICATION":
             result = self.run_identification_extractor(file_path)
         else:

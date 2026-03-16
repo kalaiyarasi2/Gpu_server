@@ -60,8 +60,8 @@ const DocumentQueue = ({ documents, activeDocId, onSelectDoc }: DocumentQueuePro
                     {doc.stage !== "queued" && doc.stage !== "complete" && doc.stage !== "error" && (
                       <> • {STAGE_LABELS[doc.stage]}</>
                     )}
-                    {doc.stage === "complete" && doc.result && (
-                      <> • {doc.result.claims_count} claims found</>
+                    {doc.stage === "complete" && doc.metadata?.claims_count !== undefined && (
+                      <> • {doc.metadata.claims_count} transactions found</>
                     )}
                   </p>
                 </div>

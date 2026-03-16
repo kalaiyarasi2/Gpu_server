@@ -1,0 +1,151 @@
+{
+  "identified_structure": {
+    "archetype": "split-column",
+    "sections": [
+      {
+        "name": "Account Summary Information",
+        "start_marker": "Account Summary Information",
+        "end_marker": "Ledger Balance",
+        "columns": [
+          "Description",
+          "Items",
+          "Amount"
+        ],
+        "has_checks": false
+      },
+      {
+        "name": "Ledger Balance",
+        "start_marker": "Ledger Balance",
+        "end_marker": "Deposits and Other Credits",
+        "columns": [
+          "Date",
+          "Ledger balance"
+        ],
+        "has_checks": false
+      },
+      {
+        "name": "Deposits and Other Credits",
+        "start_marker": "Deposits and Other Credits",
+        "end_marker": "Checks and Other Debits",
+        "columns": [
+          "Date",
+          "Transaction posted",
+          "Amount",
+          "description"
+        ],
+        "has_checks": false
+      },
+      {
+        "name": "Checks and Other Debits",
+        "start_marker": "Checks and Other Debits",
+        "end_marker": "ACH Debits",
+        "columns": [
+          "Date",
+          "Check number",
+          "Amount"
+        ],
+        "has_checks": true
+      },
+      {
+        "name": "ACH Debits",
+        "start_marker": "ACH Debits",
+        "end_marker": "ACH Debits continued on next page",
+        "columns": [
+          "Date",
+          "Transaction posted",
+          "Amount",
+          "description",
+          "Reference number"
+        ],
+        "has_checks": false
+      }
+    ],
+    "date_format": "MM/DD",
+    "currency_notes": "Credits and debits are listed as positive numbers; no parentheses or negative signs are used to distinguish debits."
+  },
+  "dynamic_schema": {
+    "mappings": [
+      {
+        "field": "Transaction Date",
+        "source_section": "Deposits and Other Credits",
+        "extraction_logic": "Extract from the 'Date' column",
+        "confidence_boosters": [
+          "MM/DD format",
+          "Date"
+        ]
+      },
+      {
+        "field": "Transaction Date",
+        "source_section": "Checks and Other Debits",
+        "extraction_logic": "Extract from the 'Date' column",
+        "confidence_boosters": [
+          "MM/DD format",
+          "Date"
+        ]
+      },
+      {
+        "field": "Transaction Date",
+        "source_section": "ACH Debits",
+        "extraction_logic": "Extract from the 'Date' column",
+        "confidence_boosters": [
+          "MM/DD format",
+          "Date"
+        ]
+      },
+      {
+        "field": "Description",
+        "source_section": "Deposits and Other Credits",
+        "extraction_logic": "Extract from the 'description' column",
+        "confidence_boosters": [
+          "merchant name",
+          "transaction details"
+        ]
+      },
+      {
+        "field": "Description",
+        "source_section": "ACH Debits",
+        "extraction_logic": "Extract from the 'description' column",
+        "confidence_boosters": [
+          "merchant name",
+          "transaction details"
+        ]
+      },
+      {
+        "field": "Withdrawal Amount",
+        "source_section": "Checks and Other Debits",
+        "extraction_logic": "Extract from the 'Amount' column",
+        "confidence_boosters": [
+          "positive numbers",
+          "debit"
+        ]
+      },
+      {
+        "field": "Withdrawal Amount",
+        "source_section": "ACH Debits",
+        "extraction_logic": "Extract from the 'Amount' column",
+        "confidence_boosters": [
+          "positive numbers",
+          "debit"
+        ]
+      },
+      {
+        "field": "Deposit Amount",
+        "source_section": "Deposits and Other Credits",
+        "extraction_logic": "Extract from the 'Amount' column",
+        "confidence_boosters": [
+          "positive numbers",
+          "credit"
+        ]
+      },
+      {
+        "field": "Check Number",
+        "source_section": "Checks and Other Debits",
+        "extraction_logic": "Look for 5-digit numbers in the 'Check number' column",
+        "confidence_boosters": [
+          "5-digit numbers",
+          "check"
+        ]
+      }
+    ]
+  }
+}

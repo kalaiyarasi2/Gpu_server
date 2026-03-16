@@ -206,7 +206,25 @@ def _perform_extraction(file: UploadFile, request: Request):
                 }
             except Exception as meta_err:
                 print(f"[Unified][WARN] Could not extract work comp metadata: {meta_err}")
-        
+
+        # Add Bank Statement specific metadata
+        if doc_type == "BANK_STATEMENT" and json_path:
+            try:
+                import json as json_lib
+                with open(json_path, "r", encoding="utf-8") as f:
+                    bank_data = json_lib.load(f)
+                
+                # bank_data schema: { "deposits_and_credits": [...], "checks_and_other_debits": [...], ... }
+                deposits = bank_data.get("deposits_and_credits", []) or []
+                debits = bank_data.get("checks_and_other_debits", []) or []
+                total_transactions = len(deposits) + len(debits)
+                
+                response["insurer"] = "Bank Statement"
+                response["claims_count"] = total_transactions
+                print(f"[Unified][API] Extracted Bank Statement Metadata: tx_count={total_transactions}")
+            except Exception as meta_err:
+                print(f"[Unified][WARN] Could not extract bank statement metadata: {meta_err}")
+                
         return response
     except Exception as e:
         tb = traceback.format_exc()
