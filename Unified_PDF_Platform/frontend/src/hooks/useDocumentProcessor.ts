@@ -72,6 +72,7 @@ export function useDocumentProcessor() {
                 }
 
                 const json = await response.json();
+                console.log("[useDocumentProcessor] API Response:", json);
 
                 if (json.error) {
                     throw new Error(json.error);
@@ -151,11 +152,12 @@ export function useDocumentProcessor() {
                     insurer: insurerLabel,
                     format: documentType.toLowerCase(),
                     confidence: 95,
-                    claims_count: claimsCount,
+                    claims_count: json.claims_count || claimsCount,
                     total_value: json.total_value || totalValue,
                     documentType: documentType as any,
                     work_comp_metadata: json.work_comp_metadata || null,
                 };
+                console.log("[useDocumentProcessor] Mapped Metadata:", metadata);
 
                 updateDoc(id, {
                     stage: "complete",

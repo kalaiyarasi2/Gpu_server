@@ -30,6 +30,18 @@ Dedicated endpoint for **Workers Compensation** documents (ACORD 130, CA, FL, an
 - **Download**: `Download JSON` and `Download Excel` buttons will appear in the response below after extraction.
 """
 
+# --- Bank Statement Documentation ---
+
+BANK_STATEMENT_SUMMARY = "Upload Bank Statement PDF - Extract Financial Data"
+
+BANK_STATEMENT_DESCRIPTION = """
+Dedicated endpoint for **Bank Statements**.
+
+- **PDF only**: Upload a bank statement PDF.
+- **Returns**: Structured JSON and Excel links containing Deposits, Credits, Checks, and Debits.
+- **Download**: Custom download buttons for both Excel and JSON will appear in the response.
+"""
+
 # --- Global API Documentation ---
 
 API_TITLE = "Data Retrieval Ingestion Verification Engine"

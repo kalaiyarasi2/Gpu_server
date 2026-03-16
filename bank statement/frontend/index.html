@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Bank Statement Extractor</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <header class="header">
+        <h1>Bank Statement Extractor</h1>
+        <p>Upload a PDF to see Deposits and Checks in table form.</p>
+      </header>
+
+      <main class="content">
+        <section class="upload-card">
+          <h2>Upload statement PDF</h2>
+          <form id="upload-form">
+            <input type="file" id="file-input" accept="application/pdf" multiple />
+            <button type="submit">Extract</button>
+          </form>
+          <p id="status" class="status"></p>
+        </section>
+
+        <section id="results" class="results" hidden>
+          <div class="summary">
+            <h2>Summary</h2>
+            <div id="summary-body"></div>
+          </div>
+
+          <div class="tables">
+            <section class="table-card">
+              <h3>Deposits and credits</h3>
+              <table id="deposits-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Amount</th>
+                    <th>Description</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </section>
+
+            <section class="table-card">
+              <h3>Checks and other debits</h3>
+              <table id="debits-table">
+                <thead>
+                  <tr>
+                    <th>Check #</th>
+                    <th>Amount</th>
+                    <th>Date</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </section>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="main.js"></script>
+  </body>
+  </html>
+

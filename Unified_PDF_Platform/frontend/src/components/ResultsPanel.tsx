@@ -85,6 +85,7 @@ const ResultsPanel = ({
   const isWorkComp = docType === "WORK_COMPENSATION";
   const isInvoice = docType === "INVOICE" || docType === "VENDOR_INVOICE";
   const isLossRun = docType === "INSURANCE_CLAIMS";
+  const isBankStatement = docType === "BANK_STATEMENT";
   const wcMeta = metadata?.work_comp_metadata;
 
   // Normalized data for table view
@@ -102,6 +103,11 @@ const ResultsPanel = ({
         return Array.isArray(result?.LINE_ITEMS) ? result.LINE_ITEMS : [];
       }
       return Array.isArray(result) ? result : [];
+    }
+    if (isBankStatement) {
+      const deposits = Array.isArray(result?.deposits_and_credits) ? result.deposits_and_credits : [];
+      const debits = Array.isArray(result?.checks_and_other_debits) ? result.checks_and_other_debits : [];
+      return [...deposits, ...debits];
     }
     return Array.isArray(result) ? result : [];
   };
@@ -244,7 +250,9 @@ const ResultsPanel = ({
           <div className="p-3 rounded-lg bg-muted/50 border border-border">
             <div className="flex items-center gap-2 mb-1">
               <Building2 className="w-3.5 h-3.5 text-primary" />
-              <span className="text-[11px] text-muted-foreground font-medium">Insurer</span>
+              <span className="text-[11px] text-muted-foreground font-medium">
+                {isBankStatement ? "Document Category" : "Insurer"}
+              </span>
             </div>
             <p className="text-sm font-semibold text-foreground truncate">{metadata?.insurer || "N/A"}</p>
           </div>
@@ -252,7 +260,7 @@ const ResultsPanel = ({
             <div className="flex items-center gap-2 mb-1">
               <BarChart3 className="w-3.5 h-3.5 text-primary" />
               <span className="text-[11px] text-muted-foreground font-medium">
-                {isInvoice ? "Total Value" : "Claims Found"}
+                {isInvoice ? "Total Value" : (isBankStatement ? "Transactions Found" : "Claims Found")}
               </span>
             </div>
             <p className="text-sm font-semibold text-foreground">

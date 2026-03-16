@@ -11,7 +11,11 @@ from shared_configs import _perform_extraction, file_path_cache
 from summary_for_json import UniversalDocumentAnalyzer as ClaimsAnalyzer
 
 # Import documentation constants
-from swagger_docs import COGNETHRO_SUMMARY, COGNETHRO_DESCRIPTION, WORK_COMP_SUMMARY, WORK_COMP_DESCRIPTION
+from swagger_docs import (
+    COGNETHRO_SUMMARY, COGNETHRO_DESCRIPTION, 
+    WORK_COMP_SUMMARY, WORK_COMP_DESCRIPTION,
+    BANK_STATEMENT_SUMMARY, BANK_STATEMENT_DESCRIPTION
+)
 
 router = APIRouter()
 
@@ -82,6 +86,36 @@ async def work_comp_trigger(request: Request, file: UploadFile = File(...)):
 
     result = await _perform_extraction(file, request)
     return JSONResponse(content=result)
+
+
+@router.get("/bank-statement", include_in_schema=False)
+async def bank_statement_trigger_docs():
+    """Redirect human visitors from the trigger point to the 'Real' standard Swagger documentation."""
+    return RedirectResponse(url="/docs")
+
+
+@router.post("/bank-statement",
+    summary=BANK_STATEMENT_SUMMARY,
+    description=BANK_STATEMENT_DESCRIPTION,
+    tags=["Bank Statements"])
+async def bank_statement_trigger(request: Request, file: UploadFile = File(...)):
+    """
+    Upload a Bank Statement PDF and receive structured JSON and Excel links.
+    """
+    from pathlib import Path as _Path
+    from fastapi import HTTPException as _HTTPException
+
+    file_ext = _Path(file.filename).suffix.lower()
+    if file_ext != ".pdf":
+        raise _HTTPException(
+            status_code=400,
+            detail=f"Bank Statement endpoint only accepts PDF files. Received: {file_ext}"
+        )
+
+    result = _perform_extraction(file, request)
+    result["trigger_point"] = "bank-statement"
+    
+    return result
 
 @router.post("/api/claim-summary")
 async def get_claim_summary(request: Request):
