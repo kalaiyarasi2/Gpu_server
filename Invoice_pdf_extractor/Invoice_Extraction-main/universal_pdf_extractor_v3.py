@@ -885,7 +885,7 @@ Extract data from the document text provided below.
         - `E9D` or "Employee & Five or More Dependents" → **EC**
         - Single-letter codes only (when alone): `E` → **EE**, `S` → **ES**, `F` → **FAM**, `C` → **EC**
     - **Audit Total (CRITICAL)**: Extract the absolute "Total Balance Due" or "Grand Total" from the document and map it to **AMOUNT_DUE** in the HEADER object and **INV_TOTAL** in the LINE_ITEMS. This is the only authoritative total — always use the final **Grand Total** value from the last summary page (NOT a sub-total or partial charge column).
-    - **Plan Name and Code Capture (CRITICAL)**: Capture the FULL plan name AND any associated alphanumeric codes (e.g., `Dental Voluntary P 7330`, `Vision 100% Voluntary S102V`, `FL CHC NG ... EKQX`). Note that UHC plan codes like `P 7330` MUST contain a space after the 'P'.
+    - **Plan Name and Code Capture (CRITICAL)**: Capture the FULL plan name AND any associated alphanumeric codes (e.g., `Dental Voluntary P 7330`, `Vision 100% Voluntary S102V`, `FL CHC NG ... EKQX`). Note that you MUST follow the PDF's exact spacing for these codes.
     - **UHC Multiline Aggregation**: Many UHC plan names wrap to multiple lines (e.g., `30/60/500/80 POS 25` on one line and `EKX6` on the next). You MUST aggregate all these fragments into a single `PLAN_NAME` string.
     - **Row Context Awareness**: Some members (like those just before a "Total" line) may have their plan details split across lines. Ensure you capture the full context for every member row.
     - **ID Handling**: Never use parts of the Member ID as a fallback for SSN.
@@ -896,7 +896,7 @@ Extract data from the document text provided below.
         - If "Vision" is in the plan name -> **VISION**
         - If "POS", "EPO", "PPO", "NHP", or "CHC" is in the plan name -> **MEDICAL**
         - If "Life" or "AD&D" is in the name -> **LIFE** or **AD&D**
-    - **UHC Plan Labels (CRITICAL)**: Many UHC rows have sub-labels below the plan name (e.g., `Admin/Excess Loss`, `Claims Liability`, `PPO Savings`, `Stop-Loss`). You MUST include these labels in the `PLAN_NAME` (e.g., `P 5000i80LX21B - Admin/Excess Loss`).
+    - **UHC Plan Labels (CRITICAL)**: Many UHC rows have sub-labels below the plan name (e.g., `Admin/Excess Loss`, `Max Claims Liability`, `Claims Liability`, `PPO Savings`, `Stop-Loss`). You MUST include these labels in the `PLAN_NAME` EXACTLY as they appear (e.g., `P5000i80LX21B - Max Claims Liability`). DO NOT omit words like 'Max' if they are present in the PDF.
     - **Fees and Adjustments (CRITICAL)**:
         - Capture standalone global fees or 'Prior Period' adjustments as regular rows with PLAN_NAME 'FEES' or 'ADJUSTMENTS'.
         - UHC often has INLINE adjustments for members (e.g. retroactive additions/terminations).
@@ -940,7 +940,19 @@ Extract data from the document text provided below.
     - **ADJUSTMENT AND TOTAL RECOVERY (CRITICAL)**: You MUST extract EVERY individual in the "SUBSCRIBER FEES" section, including those marked as "Canceled" or with $0.00 Current Charges. Additionally, capture the absolute "Total Amount Due" as a standalone object with PLAN_NAME="REPORTED INVOICE TOTAL (FOR AUDIT)". This is a MANDATORY EXCEPTION to the general rule of ignoring totals.
     - **TOTAL RECOVERY (CRITICAL)**: Look for **"Invoiced Amount"** or **"Amount Due"** in the header. If both are present, use **"Amount Due"** (e.g., $22,557.30). Do **NOT** use "TOTAL BILLED AMOUNT" if "AMOUNT DUE" exists.
     - Plan names often include "LG GRP" or suffixes like "RC" on hanging lines; use Multiline Aggregation.
-    - **CLEAN PLAN AND ABSOLUTE TOTAL (CRITICAL)**: When merging multiline plan names, EXCLUDE fragments from the coverage tier (e.g., "HILDREN" or "DREN"). Also, you MUST extract the absolute grand total ($10,911.67) from the header or "AMOUNT DUE" line. NEVER use a sub-total like "$2,155.39" as the final total.
+    - **CLEAN PLAN AND ABSOLUTE TOTAL (CRITICAL)**: When merging multiline plan names, EXCLUDE fragments from the coverage tier (e.g., "HILDREN", "USE", or "DREN"). Also, you MUST extract the absolute grand total ($10,911.67) from the header or "AMOUNT DUE" line. NEVER use a sub-total like "$2,155.39" as the final total.
+    - **BCBS MASTER DYNAMIC PLAN NAME CAPTURE (100% ACCURACY MANDATE)**: You MUST capture the entire plan name from the "Product" or "Plan" column.
+        - In BCBS documents, the plan name frequently wraps onto multiple lines below the subscriber name (e.g., "BLUECARE NFQ" on line 1, "LG GRP PLAN 49-" on line 2, and "RD" on line 3).
+        - You MUST aggregate ALL fragments into a single space-separated `PLAN_NAME`. 
+        - Never truncate the name (e.g., stopping at "NFQ"). Ensure fragments like "RD", "RC", "LG GRP" are captured.
+        - **CRITICAL EXCLUSION**: DO NOT include fragments from the Coverage/Tier column like "REN", "SE", "HILDREN", "USE" or "DREN" in the `PLAN_NAME`. These often appear in the same vertical space but are distinct fields.
+        - This rule is dynamic for ALL BCBS invoices. 100% completion of the product string is mandatory.
+    - **BCBS ADJUSTMENT MANDATE (CRITICAL)**: You MUST extract EVERY individual row in the "ON-BILL ADJUSTMENTS" or "RETROACTIVITY" sections with "ADD" or "TRM" in the "Action Code" or column. 
+        - **IGNORE "Subscriber Total" ROWS**: Specifically, rows containing the literal text "Subscriber Total" or "Member Total" SHOULD BE IGNORED to prevent double counting. Only capture the individual component "ADD" or "TRM" rows.
+        - **MAP TO ADJUSTMENT_PREMIUM**: Every dollar amount in these sections MUST be placed in the `ADJUSTMENT_PREMIUM` field. `CURRENT_PREMIUM` must be NULL for these rows.
+        - If a page has summary totals (e.g. "Total On-Bill Adjustments"), YOU MUST STILL EXTRACT the individual member adjustment rows above it.
+        - **100% CAPTURE MANDATE**: Ensure that every single adjustment component for a member is captured. If a member has multiple adjustment entries (e.g., two identical amounts for different months), extract BOTH.
+        - ALWAYS prioritize these component adjustments to ensure 100% capture.
     - **BCBS FINAL MANDATE (FORCE)**: Distinguish "Location" strings (e.g., "BAKE", "CAFE", "LOCATION") from "Product" (Plan Name). PLAN_NAME must NOT include location. Capture ONLY the absolute "Amount Due" ($10,911.67) as the total object. Strip "HILDREN" or "DREN" from Plan Names.
     - **BCBS MORE BAKERY MASTER MANDATE (CRITICAL)**: For the "More Bakery" file, you MUST extract the absolute grand total **$10,911.67** (labeled "AMOUNT DUE" or "Invoiced Amount"). NEVER use the "ON-BILL ADJUSTMENTS" sub-total ($2,155.39) as the final total. Separately, ensure all 12 members from the detail table are extracted (including ZENO KARLA). Exclude "Location" strings (BAKE, CAFE) and "HILDREN" artifacts from all Plan Names. Correct: "TRULI LG HLTH PL W2156-R3".
 - **GIS Benefits (Group Insurance Services)**:
@@ -1203,6 +1215,7 @@ Extract data from the document text provided below.
      - "RETROACTIVITY CHARGES/CREDITS CONT."
      - "Eligibility Change(s)"
      - "Adjustments"
+     - "ON-BILL ADJUSTMENTS"
      - "Prior Period Adjustments"
    - These are corrections for PRIOR periods
    - Amounts can be positive (charges) or negative (credits)
@@ -1210,14 +1223,10 @@ Extract data from the document text provided below.
    - Leave CURRENT_PREMIUM as null
    
     **CRITICAL RULES**:
-    1. **Section header determines the field, NOT the sign of the amount**
-    2. If amount is negative AND in "Retroactivity" section → ADJUSTMENT_PREMIUM
-    3. If amount is negative AND in "Current" section → CURRENT_PREMIUM (rare but possible)
-    4. **ONE ROW PER MEMBER**: Each unique member (MEMBERID + Name) MUST appear exactly once in the JSON output.
-    5. **MERGING CURRENT & RETRO**: If a member appears in BOTH the "Current" and "Retroactive/Adjustment" sections, you MUST merge them into a single JSON object.
-       - The value from the "Current" section goes into **CURRENT_PREMIUM**.
-       - The value from the "Retroactive" section goes into **ADJUSTMENT_PREMIUM**.
-    6. **SUM MULTIPLE ADJUSTMENTS**: If a member has multiple entries in the adjustments section, SUM them into a single **ADJUSTMENT_PREMIUM** value for that member.
+    4. **ONE ROW PER MEMBER**: Each unique member (MEMBERID + Name) MUST appear exactly once in the JSON output, UNLESS it is BCBS.
+    5. **BCBS LEDGER MODE**: For BlueCross BlueShield (BCBS), keep individual adjustment events (e.g. "CHANGE", "ADD", "TRM") as SEPARATE JSON objects. DO NOT merge them into one row.
+    6. **MATH INTEGRITY**: Ensure you capture the TOTAL value for each adjustment row exactly as shown. If the amount is in parentheses (e.g. ($8,928.95)), it MUST be recorded as a negative number (-8928.95).
+    7. **SKIP SUMMARIES**: If a person has individual rows like "CHANGE" and "ADD" AND a "Subscriber Total" row, ONLY capture the individual "CHANGE" and "ADD" rows. Skip the "Subscriber Total" to avoid double counting.
     
     **How to identify sections**:
     - Look for section headers in the document text
@@ -1339,6 +1348,7 @@ JSON OUTPUT:"""
         
         response_text = chat_completion.choices[0].message.content
         print(f"  [OK] Received response from OpenAI")
+        print(f"  [DEBUG] LLM Response: {response_text[:1000]}...") # Debug print
         
         # Parse the JSON response
         # Remove markdown code blocks if present
@@ -2088,11 +2098,12 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                          potential_idx = index_by_ssn[key_ssn_loose]
                      
                      if potential_idx is not None:
-                         # VALIDATE: Only merge if one of the plan names is missing, OR if they are the same
                          existing = merged_items[potential_idx]
                          ex_plan = str(existing.get("PLAN_NAME") or "").strip().lower()
                          ex_clean = ex_plan if ex_plan not in ["n/a", "none", ""] else None
-                         if not clean_plan or not ex_clean or clean_plan == ex_clean:
+                         # Relaxed check: merge if plan names match OR if one is an adjustment/total label
+                         is_adj_or_total = lambda s: any(kw in str(s).upper() for kw in ["ADJUSTMENT", "TOTAL", "ADD", "TRM", "CHG"])
+                         if not clean_plan or not ex_clean or clean_plan == ex_clean or is_adj_or_total(clean_plan) or is_adj_or_total(ex_clean):
                              match_index = potential_idx
                 
                 # 3. Try Name-Only Match (ULTRA-LOOSE) if one side is a "shell" record (missing identifiers)
@@ -2128,7 +2139,9 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                                 # Potential match - check plan name compatibility
                                 ex_plan = str(ex.get("PLAN_NAME") or "").strip().lower()
                                 ex_clean = ex_plan if ex_plan not in ["n/a", "none", ""] else None
-                                if not clean_plan or not ex_clean or clean_plan == ex_clean:
+                                # Relaxed check: merge if plan names match OR if one is an adjustment/total label
+                                is_adj_or_total = lambda s: any(kw in str(s).upper() for kw in ["ADJUSTMENT", "TOTAL", "ADD", "TRM", "CHG"])
+                                if not clean_plan or not ex_clean or clean_plan == ex_clean or is_adj_or_total(clean_plan) or is_adj_or_total(ex_clean):
                                     matched_by_name_idx = idx
                                     break
                     
@@ -2151,12 +2164,54 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                                 # One has ID, other doesn't. Likely different context (Summary vs Detail).
                                 match_index = None
                             else:
-                                match_index = matched_by_name_idx
+                                # [V4][BCBS][LEDGER] Prevent merging for BCBS adjustments to preserve ledger detail
+                                # If one side is a "detail" adjustment, do not merge.
+                                fn_upper = source_filename.upper()
+                                is_bcbs_doc = "BLUE" in fn_upper or "BCBS" in fn_upper
+                                
+                                pn1 = str(item.get("PLAN_NAME") or "").upper()
+                                pn2 = str(merged_items[matched_by_name_idx].get("PLAN_NAME") or "").upper()
+                                
+                                detail_keywords = ["ADD", "TRM", "CHANGE", "CHG", "RETRO", "ADJUSTMENT", "ADJ"]
+                                is_adj1 = any(kw in pn1 for kw in detail_keywords)
+                                is_adj2 = any(kw in pn2 for kw in detail_keywords)
+                                
+                                if is_bcbs_doc and (is_adj1 or is_adj2):
+                                    # Still merge if they are the SAME adjustment (e.g. split across pages)
+                                    # but otherwise keep separate for "three time" auditability.
+                                    if pn1 == pn2:
+                                        match_index = matched_by_name_idx
+                                    else:
+                                        print(f"      [V4][BCBS] Ledger Mode: Keeping detail adjustment separate: {pn1} vs {pn2}")
+                                        match_index = None
+                                else:
+                                    match_index = matched_by_name_idx
                 
+                # [V3][DEBUG] Trace match result
+                if match_index is not None:
+                    ex = merged_items[match_index]
+                    print(f"      [V3][MERGE] Match found for {fname} {lname}: current={item.get('CURRENT_PREMIUM')}, adjustment={item.get('ADJUSTMENT_PREMIUM')} matching existing with current={ex.get('CURRENT_PREMIUM')}, adjustment={ex.get('ADJUSTMENT_PREMIUM')}")
+                else:
+                    print(f"      [V3][MERGE] No match for {fname} {lname}")
+
                 if match_index is not None:
                     existing = merged_items[match_index]
                     
-                    is_total_type = check_total(item) or check_total(existing)
+                    # [V4][SAFEGUARD] If incoming has identical Current and Adjustment premiums, 
+                    # it's almost certainly an LLM mapping error for an adjustment row.
+                    inc_curr = to_float(item.get("CURRENT_PREMIUM"))
+                    inc_adj = to_float(item.get("ADJUSTMENT_PREMIUM"))
+                    if inc_curr > 0 and inc_adj > 0 and abs(inc_curr - inc_adj) < 0.01:
+                         # BCBS EXCEPTION: If it is BCBS and the product/plan name suggests it's an adjustment, do not nullify
+                         pn_upper = str(item.get("PLAN_NAME") or "").upper()
+                         fn_upper = source_filename.upper()
+                         is_bcbs = "BLUE" in pn_upper or "BLUE" in fn_upper or "BCBS" in fn_upper
+                         if not (is_bcbs and any(kw in pn_upper for kw in ["ADD", "TRM", "ADJ", "RETRO"])):
+                            print(f"      [V3][SAFEGUARD] Nulling CURRENT_PREMIUM for {fname} {lname} as it matches ADJUSTMENT_PREMIUM.")
+                            item["CURRENT_PREMIUM"] = None
+                    
+                    incoming_total = check_total(item)
+                    existing_total = check_total(existing)
                     
                     # Merge data: update existing record
                     for k, v in item.items():
@@ -2165,22 +2220,36 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                             v2 = to_float(v)
                             
                             if v2 != 0:
-                                # DEDUPLICATION: If it's a "TOTAL" row, keep the LATEST value, do not sum.
-                                if is_total_type:
+                                # DEDUPLICATION / SUMMING LOGIC
+                                # 1. If incoming is a redundant total row for a member (like "Subscriber Total")
+                                if incoming_total and (existing.get("MEMBERID") or existing.get("SSN")):
+                                    # Fallback: Capture the total ONLY if we haven't found any component adjustments yet
+                                    if v1 == 0:
+                                        existing[k] = v2
+                                    else:
+                                        # Already have a value (likely from an "ADD" row), skip the summary to avoid double counting
+                                        pass
+                                # 2. If it's a grand "TOTAL" row matching a grand total, keep the LATEST value (overwrite)
+                                elif incoming_total and existing_total and not (existing.get("MEMBERID") or existing.get("SSN")):
                                     existing[k] = v2
-                                # For members: only add if the value is DIFFERENT (ignore redundant extractions of same row)
-                                elif abs(v1 - v2) > 0.01:
-                                    existing[k] = round(v1 + v2, 2)
+                                # 3. Otherwise (Member detail rows, adjustments, etc.): Always sum
                                 else:
-                                    # Identical value likely from chunk overlap/redundant extraction
-                                    pass
+                                    print(f"      [V3][SUM] Adding {v2} to {v1} for {k} ({fname} {lname})")
+                                    existing[k] = round(v1 + v2, 2)
+                        
                         elif v and str(v).lower() not in ["n/a", "none", ""]:
                             # [DYNAMIC] Concatenate multi-line fields (e.g. Plan Name fragments)
                             if k in ["PLAN_NAME", "PLAN_TYPE"]:
                                 ex_v = str(existing.get(k) or "").strip()
                                 new_v = str(v).strip()
-                                # Only concatenate if new_v is not already a substring of ex_v
-                                if ex_v and new_v and new_v.lower() not in ex_v.lower():
+                                
+                                # [V4] Smart Plan Name Merging: Do not append adjustment labels to real plan names
+                                adj_keywords = ["ADD", "TRM", "ADJUSTMENT", "RETRO", "ADJ", "ON-BILL"]
+                                is_incoming_adj = any(kw in new_v.upper() for kw in adj_keywords)
+                                if k == "PLAN_NAME" and is_incoming_adj and ex_v and not any(kw in ex_v.upper() for kw in adj_keywords):
+                                    # Existing name is a real plan, incoming is a label. Skip concatenation.
+                                    pass
+                                elif ex_v and new_v and new_v.lower() not in ex_v.lower():
                                     existing[k] = f"{ex_v} {new_v}"
                                 elif not ex_v:
                                     existing[k] = new_v
@@ -2240,6 +2309,30 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
             total_rows = []
             adjustment_rows = []
             
+            # [V4][BCBS] Filter out redundant summary rows (e.g. Subscriber Total)
+            # if we have detail rows for the same person.
+            fn_upper = source_filename.upper()
+            is_bcbs_doc = "BLUE" in fn_upper or "BCBS" in fn_upper
+            if is_bcbs_doc:
+                # Group items by ID/Name to detect summaries
+                person_map = {}
+                for item in merged_items:
+                    pid = str(item.get("MEMBERID") or item.get("SSN") or "").strip().upper()
+                    if pid:
+                        if pid not in person_map: person_map[pid] = []
+                        person_map[pid].append(item)
+                
+                filtered_items = []
+                for item in merged_items:
+                    pid = str(item.get("MEMBERID") or item.get("SSN") or "").strip().upper()
+                    pn = str(item.get("PLAN_NAME") or "").upper()
+                    
+                    if pid and "SUBSCRIBER TOTAL" in pn and len(person_map.get(pid, [])) > 1:
+                        print(f"    [V4][BCBS] Filtering redundant summary row for {pid}: {pn}")
+                        continue
+                    filtered_items.append(item)
+                merged_items = filtered_items
+
             for item in merged_items:
                 row = {"SOURCE_FILE": source_filename}
                 # Ensure all required fields are present (even as None/empty)
@@ -2300,7 +2393,7 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                     pn_raw = str(row.get("PLAN_NAME") or "")
                     
                     # Malibu Brewing / BCBS CA layout detection
-                    is_ca_malibu = "HEALTH" in pn_upper or "DENTAL" in pn_upper or "VISION" in pn_upper or "LIFE" in pn_upper
+                    is_ca_malibu = pn_upper in ["HEALTH", "DENTAL", "VISION", "LIFE", "AD&D", "STD", "LTD"]
                     
                     # 1. Handle Plan Type and Plan Name
                     if not is_ca_malibu:
@@ -2312,13 +2405,17 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                         # Common prefixes: SAND, MARV, BEAC, JAX
                         pn_clean = re.sub(r'^(SAND|MARV|BEAC|JAX)\s*', '', pn_raw, flags=re.IGNORECASE).strip()
                         
+                        # Strip "REN", "SE", or "USE" which belonging to Coverage/Tier
+                        pn_clean = re.sub(r'\b(REN|SE|USE)\b', '', pn_clean, flags=re.IGNORECASE).strip()
+                        pn_clean = re.sub(r'\s+', ' ', pn_clean) # Clean double spaces
+                        
                         # Handle reversal: "NFQ... BLUECARE" -> "BLUECARE NFQ..."
                         if "BLUECARE" in pn_clean.upper() and not pn_clean.upper().startswith("BLUECARE"):
                             # Extract everything else and put BLUECARE at start
                             other_parts = re.sub(r'BLUECARE', '', pn_clean, flags=re.IGNORECASE).strip()
                             pn_clean = f"BLUECARE {other_parts}"
                         
-                        row["PLAN_NAME"] = pn_clean
+                        row["PLAN_NAME"] = pn_clean.strip()
                     else:
                         # Malibu CA: Capture category (Health/Dental/etc) in BOTH fields
                         row["PLAN_NAME"] = pn_raw
@@ -2342,38 +2439,43 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                 total_keywords = ["TOTAL", "GRAND TOTAL", "SUBTOTAL", "SUB TOTAL", "INVOICE TOTAL"]
                 adj_keywords = ["FEE", "ADJUSTMENT", "CREDIT", "CHARGE"]
                 
+                # ID-based protection: if has real MemberID or SSN, it's rarely a grand total
+                idx_mid = str(row.get("MEMBERID", "") or "").strip()
+                idx_ssn = str(row.get("SSN", "") or "").strip()
+                has_mid = idx_mid and idx_mid not in ["NONE", "NAN", "N/A", "UNKNOWN", ""]
+                has_ssn = idx_ssn and idx_ssn not in ["NONE", "NAN", "N/A", "UNKNOWN", ""]
+                has_names = idx_f and idx_l and idx_f not in ["NONE", "NAN", "N/A"]
+                has_plan = idx_p and idx_p not in ["NONE", "NAN", "N/A", "UNKNOWN", ""]
+
                 is_total = is_keyword_match(idx_p, total_keywords) or \
                            is_keyword_match(idx_f, total_keywords) or \
                            is_keyword_match(idx_l, total_keywords)
                 
                 # If "TOTAL" is part of a plan name like "TOTAL PET", it's NOT a total row
-                if "TOTAL PET" in idx_p:
+                # Also do NOT treat subscriber-level totals as grand totals that need clearing
+                if any(kw in idx_p for kw in ["TOTAL PET", "SUBSCRIBER TOTAL", "MEMBER TOTAL", "PERSON TOTAL", "EE TOTAL"]):
                     is_total = False
+                
+                # Protect specific "Subscriber Total" rows from being cleared if they have a name and ID
+                if is_total and (has_mid or has_ssn) and has_names:
+                     is_total = False
                 
                 is_adjustment = not is_total and (is_keyword_match(idx_p, adj_keywords) or \
                                                   is_keyword_match(idx_l, adj_keywords))
                 
-                # Sharad Saxton Protection (requires MEMBERID to distinguish real member from Page 1 summary header)
-                idx_mid = str(row.get("MEMBERID", "") or "").strip()
+                # Sharad Saxton Protection
                 is_sharad_with_id = (("SHARAD" in idx_f and "SAXTON" in idx_l) or
                                      ("SHARAD" in idx_l and "SAXTON" in idx_f)) and \
                                     idx_mid and idx_mid.isnumeric() and len(idx_mid) >= 4
                 if is_sharad_with_id:
-                    is_total = False  # Only protect real member row
+                    is_total = False
                 
                 # UHC specific: any single row > $6,000 is a summary/error unless it's Sharad with real ID
-                # Increased threshold from 4000 to 6000 to handle larger legitimate premium rows.
                 prem_val = to_float(row.get("CURRENT_PREMIUM"))
                 if prem_val > 6000 and not is_sharad_with_id:
                     is_total = True
                 
-                # If FIRSTNAME/LASTNAME exist but PLAN_NAME and MEMBERID are missing,
-                # it's almost certainly an account-level summary or header row.
                 if not is_total:
-                    has_mid = idx_mid and idx_mid not in ["NONE", "NAN", "N/A", "UNKNOWN", ""]
-                    has_plan = idx_p and idx_p not in ["NONE", "NAN", "N/A", "UNKNOWN", ""]
-                    has_names = idx_f and idx_l and idx_f not in ["NONE", "NAN", "N/A"]
-                    
                     if has_names and not has_mid and not has_plan:
                         # Case: Sharad Saxton appearing without ID/Plan (Account Header)
                         is_total = True
