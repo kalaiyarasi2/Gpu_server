@@ -184,7 +184,7 @@ def check_total(item_obj):
     if is_sharad and mid and mid.isnumeric() and len(mid) >= 4:
         return False # Protect real member with ID
     
-    total_keywords = ["TOTAL", "GRAND TOTAL", "AMOUNT DUE", "BALANCE DUE", "TOTAL CURRENT PREMIUM", "TOTAL PREMIUM"]
+    total_keywords = ["TOTAL", "GRAND TOTAL", "AMOUNT DUE", "BALANCE DUE", "TOTAL CURRENT PREMIUM", "TOTAL PREMIUM", "BILLING FEE", "MANAGEMENT FEE", "SAVINGS CREDIT"]
     return any(kw in p or kw in f or kw in l for kw in total_keywords)
 
 
@@ -212,7 +212,7 @@ UHC_COVERAGE_MAP = {
     # Code → standard output
     "E":   "EE",
     "ES":  "ES",
-    "ESC": "ESC",
+    "ESC": "FAM",
     "EC":  "EC",
     "E1D": "EC",
     "E2D": "EC",
@@ -223,10 +223,14 @@ UHC_COVERAGE_MAP = {
     "E7D": "EC",
     "E8D": "EC",
     "E9D": "EC",
+    "F":   "FAM",
+    "S":   "ES",
+    "C":   "EC",
+    "E E": "EE",
     # Full-text equivalents
     "EMPLOYEE ONLY":               "EE",
     "EMPLOYEE AND SPOUSE":         "ES",
-    "EMPLOYEE AND FAMILY":         "ESC",
+    "EMPLOYEE AND FAMILY":         "FAM",
     "EMPLOYEE AND CHILD":          "EC",
     "EMPLOYEE AND CHILD(REN)":     "EC",
     "EMPLOYEE & ONE OR MORE DEPENDENT":   "EC",
@@ -236,7 +240,7 @@ UHC_COVERAGE_MAP = {
     "EMPLOYEE & FIVE OR MORE DEPENDENTS": "EC",
     # Legacy single-letter fallbacks
     "EE":  "EE",
-    "FAM": "ESC",
+    "FAM": "FAM",
 }
 
 
@@ -253,6 +257,77 @@ def normalize_uhc_coverage(items: list) -> list:
             if key in UHC_COVERAGE_MAP:
                 item["COVERAGE"] = UHC_COVERAGE_MAP[key]
     return items
+
+def deduplicate_uhc_fees(items: list) -> list:
+    """
+    Programmatically ensure global fees/credits are included exactly once and
+    grouped at the bottom of the line item list.
+    Specifically handles $25.00 'Billing Fee' and 'Surplus Reimbursement' and 'Packaged Savings Credit'.
+    """
+    members = []
+    fees = []
+    seen_fees = set()
+    
+    for item in items:
+        pn = str(item.get("PLAN_NAME") or "").upper()
+        pt = str(item.get("PLAN_TYPE") or "").upper()
+        ln = str(item.get("LASTNAME") or "").upper()
+        p_val = to_float(item.get("CURRENT_PREMIUM") or item.get("ADJUSTMENT_PREMIUM"))
+        
+        # Identifiers for deduplication
+        is_billing_fee = ("BILLING FEE" in pn or pn == "FEES" or "SETUP FEE" in pn or ln == "BILLING FEE") and p_val == 25.0
+        is_surplus = "SURPLUS REIMBURSEMENT" in pn
+        is_packaged_savings = "PACKAGED SAVINGS CREDIT" in pn or "PACKAGED SAVINGS" in pn
+        
+        if is_billing_fee:
+            fee_key = f"BILLING_FEE"
+            if fee_key in seen_fees:
+                continue
+            seen_fees.add(fee_key)
+            item["PLAN_NAME"] = "Billing Fee"
+            item["PLAN_TYPE"] = "FEES"
+            item["LASTNAME"] = "Credit/Fee"
+            item["FIRSTNAME"] = None
+            item["COVERAGE"] = None
+            fees.append(item)
+        
+        elif is_surplus:
+            fee_key = f"SURPLUS_{p_val}"
+            if fee_key in seen_fees:
+                continue
+            seen_fees.add(fee_key)
+            item["PLAN_NAME"] = "Surplus Reimbursement"
+            item["PLAN_TYPE"] = "FEES"
+            item["LASTNAME"] = "Credit/Fee"
+            item["FIRSTNAME"] = None
+            item["COVERAGE"] = None
+            fees.append(item)
+            
+        elif is_packaged_savings:
+            fee_key = f"PACKAGED_SAVINGS_{p_val}"
+            if fee_key in seen_fees:
+                continue
+            seen_fees.add(fee_key)
+            item["PLAN_NAME"] = "Packaged Savings Credit"
+            item["PLAN_TYPE"] = "FEES"
+            item["LASTNAME"] = "Credit/Fee"
+            item["FIRSTNAME"] = None
+            item["COVERAGE"] = None
+            fees.append(item)
+            
+        else:
+            # Check if it was extracted as a generic 'Fees/Credits' without specific name
+            if pt == "FEES" or ln == "CREDIT/FEE":
+                fee_key = f"GENERIC_FEE_{pn}_{p_val}"
+                if fee_key in seen_fees:
+                    continue
+                seen_fees.add(fee_key)
+                fees.append(item)
+            else:
+                members.append(item)
+                
+    # Return members first, then fees
+    return members + fees
 
 def format_date_clean(val: Optional[str]) -> Optional[str]:
     """
@@ -482,22 +557,71 @@ def extract_text_from_pdf_ocr(pdf_path: str) -> str:
 
 def extract_text_from_pdf_improved(pdf_path: str) -> str:
     """
-    Extract text content from a PDF file using pdfplumber (better quality)
-    with a fallback to PyMuPDF if pdfplumber yields insufficient results.
+    Extract text content from a PDF file using pdfplumber with enhanced layout preservation
+    (table-aware) and falling back to PyMuPDF if needed.
     """
     try:
         text: str = ""
-        with pdfplumber.open(pdf_path) as pdf:
-            print(f"  Total pages: {len(pdf.pages)}")
-            for page_num, page in enumerate(pdf.pages, 1):
-                page_text = page.extract_text()
-                # Always add page markers even if text is empty to maintain chunk alignment
-                text = text + f"\n[[PAGE_{page_num}]]\n"
-                if page_text:
-                    text = text + page_text + "\n"
+        pages_metadata = []
         
-        # If pdfplumber extracted very little for a non-empty file, try PyMuPDF
-        # (Humana files often have weird encodings that pdfplumber misses but fitz captures)
+        with pdfplumber.open(pdf_path) as pdf:
+            print(f"  [V3][INFO] Extractions started for: {os.path.basename(pdf_path)}")
+            print(f"  Total pages: {len(pdf.pages)}")
+            
+            for page_num, page in enumerate(pdf.pages, 1):
+                page_content = f"\n[[PAGE_{page_num}]]\n"
+                
+                # Extract tables with explicit settings
+                tables = page.extract_tables()
+                
+                if tables:
+                    table_bboxes = page.find_tables()
+                    
+                    # 1. Text above first table
+                    if table_bboxes:
+                        bbox = table_bboxes[0].bbox
+                        if bbox[1] > 0:
+                            top_area = page.crop((0, 0, page.width, bbox[1]))
+                            if top_area:
+                                top_text = top_area.extract_text(layout=True)
+                                if top_text: page_content += top_text + "\n\n"
+                    
+                    # 2. Process each table
+                    for idx, (table, table_bbox) in enumerate(zip(tables, table_bboxes), 1):
+                        page_content += f"[TABLE_{idx}]\n"
+                        # Simple tab-separated formatting for LLM readability
+                        for row in table:
+                            clean_row = [" ".join(str(cell).split()) if cell else "" for cell in row]
+                            page_content += "\t".join(clean_row) + "\n"
+                        page_content += "\n"
+                        
+                        # Text between tables
+                        if idx < len(table_bboxes):
+                            curr_bbox = table_bbox.bbox
+                            next_bbox = table_bboxes[idx].bbox
+                            if next_bbox[1] > curr_bbox[3]:
+                                between_area = page.crop((0, curr_bbox[3], page.width, next_bbox[1]))
+                                if between_area:
+                                    between_text = between_area.extract_text(layout=True)
+                                    if between_text: page_content += between_text + "\n\n"
+                    
+                    # 3. Text after last table
+                    if table_bboxes:
+                        last_bbox = table_bboxes[-1].bbox
+                        if last_bbox[3] < page.height:
+                            bottom_area = page.crop((0, last_bbox[3], page.width, page.height))
+                            if bottom_area:
+                                bottom_text = bottom_area.extract_text(layout=True)
+                                if bottom_text: page_content += bottom_text + "\n"
+                else:
+                    # Fallback to standard layout extraction if no tables found
+                    page_text = page.extract_text(layout=True)
+                    if page_text:
+                        page_content += page_text + "\n"
+                
+                text += page_content
+        
+        # If pdfplumber yielded very little, try PyMuPDF
         if len(text.strip()) < 500 and len(text.strip()) > 0:
             print(f"  [INFO] pdfplumber yielded low character count ({len(text)}). Trying PyMuPDF fallback...")
             fitz_text = ""
@@ -513,12 +637,10 @@ def extract_text_from_pdf_improved(pdf_path: str) -> str:
             except Exception as fe:
                 print(f"  [WARN] PyMuPDF fallback also failed: {fe}")
 
-        # Show preview of extracted text
         if text.strip():
             print(f"  [OK] Extracted {len(text)} characters")
-            print(f"  Preview (first 500 chars):\n{text[:500]}\n")
         else:
-            print(f"  [WARNING] Warning: No text extracted from {pdf_path}")
+            print(f"  [WARNING] No text extracted from {pdf_path}")
             
         return text
     except Exception as e:
@@ -914,19 +1036,22 @@ Extract data from the document text provided below.
         - `E7D` or "Employee & Three or More Dependents" → **EC**
         - `E8D` or "Employee & Four or More Dependents" → **EC**
         - `E9D` or "Employee & Five or More Dependents" → **EC**
-        - Single-letter codes only (when alone): `E` → **EE**, `S` → **ES**, `F` → **FAM**, `C` → **EC**
-    - **Audit Total (CRITICAL)**: Extract the absolute "Total Balance Due" or "Grand Total" from the document and map it to **AMOUNT_DUE** in the HEADER object and **INV_TOTAL** in the LINE_ITEMS. This is the only authoritative total — always use the final **Grand Total** value from the last summary page (NOT a sub-total or partial charge column).
+        - Single-letter codes only (when alone): `E` → **EE**, `S` → **ES**, `F` → **FAM**, `C` → **EC**, `E E` → **EE**
+    - **UHC TOTAL VALUE & FEES MANDATE (STRICT)**: 
+        - **GRAND TOTAL**: Extract the absolute "Total Balance Due", "Grand Total", or "Minimum Amount Due" from the document (e.g., `$4,969.83`). This value MUST be placed in `AMOUNT_DUE` in the HEADER and a standalone LINE_ITEM with `PLAN_NAME`: "REPORTED INVOICE TOTAL (FOR AUDIT)" and `FIRSTNAME`: "INVOICE TOTAL" and `CURRENT_PREMIUM` set to that exact value. 
+        - **NO MATH (CRITICAL)**: DO NOT add, subtract, or sum any values. Extract the Grand Total EXACTLY as it appears on the page. DO NOT compute a total yourself. If the page says `$4,969.83`, do NOT output `$4,994.83`.
+        - **AUTHORITATIVE SOURCE**: The only authoritative total is the final Grand Total value from the LAST summary page or the invoice footer. Place this value in `AMOUNT_DUE` in the HEADER.
+        - **GLOBAL FEES (DE-DUPLICATION MANDATORY)**: Extract named global charges like "Billing Fee", "Management Fee", "Packaged Savings Credit", or "Surplus Reimbursement" as individual line items. Use `PLAN_NAME`: [Exact Name], `PLAN_TYPE`: "FEES", and `LASTNAME`: "Credit/Fee".
+        - **FEE DE-DUPLICATION (CRITICAL)**: If a fee (like "Billing Fee" $25 or "Surplus Reimbursement") appears on multiple pages, you MUST extract it EXACTLY ONCE.
+        - **NO MISATTRIBUTION**: DO NOT assign a global fee to a person's name (e.g., "KITSON, DENNIS"). Fees are entity-level and should have `LASTNAME`: "Credit/Fee" and `FIRSTNAME`: null.
+        - **MANDATORY EXCEPTION**: Fees appearing ALONGSIDE summary totals are NOT sub-totals — you MUST still extract them.
     - **Plan Name and Code Capture (CRITICAL)**: Capture the FULL plan name AND any associated alphanumeric codes (e.g., `Dental Voluntary P 7330`, `Vision 100% Voluntary S102V`, `FL CHC NG ... EKQX`). Note that you MUST follow the PDF's exact spacing for these codes.
     - **UHC Multiline Aggregation**: Many UHC plan names wrap to multiple lines (e.g., `30/60/500/80 POS 25` on one line and `EKX6` on the next). You MUST aggregate all these fragments into a single `PLAN_NAME` string.
-    - **Row Context Awareness**: Some members (like those just before a "Total" line) may have their plan details split across lines. Ensure you capture the full context for every member row.
-    - **ID Handling**: Never use parts of the Member ID as a fallback for SSN.
-    - **Forbidden String**: In UHC, "IND AGE RATED" or "FAM AGE RATED" are often labels; do NOT let them override explicit coverage tiers like `EE` or `FAM`.
-    - **Audit Total Capture (CRITICAL)**: For UHC documents, use the **Grand Total** or **Total Amount Due** from the LAST summary page of the invoice as the AMOUNT_DUE. For multi-bill-group documents (with multiple "Bill Group" sections), the Grand Total on the final page is the ONLY authoritative total. DO NOT sum individual bill group sub-totals — use only the Grand Total line (e.g., `$5,095.75`).
-    - **PLAN_TYPE Identification**: Extract or infer the PLAN_TYPE from the plan name or section. 
-        - If "Dental" is in the plan name -> **DENTAL**
-        - If "Vision" is in the plan name -> **VISION**
-        - If "POS", "EPO", "PPO", "NHP", or "CHC" is in the plan name -> **MEDICAL**
-        - If "Life" or "AD&D" is in the name -> **LIFE** or **AD&D**
+    - **STRICT PLAN_TYPE MANDATE (UHC)**: Every member row MUST have a non-null `PLAN_TYPE`. You MUST strictly infer it from the plan name or description:
+        - If "POS", "EPO", "PPO", "NHP", "CHC", or "Health" is in the plan name -> **MEDICAL**
+        - If "Dental" -> **DENTAL**
+        - If "Vision" -> **VISION**
+        - If "Life" or "AD&D" -> **LIFE** or **AD&D**
     - **UHC Plan Labels (CRITICAL)**: Many UHC rows have sub-labels below the plan name (e.g., `Admin/Excess Loss`, `Max Claims Liability`, `Claims Liability`, `PPO Savings`, `Stop-Loss`). You MUST include these labels in the `PLAN_NAME` EXACTLY as they appear (e.g., `P5000i80LX21B - Max Claims Liability`). DO NOT omit words like 'Max' if they are present in the PDF.
     - **Fees and Adjustments (CRITICAL)**:
         - Capture standalone global fees or 'Prior Period' adjustments as regular rows with PLAN_NAME 'FEES' or 'ADJUSTMENTS'.
@@ -937,11 +1062,6 @@ Extract data from the document text provided below.
         - If a row has BOTH a current charge and a VALID adjustment (with code like ADD/TRM): Put the current charge in CURRENT_PREMIUM and the adjustment amount in ADJUSTMENT_PREMIUM.
         - If a row has ONLY an adjustment (starts with Period and Code, no current charge): Put the amount in ADJUSTMENT_PREMIUM and capture CURRENT_PREMIUM as 0 or null.
         - DO NOT put any final row `Total` column into `ADJUSTMENT_PREMIUM` or `CURRENT_PREMIUM`.
-        - **Member Adjustments (Separate Rows)**: If marked by "Current Adjustments" or "Retroactive Adjustment" below a member row, merge its amount into that member's `ADJUSTMENT_PREMIUM`.
-        - **Global Fees**: Capture standalone group-level fees (e.g., `Billing Fee`, `Management Fee`, `Packaged Savings Credit`) from the summary pages as separate line items. Set `LASTNAME` to the description and `CURRENT_PREMIUM` to the amount (use a negative value if it is a credit). 
-        - **MANDATORY EXCEPTION**: Even when a page contains summary totals (Subtotal Plan Charges, Grand Total), you MUST still extract any named fee/credit rows on that same page. These are NOT sub-totals.
-    - **STRICT PLAN_TYPE MANDATE (UHC)**: Every member row MUST have a non-null `PLAN_TYPE`. You MUST strictly infer it from the plan name or description. Use **MEDICAL** for names containing "POS", "EPO", "PPO", "NHP", "CHC", or "Health". Use **DENTAL** or **VISION** as appropriate. Do NOT leave this blank or NULL.
-    - **Audit Total Integrity**: Ensure every member listed in the detail table is captured. Include their full plan names (with labels), codes, AND plan types.
     - **UHC STRICT SPACING FIDELITY (HIGHEST PRIORITY)**: You MUST maintain 100% accuracy to the spacing in the source PDF for all plan names and codes. If the PDF shows a value like `P5000` (no space), you MUST NOT output it as `P 5000`. This rule overrides any previous UHC instructions or examples that mention a "mandatory space". For groups like MGSI where the file structure requires no space, this is CRITICAL for 100% accuracy.
     - **BCBS (BlueCross BlueShield)**: 
     - **Subscriber ID** or **Member ID** -> maps to `MEMBERID`.
@@ -1098,7 +1218,7 @@ Extract data from the document text provided below.
     - "Adjustment" / "Credit" / "Debit" -> `ADJUSTMENT_PREMIUM`
     - "Product" / "Plan Description" / "Coverage Type" -> `PLAN_NAME`
     - "Policy No." / "Policy Number" -> `POLICYID`
-    - "Amount Due" / "Invoiced Amount" / "Balance Due" / "Grand Total" / "Invoice Total" -> `INV_TOTAL`
+    - "Amount Due" / "Invoiced Amount" / "Balance Due" / "Grand Total" / "Invoice Total" -> `AMOUNT_DUE`
 3. **Multiline Value Aggregation**:
    - **CRITICAL**: Some columns (especially 'Product', 'Plan', or 'Address') span multiple lines vertically.
    - You MUST look at the lines immediately following a member row. If they contain hanging text (e.g., "LG GRP PLAN 49-" and "RC" below "BLUECARE NFQ"), AGGREGATE them into the appropriate field (e.g., `PLAN_NAME`) with a space.
@@ -1114,7 +1234,7 @@ Extract data from the document text provided below.
 - **IGNORE** all rows that are grand totals, invoice summaries, or sub-totals.
 - ONLY extract individual member/employee line-items.
 - If a row contains "Total", "Amount Due", or "Balance Due", skip it completely.
-- **UHC EXCEPTION (CRITICAL)**: For UHC documents, named fee/credit rows (such as "Packaged Savings Credit", "Billing Fee", "Management Fee") that appear on the last summary page ALONGSIDE grand total/sub-total rows MUST STILL BE EXTRACTED as individual line items. These are not sub-totals — they are explicit named charges or credits. Only skip rows whose description IS "Subtotal Plan Charges", "Grand Total", "Subtotal", or similar aggregate summary labels.
+- **UHC EXCEPTION (CRITICAL)**: For UHC documents, named fee/credit rows (such as "Packaged Savings Credit", "Billing Fee", "Management Fee") that appear on ANY page (including summary pages and detail pages) MUST STILL BE EXTRACTED as individual line items. These are not sub-totals — they are explicit named charges or credits. Only skip rows whose description IS "Subtotal Plan Charges", "Grand Total", "Subtotal", or similar aggregate summary labels.
 
 4. **Leading Zeros**: Preserve every single zero.
 5. **Aggressive Row Capture**: You MUST extract EVERY individual listed in the main table. Even if the name contains symbols (e.g., "#27411" or "“6078") or looks like garbage, extract it as-is. Do not skip any rows.
@@ -1226,10 +1346,9 @@ Extract data from the document text provided below.
    - **Definition**: Captures descriptors like "FAM AGE RATED" or "COMMUNITY RATED".
    - **RULE**: Use this to handle rating text without polluting `PLAN_TYPE`. Do not include in final output.
     
-8. **TOTAL VERIFICATION (CROSS-CHECK)**:
-    - **MANDATORY**: Sum all individual premiums you extracted. Compare this sum to the "Grand Total" or `INV_TOTAL` found on the page.
-    - If your sum (e.g. $50.35) is less than the Grand Total (e.g. $53.72), it means you MISSED a member like `Gacio Tomas`. You MUST re-scan the text (especially the horizontal space between columns) to find the missing person and include them.
-    - ALWAYS capture the "Grand Total" into the `INV_TOTAL` field of every row (it's document level metadata).
+8. **TOTAL VERIFICATION**:
+    - ALWAYS capture the "Grand Total" or "Amount Due" into the `AMOUNT_DUE` field of the `HEADER`. 
+    - This is document-level metadata.
    
 
 
@@ -1536,36 +1655,80 @@ def process_verified_text_file(txt_path: str, client: OpenAI, source_filename: O
     """
     STEP 2: Process verified TXT file and extract fields using LLM
     
-    Args:
-        txt_path: Path to verified TXT file
-        client: Groq client instance
-        source_filename: Original source filename for reference
-        
-    Returns:
-        Dictionary with extracted fields
+    This version supports page-by-page processing if the TXT file contains [[PAGE_X]] delimiters.
     """
     print(f"\n{'='*70}")
     print(f"STEP 2: PROCESSING VERIFIED TEXT")
     print(f"{'='*70}")
     print(f"[TXT] Reading verified text from: {txt_path}")
     
-    # Read verified text from file
     try:
         with open(txt_path, 'r', encoding='utf-8') as f:
             text = f.read()
             
-        # Apply noise cleaning (safe to run even on clean text)
         text = clean_ocr_noise(text)
-        
         print(f"  [OK] Read {len(text)} characters from verified file")
         
     except Exception as e:
         print(f"  [ERROR] Error reading text file {txt_path}: {e}")
         return {field: None for field in REQUIRED_FIELDS}
     
-    # Extract fields using LLM
-    extracted_data = extract_fields_with_llm(text, client, os.path.basename(txt_path))
-    
+    # Check for page delimiters
+    page_markers = re.findall(r'\[\[PAGE_(\d+)\]\]', text)
+    if page_markers:
+        print(f"  [V4] Detected {len(page_markers)} page markers. Processing page-by-page...")
+        # Split by markers, preserving the split content
+        parts = re.split(r'\[\[PAGE_\d+\]\]', text)
+        # Usually the first part is empty if it starts with a marker
+        if parts and not parts[0].strip():
+            parts.pop(0)
+            
+        final_header = {}
+        all_line_items = []
+        is_uhc = "UNITEDHEALTH" in text.upper() or "UHC" in text.upper()
+
+        for i, page_text in enumerate(parts):
+            if not page_text.strip(): continue
+            
+            page_num = page_markers[i] if i < len(page_markers) else i + 1
+            print(f"  [AI] Extracting from Page {page_num}...")
+            
+            # Simple UHC Summary Skip (similar to process_single_pdf)
+            # We still extract LINE_ITEMS because global fees like "Billing Fee" are often on these pages
+            if is_uhc and i > 0 and (("Summary" in page_text and "Description" in page_text) or ("Total Volume" in page_text)):
+                 print(f"    [V4] Page {page_num} looks like a UHC summary. Collecting LINE_ITEMS + HEADER.")
+                 page_data = extract_fields_with_llm(page_text, client, f"Page {page_num} (Summary/Fee Page)", mode="standard") or {}
+                 if "HEADER" in page_data: final_header.update({k: v for k, v in page_data["HEADER"].items() if v})
+                 if "LINE_ITEMS" in page_data: all_line_items.extend(page_data["LINE_ITEMS"])
+                 continue
+
+            page_data = extract_fields_with_llm(page_text, client, f"Page {page_num}", mode="standard") or {}
+            
+            # Merge Header
+            if "HEADER" in page_data:
+                final_header.update({k: v for k, v in page_data["HEADER"].items() if v})
+            
+            # Collect Line Items
+            if "LINE_ITEMS" in page_data:
+                all_line_items.extend(page_data["LINE_ITEMS"])
+
+        extracted_data = {"HEADER": final_header, "LINE_ITEMS": all_line_items}
+    else:
+        # Fallback to single block processing for legacy/custom files
+        print(f"  [V4] No page markers found. Processing as single block.")
+        extracted_data = extract_fields_with_llm(text, client, os.path.basename(txt_path))
+        is_uhc = "UNITEDHEALTH" in text.upper() or "UHC" in text.upper()
+
+    # [V4][UHC POST-PROCESS] Apply normalization
+    if "LINE_ITEMS" in extracted_data and extracted_data["LINE_ITEMS"]:
+        # Always normalize coverage if it looks like UHC codes
+        extracted_data["LINE_ITEMS"] = normalize_uhc_coverage(extracted_data["LINE_ITEMS"])
+        
+        # Strictly deduplicate fees if it's a UHC doc
+        if is_uhc:
+            print(f"  [V4][UHC] Detected UHC via content. Applying fee deduplication.")
+            extracted_data["LINE_ITEMS"] = deduplicate_uhc_fees(extracted_data["LINE_ITEMS"])
+
     # Add source filename
     if source_filename:
         extracted_data['SOURCE_FILE'] = source_filename
@@ -1889,6 +2052,11 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
     
     # [V4][COVERAGE NORMALIZE] Programmatic fix for UHC coverage tier mapping
     all_line_items = normalize_uhc_coverage(all_line_items)
+    
+    # [V4][STRICT FEE FILTER] Programmatic de-duplication of $25 billing fees
+    if is_uhc_invoice:
+        all_line_items = deduplicate_uhc_fees(all_line_items)
+        data["LINE_ITEMS"] = all_line_items
 
     return data
 
@@ -2221,9 +2389,9 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                                     break
                     
                     if matched_by_name_idx is not None:
-                        # 1. CRITICAL: Do NOT merge rows that represent TOTALS/SUMMARY rows.
-                        if check_total(item) or check_total(merged_items[matched_by_name_idx]):
-                            match_index = None # Do not match by name if one is a total
+                        # 1. CRITICAL: Do NOT merge a TOTAL/SUMMARY row with a member row.
+                        if check_total(item) != check_total(merged_items[matched_by_name_idx]):
+                            match_index = None # Only block if one is total and other is not
                         
                         # 2. DEDUPLICATION PRECEDENCE: Do NOT merge a row with a MEMBERID into a row WITHOUT one (or vice versa)
                         # if the premiums were likely different. This prevents summary totals on Page 1 from merging with members.
@@ -2537,7 +2705,9 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                      is_total = False
                 
                 is_adjustment = not is_total and (is_keyword_match(idx_p, adj_keywords) or \
-                                                  is_keyword_match(idx_l, adj_keywords))
+                                                  is_keyword_match(idx_l, adj_keywords) or \
+                                                  str(row.get("PLAN_TYPE")).upper() == "FEES" or \
+                                                  idx_l == "CREDIT/FEE")
                 
                 # Sharad Saxton Protection
                 is_sharad_with_id = (("SHARAD" in idx_f and "SAXTON" in idx_l) or
@@ -2681,12 +2851,14 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                     header_total = computed_from_billed
             
             effective_total = header_total
-            if combined_total > header_total + 0.05:
-                # If calculated sum is larger, the reported total was likely a sub-total
-                effective_total = combined_total
-            elif header_total == 0:
+            if header_total == 0:
                 # Fallback to LLM reported total or calculated sum
                 effective_total = llm_total_val if llm_total_val != 0 else combined_total
+            
+            # If combined_total (sum of individual rows) is significantly different from what the invoice claims (effective_total),
+            # we report it as a warning in logs, but we DO NOT override the authoritative total.
+            if effective_total > 0 and abs(combined_total - effective_total) > 0.05:
+                print(f"    [V3][AUDIT][WARNING] Sum of rows (${combined_total}) does NOT match Invoiced Total (${effective_total})")
             
             if effective_total != 0:
                 # Build row starting with header data
@@ -2713,8 +2885,8 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                 if reported_val > 0 and abs(combined_total - reported_val) > 0.05:
                     print(f"\n    [V4][AUDIT][WARNING] Total calculation discrepancy detected!")
             # Propagate the real invoice total (effective_total) to every row as INV_TOTAL
-            # so that shared_configs.py can use it for the UI card.
-            if effective_total != 0:
+            # ONLY if it was explicitly extracted as AMOUNT_DUE.
+            if effective_total != 0 and header_total > 0:
                 for r in (member_rows + adjustment_rows + final_total_rows):
                     r["INV_TOTAL"] = effective_total
 
