@@ -63,7 +63,7 @@ def should_trigger_refinement(extracted_data: Dict, raw_text: str) -> tuple:
         
     # Heuristic 2: Financial Reconciliation (Sum of items vs Total in Text)
     # Find total in text - using expanded list of common labels
-    total_labels = r'(?:AMOUNT DUE|AMOUNTDUE|BALANCEDUE|BALANCE DUE|TOTAL DUE|INVOICE TOTAL|GRAND TOTAL|GRANDTOTAL|TOTAL PREMIUM|TOTALCURRENTPREMIUM|CURRENT PREMIUM)'
+    total_labels = r'(?:AMOUNT DUE|AMOUNTDUE|BALANCEDUE|BALANCE DUE|TOTAL DUE|TOTAL AMOUNT DUE|INVOICE TOTAL|GRAND TOTAL|GRANDTOTAL|TOTAL PREMIUM|TOTALCURRENTPREMIUM|CURRENT PREMIUM|CURRENT PREMIUM DUE)'
     total_matches = re.findall(fr'{total_labels}\s*[:$]*\s*([0-9,]+\.[0-9]{2})', raw_text.upper())
     
     # [UNUM] Mirrored Total Check
@@ -80,7 +80,7 @@ def should_trigger_refinement(extracted_data: Dict, raw_text: str) -> tuple:
     combined_targets = []
     
     # Priority Tier 1: Strong indicators of the final payable amount
-    high_priority_labels = r'(?:AMOUNT DUE|AMOUNTDUE|BALANCEDUE|BALANCE DUE|INVOICED AMOUNT|TOTAL DUE)'
+    high_priority_labels = r'(?:AMOUNT DUE|AMOUNTDUE|BALANCEDUE|BALANCE DUE|TOTAL DUE|TOTAL AMOUNT DUE|INVOICED AMOUNT)'
     hp_matches = re.findall(fr'{high_priority_labels}\s*[:$]*\s*([0-9,]+\.[0-9]{2})', raw_text.upper())
     if hp_matches:
         combined_targets.extend([float(m.replace(',', '')) for m in hp_matches])
@@ -106,7 +106,16 @@ def should_trigger_refinement(extracted_data: Dict, raw_text: str) -> tuple:
             # We look for a total that is likely the 'Grand Total'.
             target_total = max(combined_targets)
             
-            extracted_sum = sum(float(item.get("CURRENT_PREMIUM", 0) or 0) for item in line_items)
+            # [V5] Refined financial trigger: 
+            # 1. If we found more money than the target, the target is likely a subtotal.
+            #    Do not refine unless the difference is tiny (rounding).
+            # 2. If we found less money than the target, we are likely missing rows.
+            #    Refine!
+            if extracted_sum > target_total:
+                buffer = max(1.0, extracted_sum * 0.01)
+                if extracted_sum - target_total > buffer:
+                    print(f"  [LEARNING][SAFEGUARD] Target total ${target_total:.2f} < Extracted Sum ${extracted_sum:.2f}. Likely a subtotal. Ignoring.")
+                    return False, 0.0, 0.0
             
             discrepancy = abs(target_total - extracted_sum)
             if discrepancy > 0.05: # Allow 5 cents for rounding variance

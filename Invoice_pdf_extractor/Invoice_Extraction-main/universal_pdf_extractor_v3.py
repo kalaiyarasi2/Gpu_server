@@ -256,39 +256,68 @@ def normalize_uhc_coverage(items: list) -> list:
 
 def format_date_clean(val: Optional[str]) -> Optional[str]:
     """
-    Standardize dates to M/D/YYYY format, stripping leading zeros.
-    Example: 01/02/2026 -> 1/2/2026
-    Also handles YYYYMM (202603 -> 3/1/2026) and MM/YYYY (03/2026 -> 3/1/2026).
+    Standardize dates to D/M/YYYY format, stripping leading zeros.
+    Example: 19/02/2026 -> 19/2/2026 (User Request: February 19, 2026 -> 19/2/2026)
+    Also handles YYYYMM (202603 -> 1/3/2026) and MM/YYYY (03/2026 -> 1/3/2026).
     """
     if not val or not str(val).strip() or str(val).lower() in ["n/a", "none"]:
         return val
         
     s = str(val).strip()
     
+    # Month name mapping
+    month_map = {
+        "january": "1", "february": "2", "march": "3", "april": "4",
+        "may": "5", "june": "6", "july": "7", "august": "8",
+        "september": "9", "october": "10", "november": "11", "december": "12",
+        "jan": "1", "feb": "2", "mar": "3", "apr": "4", "jun": "6",
+        "jul": "7", "aug": "8", "sep": "9", "oct": "10", "nov": "11", "dec": "12"
+    }
+
     # 1. Full Date Try: MM/DD/YYYY, MM/DD/YY, M/D/YY
     match = re.search(r'(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})', s)
     if match:
-        m, d, y = match.groups()
-        m_clean = str(int(m))
-        d_clean = str(int(d))
+        p1, p2, y = match.groups()
+        p1_int = int(p1)
+        p2_int = int(p2)
         y_clean = y if len(y) == 4 else ("20" + y)
-        return f"{m_clean}/{d_clean}/{y_clean}"
+        
+        # If first part > 12, it's already D/M/YYYY (Idempotency)
+        if p1_int > 12:
+             return f"{p1_int}/{p2_int}/{y_clean}"
+        # If second part > 12, it was M/D/YYYY -> convert to D/M/YYYY
+        if p2_int > 12:
+             return f"{p2_int}/{p1_int}/{y_clean}"
+        
+        # Ambiguous case (both <= 12): assume input was M/D/YYYY and convert to D/M/YYYY
+        # This part is NOT idempotent for days 1-12, so redundant calls must be avoided.
+        return f"{p2_int}/{p1_int}/{y_clean}"
+
+    # 2. Month Name Try: "February 19, 2026" or "Feb 19 2026"
+    month_pattern = r'([A-Za-z]+)\s+(\d{1,2})[,\s]+(\d{4})'
+    match_month = re.search(month_pattern, s)
+    if match_month:
+        month_name, d, y = match_month.groups()
+        month_num = month_map.get(month_name.lower())
+        if month_num:
+            d_clean = str(int(d))
+            return f"{d_clean}/{month_num}/{y}"
     
-    # 2. Year/Month Only Try: YYYYMM (e.g. 202603)
+    # 3. Year/Month Only Try: YYYYMM (e.g. 202603)
     match_yyyymm = re.search(r'^(\d{4})(\d{2})$', s)
     if match_yyyymm:
         y, m = match_yyyymm.groups()
         m_int = int(m)
         if 1 <= m_int <= 12:
-            return f"{m_int}/1/{y}"
+            return f"1/{m_int}/{y}"
             
-    # 3. Month/Year Try: MM/YYYY or MM-YYYY
+    # 4. Month/Year Try: MM/YYYY or MM-YYYY
     match_mmyyyy = re.search(r'(\d{1,2})[/-](\d{4})', s)
     if match_mmyyyy:
         m, y = match_mmyyyy.groups()
         m_int = int(m)
         if 1 <= m_int <= 12:
-            return f"{m_int}/1/{y}"
+            return f"1/{m_int}/{y}"
 
     return s
 
@@ -823,7 +852,7 @@ def extract_gis_header_direct(raw_text: str) -> dict:
     return header
 
 
-def extract_fields_with_llm(text: str, client: OpenAI, pdf_filename: str = "", mode: str = "standard") -> Dict:
+def extract_fields_with_llm(text: str, client: OpenAI, pdf_filename: str = "", mode: str = "standard", detected_carrier: Optional[str] = None) -> Dict:
 
     """
     Extract fields using OpenAI with enhanced 'Discovery' logic and mirrored text awareness
@@ -859,6 +888,8 @@ Extract data from the document text provided below.
 
 ### EXTRACTION MODE: {mode.upper()}
 {mode_instructions}
+
+{f'### CARRIER DETECTED: {detected_carrier.upper()} (PRIORITY)' if detected_carrier else ""}
 
 
 
@@ -1032,7 +1063,30 @@ Extract data from the document text provided below.
       - **COVERAGE TIER MAPPING**: "Emp"→**EE**, "Emp/Sp"→**ES**, "Emp/Ch"→**EC**, "Fam"→**FAM**.
       - **PLAN NAME SPLITTING**: Split full string on comma: `Anderson,TylerA` → LASTNAME=`Anderson`, FIRSTNAME=`TylerA`.
       - Each non-zero benefit MUST be a separate line item with the correct `PLAN_TYPE`.
-    - **Adjustment Table (GUARDIAN)**:
+    - **Mutual of Omaha**:
+    - **Identification**: Look for "Mutual of Omaha" in any header or page.
+    - **ID Handling**: Ignore "693399" and "7605" - these are footer/group codes, not member IDs.
+    - **Coverage Mapping (STRICT)**:
+        - `Participant` or `Ppt` -> **EE**
+        - `Spouse` or `Sps` -> **ES**
+        - `Dependent` or `Dep` or `Dep(s)` -> **EC**
+        - `Ppt & Sps` or `Ppt & Spouse` -> **ES**
+        - `Ppt & Dep(s)` or `Ppt & Child` -> **EC**
+        - `Ppt/Dep` -> **EC**
+        - `Family` or `Ppt & Fam` -> **ESC**
+    - **Column Mapping (CRITICAL)**:
+        - Map column `CURRENT` to `CURRENT_PREMIUM`.
+        - Map column `ADJUSTMENT` to `ADJUSTMENT_PREMIUM`.
+        - The member's final total is in the `NET` column (= CURRENT + ADJUSTMENT). You MUST extract BOTH component values.
+    - **Row Capture (STRICT)**:
+        - **Source**: Extract ONLY from tables explicitly labeled "**PARTICIPANT DETAIL**".
+        - **Comma-Name Rule (MANDATORY)**: You MUST only extract rows that have a specific individual's name in "**Lastname, Firstname**" format (containing a comma). 
+        - **SKIP ALL SUMMARIES**: If a row does not have a name with a comma, or if it shows a "Count" (e.g. 72) or "Volume" (e.g. 1,000,000), it is a summary row. **YOU MUST SKIP THESE ROWS.**
+        - **No Orphans**: Do NOT extract "ORPHAN" rows or rows without names. If you cannot find a name for the specific row, skip it.
+        - **Retroactive Changes**: These are ADJUSTMENTS. Map to `ADJUSTMENT_PREMIUM` for the member it follows.
+    - **Authoritative Total (MANDATORY)**: ONLY extract the absolute "TOTAL AMOUNT DUE" (e.g., `$9,379.56`) if it is explicitly present in the text (usually Page 3 or 5). Map it as a standalone LINE_ITEM with `PLAN_NAME`: "REPORTED INVOICE TOTAL (FOR AUDIT)" and `FIRSTNAME`: "INVOICE TOTAL". 
+    - **STRICT RULE ON TOTALS**: If the authoritative total (e.g. 9379.56) is NOT in the current document text chunk, DO NOT extract a total row. Do NOT calculate a sub-total for the chunk or use branch totals.
+- **Adjustment Table (GUARDIAN)**:
       - If you see **"New Premium"** and **"New Premium Adjustment"**:
         - `New Premium` (e.g., 2.50) -> `CURRENT_PREMIUM`.
         - `New Premium Adjustment` (e.g., 7.50) -> `ADJUSTMENT_PREMIUM`.
@@ -1626,6 +1680,13 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
     if is_uhc_invoice:
         print(f"  [V3][UHC] UnitedHealthcare invoice detected. Checking for summary pages to skip...")
 
+    # [V4][MOO] Mutual of Omaha Detection
+    is_moo_invoice = any("Mutual of Omaha" in p for p in pages)
+    global_carrier = None
+    if is_moo_invoice:
+        global_carrier = "Mutual of Omaha"
+        print(f"  [V4][MOO] Mutual of Omaha detected document-wide. Carrier context will be passed to all chunks.")
+
     # Unum Detection
     _unum_mirrored_signature = "ACIREMA FO YNAPMOC ECNARUSNI EFIL MUNU"
     _unum_normal_signature = "UNUM LIFE INSURANCE COMPANY OF AMERICA"
@@ -1719,11 +1780,11 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
         if is_skip_page:
             reason = "GIS" if is_gis_invoice else ("Humana" if is_humana_invoice else "UHC Summary")
             print(f"  [V3][THREAD] Chunk {i+1} is a {reason} page. Extracting header only.")
-            header_only_data = extract_fields_with_llm(page_text, client, f"{os.path.basename(pdf_path)}_page_{i+1}_header", mode="standard") or {}
+            header_only_data = extract_fields_with_llm(page_text, client, f"{os.path.basename(pdf_path)}_page_{i+1}_header", mode="standard", detected_carrier=global_carrier) or {}
             return {"index": i, "header": header_only_data.get("HEADER", {}), "items": [], "refinement_info": None}
         
         # Pass 1: Standard Mode (Horizontal Parser)
-        page_data = extract_fields_with_llm(page_text, client, f"{os.path.basename(pdf_path)}_page_{i+1}", mode="standard") or {}
+        page_data = extract_fields_with_llm(page_text, client, f"{os.path.basename(pdf_path)}_page_{i+1}", mode="standard", detected_carrier=global_carrier) or {}
         
         # Pass 2: Vertical Fallback
         if not page_data.get("LINE_ITEMS"):
@@ -1739,7 +1800,7 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
                     if v_pages and not v_pages[0].strip(): v_pages.pop(0)
                     if i < len(v_pages):
                         v_chunk_text = v_pages[i].strip()
-                        page_data = extract_fields_with_llm(v_chunk_text, client, f"{os.path.basename(pdf_path)}_page_{i+1}", mode="vertical") or {}
+                        page_data = extract_fields_with_llm(v_chunk_text, client, f"{os.path.basename(pdf_path)}_page_{i+1}", mode="vertical", detected_carrier=global_carrier) or {}
                 except Exception as e:
                     print(f"    -> [ERROR] Vertical fallback failed: {e}")
 
@@ -1748,7 +1809,7 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
         if should_refine:
             print(f"    -> [LEARNING] Refinement triggered for chunk {i+1}...")
             refinement_prompt = learning_engine.generate_refinement_prompt(page_data, page_text, target_total, current_sum)
-            page_data = extract_fields_with_llm(refinement_prompt, client, f"{os.path.basename(pdf_path)}_page_{i+1}_refinement", mode="standard") or {}
+            page_data = extract_fields_with_llm(refinement_prompt, client, f"{os.path.basename(pdf_path)}_page_{i+1}_refinement", mode="standard", detected_carrier=global_carrier) or {}
             
         return {
             "index": i, 
@@ -1777,7 +1838,16 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
         p_header = res["header"]
         for k, v in p_header.items():
             if v and str(v).lower() not in ["n/a", "none"]:
-                final_header[k] = v
+                # [V4][MOO] Prioritize the larger amount for financial fields (Grand Total vs Subtotal/Misc)
+                if k in ["AMOUNT_DUE", "TOTAL_BILLED"]:
+                    curr_val = to_float(final_header.get(k))
+                    new_val = to_float(v)
+                    if new_val > curr_val:
+                        final_header[k] = v
+                else:
+                    # For other fields (Date, Invoice #), keep the first non-null encounter (usually Page 1)
+                    if not final_header.get(k):
+                        final_header[k] = v
         items = res["items"]
         if items:
             all_line_items.extend(items)
@@ -1863,6 +1933,11 @@ def process_single_pdf_to_excel(pdf_path: str, output_excel: str):
     for field in REQUIRED_FIELDS:
         if field not in df.columns:
             df[field] = None
+            
+    # [V4][FIX] Force date columns to strings to prevent Excel auto-reformatting to US dates
+    for col in ["INV_DATE", "BILLING_PERIOD"]:
+        if col in df.columns:
+            df[col] = df[col].astype(str).replace(['None', 'nan', 'NaT'], None)
             
     # Reorder columns - STRICTLY use REQUIRED_FIELDS for Excel
     cols = ['SOURCE_FILE'] + REQUIRED_FIELDS
@@ -2422,9 +2497,10 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                         row["PLAN_TYPE"] = pn_raw
                 # ----------------------------------------------------------------------------
                 
-                # Clean Dates (M/D/YYYY format, strip leading zeros)
-                for f in ["INV_DATE", "BILLING_PERIOD"]:
-                    if row.get(f): row[f] = format_date_clean(row[f])
+                # --- CLEANING REMOVED ---
+                # Redundant calls to format_date_clean here were flipping dates back to M/D/YYYY.
+                # Dates are already cleaned once when the header is prepared above (line 2045-2046).
+                # -----------------------
                 # -------------------------------------------------------
                 # Remove internal fields that shouldn't be in Excel
                 for internal_field in ["PRICING_MODEL", "RELATIONSHIP"]:
@@ -2617,7 +2693,6 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                 row_report = {field: None for field in REQUIRED_FIELDS}
                 row_report.update(clean_header)
                 row_report["SOURCE_FILE"] = source_filename
-                
                 # Label based on whether it was explicitly reported or just calculated by us
                 # If we have a header total or llm reported total, it's REPORTED.
                 source_is_reported = (header_total > 0 or llm_total_val > 0)
@@ -2625,9 +2700,11 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                 row_report["PLAN_NAME"] = f"{label} (FOR AUDIT)"
                 row_report["CURRENT_PREMIUM"] = effective_total
                 
-                # Ensure date fields are formatted correctly if they were just added via update(clean_header)
-                for f in ["INV_DATE", "BILLING_PERIOD"]:
-                    if row_report.get(f): row_report[f] = format_date_clean(row_report[f])
+                # --- CLEANING REMOVED ---
+                # Redundant calls to format_date_clean here were flipping dates back to M/D/YYYY.
+                # Dates are already cleaned once when the header is prepared above (line 2045).
+                # for f in ["INV_DATE", "BILLING_PERIOD"]:
+                #     if row_report.get(f): row_report[f] = format_date_clean(row_report[f])
                 
                 final_total_rows.append(row_report)
                 
@@ -2703,6 +2780,11 @@ def process_step(txt_path: str, output_excel: str = "extracted_data.xlsx"):
     for field in REQUIRED_FIELDS:
         if field not in df.columns:
             df[field] = None
+            
+    # [V4][FIX] Force date columns to strings to prevent Excel auto-reformatting to US dates
+    for col in ["INV_DATE", "BILLING_PERIOD"]:
+        if col in df.columns:
+            df[col] = df[col].astype(str).replace(['None', 'nan', 'NaT', 'nan '], None)
             
     # Reorder columns - STRICTLY use REQUIRED_FIELDS for Excel
     cols = ['SOURCE_FILE'] + REQUIRED_FIELDS
@@ -2796,6 +2878,11 @@ def batch_process_step(txt_directory: str, output_excel: str = "extracted_data.x
     # Convert to DataFrame
     df = pd.DataFrame(all_data)
     
+    # [V4][FIX] Force date columns to strings to prevent Excel auto-reformatting to US dates
+    for col in ["INV_DATE", "BILLING_PERIOD"]:
+        if col in df.columns:
+            df[col] = df[col].astype(str).replace(['None', 'nan', 'NaT', 'nan '], None)
+            
     # Reorder columns
     cols = ['SOURCE_FILE'] + REQUIRED_FIELDS
     df = df[cols]
