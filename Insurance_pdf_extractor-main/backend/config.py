@@ -20,8 +20,19 @@ class Config:
     
     # OCR Settings
     OCR_DPI = 600  # Resolution for PDF to image conversion
+    OCR_PSM_MODE = 3  # Auto-layout without OSD
     OCR_ENGINE = 'vision'  # Options: 'vision', 'deepseek', 'tesseract', 'auto'
     FALLBACK_OCR = True  # Use fallback OCR if primary fails
+    OCR_CONTRAST = 1.7
+    OCR_SHARPNESS = 2.5
+    OCR_GRAYSCALE = True
+    OCR_BINARIZE = True
+    OCR_EDGE_ENHANCE = True
+    ENABLE_MORPHOLOGY_CLEANING = True
+    
+    # AI Model Settings
+    USE_VISION_EXTRACTION = False
+    VISION_MODEL = "gpt-4o"
     
     # AI Model Settings
     USE_LOCAL_MODELS = False  # Set to True to run models locally

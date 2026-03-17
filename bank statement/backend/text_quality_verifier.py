@@ -13,7 +13,7 @@ class TextQualityVerifier:
             'max_cid_count': 30,           # CID issues indicate unreadable digital text
             'max_noise_ratio': 0.25,       # Non-alphanumeric char ratio (tables have delimiters)
             'min_keywords': 3,             # Expect basic bank terms
-            'max_noisy_line_ratio': 0.20   # Tabular layouts can have symbol-heavy lines
+            'max_noisy_line_ratio': 0.40   # Tabular layouts can have symbol-heavy lines
         }
         
         self.critical_keywords = [

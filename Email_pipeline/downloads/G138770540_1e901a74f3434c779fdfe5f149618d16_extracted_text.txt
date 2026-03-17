@@ -1,0 +1,91 @@
+
+[[PAGE_1]]
+Billing Summary
+Original for recipient
+Microsoft Corporation (India) Private Limited Summary
+Shed No. 1.1 B situated at 23/5
+Delhi Mathura Road, Billing Profile 365 APPS
+Ballabhgarh,
+Invoice Number G138770540
+Haryana 121004, India
+GSTIN: 06AAACM5586C1ZL Invoice Date 06/02/2026
+PAN: AAACM5586C State of Destination and Code TN — 33
+CIN: U74899DL1988PTC032549
+Sold To Bill To Total Amount INR 4,849.80
+Cognet HR Solutions Pvt Ltd Cognet HR Solutions Pvt Ltd
+Due on 08/02/2026
+2Nd Floor, Karunaa Conquest 2Nd Floor, Karunaa Conquest
+7 MTH Road 7 MTH Road
+Questions on your bill? Visit https://aka.ms/invoice-billing
+Chennai Chennai
+TAMIL NADU TAMIL NADU
+600058 600058
+IN IN
+GSTIN/UIN No. 33AADCC0190K1ZW
+PAN: AADCC0190K
+Invoice for activity on 05/02/2026
+This invoice is for any subscription purchases, renewals, and recurring charges on the date indicated. The service period you are paying for is listed with
+each subscription below. Find more details about your bill at
+https://admin.microsoft.com/Adminportal/Home#/billoverview/invoice-list/G138770540
+Billing Summary
+Charges 4,110.00
+Subtotal 4,110.00
+Integrated Tax (18.00%) 739.80
+Total (including Tax) INR 4,849.80
+Your account has a credit card on file and there is no action for you to take. The card you have on file will be charged.
+Payment should only be made by Electronic Funds Transfer.
+Do not send any physical payment to any address on this invoice.
+Reverse Charge- No
+Regd. Office: Microsoft Corporation (India) Private Limited, 807, New Delhi House, Barakhamba Road, New Delhi -110001
+1/3
+
+[[PAGE_2]]
+Commercial Invoice
+Original for recipient
+Microsoft Corporation (India) Private Limited Summary
+Shed No. 1.1 B situated at 23/5
+Delhi Mathura Road, Billing Profile 365 APPS
+Ballabhgarh,
+Invoice Number G138770540
+Haryana 121004, India
+GSTIN: 06AAACM5586C1ZL Invoice Date 06/02/2026
+PAN: AAACM5586C State of Destination and Code TN — 33
+CIN: U74899DL1988PTC032549
+Sold To Bill To Total Amount INR 4,849.80
+Cognet HR Solutions Pvt Ltd Cognet HR Solutions Pvt Ltd
+Due on 08/02/2026
+2Nd Floor, Karunaa Conquest 2Nd Floor, Karunaa Conquest
+7 MTH Road 7 MTH Road
+Phone Number: 000 800 440 2038 (Mon - Fri, 9am-6pm)
+Chennai Chennai
+Web Support: https://aka.ms/Office365BusinessSupport
+TAMIL NADU TAMIL NADU
+600058 600058
+IN IN
+GSTIN/UIN No. 33AADCC0190K1ZW
+PAN: AADCC0190K
+Invoice for activity on 05/02/2026
+Section Summary
+Charges Tax Amount Total (including Tax)
+Section Name (INR) (INR) (INR)
+Cognet HR Solutions Pvt Ltd 4,110.00 739.80 4,849.80
+Total 4,849.80
+Details By Section
+Cognet HR Solutions Pvt Ltd
+Microsoft 365 Apps for business - One-Month commitment for monthly billing
+Total
+Purchases Charges/ (including
+Charge Start Date - Charge End Unit Price Credits Tax Amount Tax)
+Date (INR) Qty (INR) Integrated Tax (INR) (INR)
+05/02/2026-04/03/2026 822.00 5 4,110.00 18.00% 739.80 4,849.80
+HSN: 997331
+Reverse Charge- No
+Regd. Office: Microsoft Corporation (India) Private Limited, 807, New Delhi House, Barakhamba Road, New Delhi -110001
+2/3
+
+[[PAGE_3]]
+Payment Instructions:
+Your account has a credit card on file and there is no action for you to take. The card you have on file will be charged.
+Reverse Charge- No
+Regd. Office: Microsoft Corporation (India) Private Limited, 807, New Delhi House, Barakhamba Road, New Delhi -110001
+3/3

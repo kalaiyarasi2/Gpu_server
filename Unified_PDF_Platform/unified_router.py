@@ -54,9 +54,10 @@ INSURANCE_BACKEND_DIR = BASE_DIR.parent / "Insurance_pdf_extractor-main/backend"
 INVOICE_BACKEND_DIR = BASE_DIR.parent / "Invoice_pdf_extractor/Invoice_Extraction-main"
 GENERAL_INVOICE_BACKEND_DIR = BASE_DIR.parent / "invoice/backend"
 WORK_COMPENSATION_BACKEND_DIR = BASE_DIR.parent / "work_compenstaion/backend"
+BANK_STATEMENT_BACKEND_DIR = BASE_DIR.parent / "bank statement/backend"
 
 # Add backend dirs to sys.path early to allow module imports
-for d in [INSURANCE_BACKEND_DIR, WORK_COMPENSATION_BACKEND_DIR, GENERAL_INVOICE_BACKEND_DIR, INVOICE_BACKEND_DIR]:
+for d in [INSURANCE_BACKEND_DIR, WORK_COMPENSATION_BACKEND_DIR, GENERAL_INVOICE_BACKEND_DIR, INVOICE_BACKEND_DIR, BANK_STATEMENT_BACKEND_DIR]:
     if d.exists() and str(d) not in sys.path:
         sys.path.append(str(d))
 
@@ -81,16 +82,18 @@ INSURANCE_BACKEND_DIR = BASE_DIR.parent / "Insurance_pdf_extractor-main/backend"
 INVOICE_BACKEND_DIR = BASE_DIR.parent / "Invoice_pdf_extractor/Invoice_Extraction-main"
 GENERAL_INVOICE_BACKEND_DIR = BASE_DIR.parent / "invoice/backend"
 WORK_COMPENSATION_BACKEND_DIR = BASE_DIR.parent / "work_compenstaion/backend"
+BANK_STATEMENT_BACKEND_DIR = BASE_DIR.parent / "bank statement/backend"
 
-# Import Insurance extractor as module
+# Import Insurance extractor dynamically
+INSURANCE_MODULE_AVAILABLE = False
 try:
-    from Insurance_pdf_extractor_main.backend.chunked_extractor import ChunkedInsuranceExtractor
-    INSURANCE_MODULE_AVAILABLE = True
-    print("[OK] Insurance extractor module loaded successfully")
+    # First check if we can load it dynamically (most robust)
+    InsuranceClass = get_extractor_class(INSURANCE_BACKEND_DIR)
+    if InsuranceClass:
+        INSURANCE_MODULE_AVAILABLE = True
+        # print("[OK] Insurance extractor module loaded successfully")
 except Exception as e:
-    INSURANCE_MODULE_AVAILABLE = False
-    print(f"Warning: Could not import Insurance extractor module: {e}")
-    # print(f"   (Search path: {sys.path[:3]}...)")
+    print(f"Warning: Could not check Insurance extractor module: {e}")
     print("   Will fall back to subprocess method if needed.")
 
 # Configuration for paths
@@ -1018,7 +1021,19 @@ class UnifiedRouter:
             # but we usually prefer sticking to INVOICE if it's not explicitly a loss run.
             # However, for now, let's just make sure "Anthem...Inv" works.
         
-        # RULE F4: Explicit vendor invoice keywords in filename
+        # RULE F4: Bank statement filenames (common bank names + account/statement keywords)
+        bank_fn_kw = [
+            "chase.com", "chase bank", "bank of america", "wells fargo", "citibank",
+            "capital one", "pnc bank", "td bank", "us bank", "usbank",
+            "regions bank", "truist", "fifth third", "key bank", "keybank",
+            "huntington bank", "bank statement", "bankstatement",
+            "checking statement", "savings statement", "operating account"
+        ]
+        if any(kw in filename_lower for kw in bank_fn_kw):
+            print(f"[Pre-Classify] Bank statement filename → BANK_STATEMENT")
+            return "BANK_STATEMENT", "Filename bank keyword"
+
+        # RULE F5: Explicit vendor invoice keywords in filename
         vendor_fn_kw = ["internet", "subscription", "utility", "phone bill", "electricity"]
         if any(kw in filename_lower for kw in vendor_fn_kw):
             print("[Pre-Classify] Vendor invoice filename → invoice_poc_extractor")
@@ -1217,7 +1232,9 @@ class UnifiedRouter:
         meaningful_keywords = [
             "compensation", "insurance", "invoice", "premium", "claim", "policy",
             "payroll", "employee", "acord", "member", "billing", "workers",
-            "gstin", "cgst", "sgst", "loss run", "claimant", "subscription"
+            "gstin", "cgst", "sgst", "loss run", "claimant", "subscription",
+            "balance", "account", "deposit", "withdrawal", "statement",
+            "checking", "savings", "routing number", "transaction"
         ]
         has_meaningful_content = any(kw in text.lower() for kw in meaningful_keywords)
         is_noisy = file_ext == ".pdf" and (not text or clean_text_len < 50 or not has_meaningful_content)
@@ -1240,14 +1257,18 @@ CRITICAL RULES (apply in order, first match wins):
    NOTE: "Workers Compensation Loss Run" is INSURANCE_CLAIMS, NOT WORK_COMPENSATION.
 2. "Acord", "WC App", "Workers Comp Application" in filename -> WORK_COMPENSATION
 3. "Invoice", "Inv", "Bill", "Billing", "Statement" in filename -> INVOICE
+4. "Account", "chase.com", "Chase Bank", "Bank of America", "Wells Fargo", "Citibank",
+   "Operating Account", "Checking", "Savings" combined with bank/financial context -> BANK_STATEMENT
+   NOTE: "Operating Account" or any bank name (Chase, Wells Fargo, etc.) -> BANK_STATEMENT, NOT INVOICE.
+5. "Invoice", "Inv", "Bill", "Billing" in filename -> INVOICE
    NOTE: Even if an insurance carrier name (like Anthem) is present, if "Inv" or "Invoice" is also there, pick INVOICE.
-4. "Passport", "Driver License", "ID Card", "SSN" in filename -> IDENTIFICATION
-5. Any insurance CARRIER or TPA name (Accident Fund, CCMSI, BerkleyNet, KeyRisk, Travelers,
+6. "Passport", "Driver License", "ID Card", "SSN" in filename -> IDENTIFICATION
+7. Any insurance CARRIER or TPA name (Accident Fund, CCMSI, BerkleyNet, KeyRisk, Travelers,
    Zurich, CNA, AmTrust, Liberty Mutual, Markel, Stonetrust, FCBI, State Fund, Clear Springs,
    Chesapeake Employers, Berkshire Hathaway) paired with no invoice keywords -> INSURANCE_CLAIMS
 
 Return EXACTLY TWO lines:
-Line 1: INSURANCE_CLAIMS | WORK_COMPENSATION | INVOICE | invoice_poc_extractor | IDENTIFICATION
+Line 1: INSURANCE_CLAIMS | WORK_COMPENSATION | INVOICE | invoice_poc_extractor | IDENTIFICATION | BANK_STATEMENT
 Line 2: Carrier/vendor name or UNKNOWN
 
 OUTPUT:"""
@@ -1324,7 +1345,7 @@ PRIORITY TIEBREAKER RULES:
 - Claimant + date of loss + incurred amounts -> INSURANCE_CLAIMS
 
 Return EXACTLY TWO lines:
-Line 1: INSURANCE_CLAIMS | WORK_COMPENSATION | BENEFIT_INVOICE | VENDOR_INVOICE | IDENTIFICATION
+Line 1: INSURANCE_CLAIMS | WORK_COMPENSATION | BENEFIT_INVOICE | VENDOR_INVOICE | IDENTIFICATION | BANK_STATEMENT
 Line 2: Primary carrier, vendor, or company name (e.g., Berkshire Hathaway, Zoho, APL) or UNKNOWN
 
 - USE VENDOR_INVOICE for software (Avanquest, Zoho, Adobe), utilities, and SaaS.

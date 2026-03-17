@@ -116,3 +116,84 @@ Return JSON:
         )
         self.dynamic_schema = json.loads(response.choices[0].message.content)
         return self.dynamic_schema
+    def execute_extraction(self, full_text: str) -> List[Dict[str, Any]]:
+        """
+        Phase 4: Dynamic Extraction Execution
+        Uses the schema to guide row extraction from the text.
+        """
+        if not self.dynamic_schema:
+            raise ValueError("No dynamic schema generated")
+
+        all_transactions = []
+        
+        # Strategy: Segment text by discovered sections and extract rows
+        sections = self.discovered_structure.get("sections", [])
+        for section in sections:
+            # We focus on sections that likely contain transactions
+            section_name = section.get("name", "")
+            if any(k in section_name.lower() for k in ["transaction", "deposit", "credit", "debit", "withdrawal", "charge", "check"]):
+                
+                # Extract the raw text block for this section
+                start_re = section.get("start_marker", "")
+                end_re = section.get("end_marker", "")
+                
+                import re
+                try:
+                    start_match = re.search(start_re, full_text, flags=re.IGNORECASE | re.MULTILINE)
+                    if not start_match:
+                        continue
+                    
+                    start_pos = start_match.end()
+                    end_pos = len(full_text)
+                    
+                    end_match = re.search(end_re, full_text[start_pos:], flags=re.IGNORECASE | re.MULTILINE)
+                    if end_match:
+                        end_pos = start_pos + end_match.start()
+                    
+                    section_text = full_text[start_pos:end_pos].strip()
+                    if not section_text:
+                        continue
+                        
+                    # Use LLM to extract rows from this specific block using the schema
+                    section_mapping = [m for m in self.dynamic_schema["mappings"] if m["source_section"] == section_name]
+                    
+                    prompt = f"""Extract transactions from the following bank statement section text.
+                    
+SECTION NAME: {section_name}
+SECTION COLUMNS: {section.get("columns", [])}
+SCHEMA MAPPINGS: {json.dumps(section_mapping, indent=2)}
+
+SECTION TEXT:
+---
+{section_text}
+---
+
+TASK:
+Return each transaction row as a JSON object in a list.
+Use these field names: "date", "description", "amount", "check_no" (if present).
+Standardize:
+- amount: numeric (positive for deposits, negative for withdrawals/debits OR as per section context)
+- date: MM/DD
+- description: string
+
+Return JSON:
+{{
+  "transactions": [
+    {{ "date": "...", "description": "...", "amount": ..., "check_no": ... }}
+  ]
+}}
+"""
+                    response = self.client.chat.completions.create(
+                        model="gpt-4o",
+                        messages=[{"role": "user", "content": prompt}],
+                        response_format={"type": "json_object"},
+                        temperature=0.0
+                    )
+                    
+                    rows = json.loads(response.choices[0].message.content).get("transactions", [])
+                    all_transactions.extend(rows)
+                    
+                except Exception as e:
+                    print(f"   ⚠️ Error extracting section {section_name}: {e}")
+                    
+        return all_transactions

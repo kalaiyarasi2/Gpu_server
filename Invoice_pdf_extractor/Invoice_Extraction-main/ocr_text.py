@@ -349,4 +349,3 @@ class OCRPDFExtractor:
         page_text = response.choices[0].message.content or ""
         confidence = 0.99 if page_text.strip() else 0.0
         return page_text, confidence
-

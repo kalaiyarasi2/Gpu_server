@@ -90,7 +90,17 @@ class StatementExtractor:
 
         # 2a) Vision Recovery / Patching (for scanned or messy digital PDFs)
         try:
-            from vision_recovery import VisionRecoveryHandler
+            import importlib.util
+            
+            # Dynamically load the local vision_recovery module to avoid sys.path collisions
+            # (unified_router.py prepends multiple backend dirs to sys.path which can cause
+            # the wrong vision_recovery.py to be imported)
+            vision_ext_path = Path(__file__).parent / "vision_recovery.py"
+            spec = importlib.util.spec_from_file_location("local_vision_recovery", vision_ext_path)
+            local_vr = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(local_vr)
+            VisionRecoveryHandler = local_vr.VisionRecoveryHandler
+            
             from openai import OpenAI
             
             client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -108,6 +118,7 @@ class StatementExtractor:
             print(f"   ⚠️ Vision Recovery skipped: {e}")
 
         # 2b) Document Intelligence (Phase 2: Structural Discovery & Phase 3: Dynamic Schema)
+        intel_manager = None
         try:
             from dynamic_extraction_prototype import DynamicExtractionManager
             from openai import OpenAI
@@ -164,13 +175,29 @@ class StatementExtractor:
                 expected_dep = self._extract_expected_count(text, r"Zero\s+Balance\s+Transfers\s+(?P<count>\d+)\s+transactions")
                 expected_ach = self._extract_expected_count(text, r"ACH\s+Debits\s+(?P<count>\d+)\s+transactions")
 
-                dep_ok = (expected_dep is None and len(coord_deposits) > 0) or (
-                    expected_dep is not None and len(coord_deposits) == expected_dep
-                )
-                # coord_debits can be either ACH-only (PNC) or charges/debits (Zions)
-                deb_ok = (expected_ach is None and len(coord_debits) > 0) or (
-                    expected_ach is not None and len(coord_debits) == expected_ach
-                )
+                # Check if text-based parsing already found good data with descriptions
+                text_deps_have_desc = any(d.get("description") for d in deposits)
+                text_debs_have_desc = any(d.get("description") for d in debits)
+
+                # Coordinate data should only override text-based results if:
+                # 1) Expected count is known and coordinate matches it exactly, OR
+                # 2) Text parser found nothing but coordinates found something, OR
+                # 3) Coordinate found strictly more rows AND text data lacks descriptions
+                dep_ok = False
+                if expected_dep is not None and len(coord_deposits) == expected_dep:
+                    dep_ok = True
+                elif len(deposits) == 0 and len(coord_deposits) > 0:
+                    dep_ok = True
+                elif not text_deps_have_desc and len(coord_deposits) > len(deposits):
+                    dep_ok = True
+
+                deb_ok = False
+                if expected_ach is not None and len(coord_debits) == expected_ach:
+                    deb_ok = True
+                elif len(debits) == 0 and len(coord_debits) > 0:
+                    deb_ok = True
+                elif not text_debs_have_desc and len(coord_debits) > len(debits):
+                    deb_ok = True
 
                 if dep_ok:
                     deposits = coord_deposits
@@ -197,6 +224,46 @@ class StatementExtractor:
         # 3) Finalize data: Deduplication and Sorting
         deposits = self._finalize_deposits(deposits)
         debits = self._finalize_debits(debits)
+
+        # 3b) Adaptive Extraction Fallback
+        # If we still have no transactions but discovered a dynamic schema, try adaptive extraction
+        if not deposits and not debits and getattr(self, "dynamic_schema", None) and intel_manager:
+            try:
+                print("⚡ Triggering Adaptive Extraction Fallback...")
+                adaptive_txs = intel_manager.execute_extraction(text)
+                
+                if adaptive_txs:
+                    for tx in adaptive_txs:
+                        amt = tx.get("amount", 0)
+                        # Categorize based on amount sign or section context (handled by LLM standardized output)
+                        if amt > 0:
+                            deposits.append(tx)
+                        elif amt < 0:
+                            # Normalize debits to positive for internal format
+                            tx["amount"] = abs(amt)
+                            debits.append(tx)
+                        else:
+                            # If zero, look at description or check_no
+                            if tx.get("check_no"):
+                                debits.append(tx)
+                            else:
+                                deposits.append(tx)
+                                
+                    extraction_method = f"{extraction_method} + adaptive-execution"
+                    # Re-finalize
+                    deposits = self._finalize_deposits(deposits)
+                    debits = self._finalize_debits(debits)
+                    print(f"   ✓ Adaptive extraction recovered {len(deposits)} deposits and {len(debits)} debits.")
+                else:
+                    print("   ℹ️ Adaptive extraction returned no transactions.")
+            except Exception as e:
+                print(f"   ⚠️ Adaptive Extraction Fallback failed: {e}")
+                import traceback
+                traceback.print_exc()
+        elif not deposits and not debits:
+            print(f"   ℹ️ Skipping Adaptive Fallback: has_schema={bool(getattr(self, 'dynamic_schema', None))}, has_manager={bool(intel_manager)}")
+
+
 
         # 4) session output dir
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:20]
@@ -553,7 +620,13 @@ class StatementExtractor:
                     txt = line_text(toks).lower()
                     if "zero balance transfers" in txt and "transactions" in txt:
                         deposits_anchor_y = y
+                    # Chase format: "Deposits and Credits" as section header
+                    if deposits_anchor_y is None and "deposits and credits" in txt and "summary" not in txt:
+                        deposits_anchor_y = y
                     if "ach debits" in txt and "transactions" in txt:
+                        ach_anchor_y = y
+                    # Chase format: "Withdrawals and Debits" as section header
+                    if ach_anchor_y is None and "withdrawals and debits" in txt and "summary" not in txt:
                         ach_anchor_y = y
 
                 # Learn amount column x positions from nearby header lines if present
@@ -578,19 +651,32 @@ class StatementExtractor:
                     toks = retokenize_line_chars(line)
                     txt = line_text(toks).lower()
                     if deposits_anchor_y is not None and y > deposits_anchor_y:
-                        if "continued" in txt and "next page" in txt:
+                        if ("continued" in txt and "next page" in txt):
                             deposits_anchor_y = None
+                        # Chase/generic: stop deposits at withdrawals/debits/total/daily balance
+                        elif re.search(r'\b(withdrawals and debits|checks paid|daily balance)\b', txt):
+                            deposits_anchor_y = None
+                            # Check if this is the withdrawals header — set ach anchor
+                            if 'withdrawals and debits' in txt:
+                                ach_anchor_y = y
+                        elif txt.strip().startswith('total') and re.search(r'\$[\d,]+\.\d{2}', txt):
+                            pass  # Skip total lines
                         else:
                             row = parse_date_amount_desc_from_line(toks, amount_x0=deposits_amount_x0)
                             if row and row.get("amount") is not None:
-                                # Ignore ledger balance / summary zones by requiring description or being below deposit anchor
+                                # Ignore ledger balance / summary zones
                                 if "ledger" in txt or "balance" in txt:
                                     continue
                                 deposits.append(row)
 
                     if ach_anchor_y is not None and y > ach_anchor_y:
-                        if "continued" in txt and "next page" in txt:
+                        if ("continued" in txt and "next page" in txt):
                             ach_anchor_y = None
+                        # Chase/generic: stop debits at daily balance/checks paid
+                        elif re.search(r'\b(daily balance|checks paid)\b', txt) and 'withdrawals' not in txt:
+                            ach_anchor_y = None
+                        elif txt.strip().startswith('total') and re.search(r'\$[\d,]+\.\d{2}', txt):
+                            pass  # Skip total lines
                         else:
                             row = parse_date_amount_from_line(toks, amount_x0=ach_amount_x0)
                             if row and row.get("amount") is not None:
@@ -875,6 +961,17 @@ class StatementExtractor:
         if m:
             period_start, period_end = m.group(1), m.group(2)
 
+        # Chase format: "January 01, 2026 through January 30, 2026"
+        if not period_start:
+            month_names = r"(?:January|February|March|April|May|June|July|August|September|October|November|December)"
+            m = re.search(
+                rf"({month_names}\s+\d{{1,2}},\s+\d{{4}})\s+through\s+({month_names}\s+\d{{1,2}},\s+\d{{4}})",
+                text,
+                flags=re.IGNORECASE,
+            )
+            if m:
+                period_start, period_end = m.group(1), m.group(2)
+
         return {"account_number": account_number, "period_start": period_start, "period_end": period_end}
 
     def _extract_block(self, text: str, start_marker_re: str, end_marker_res: List[str]) -> str:
@@ -895,6 +992,10 @@ class StatementExtractor:
         # Sample anchor: "Zero Balance Transfers 20 transactions for a total of $..."
         m = re.search(r"Zero\s+Balance\s+Transfers\s+\d+\s+transactions\b", text, flags=re.IGNORECASE)
         if not m:
+            # Try Chase format before generic
+            chase_result = self._parse_deposits_credits_chase(text)
+            if chase_result:
+                return chase_result
             return self._parse_deposits_credits_generic(text)
         tail = text[m.start():]
         # Some extraction layouts place the continuation "Transaction description" list after the "Checks..." header.
@@ -979,6 +1080,22 @@ class StatementExtractor:
         ):
             return self._parse_charges_debits_generic(text)
 
+        # Chase format: "Withdrawals and Debits" section
+        is_chase = False
+        if not re.search(r"\bACH\s+Debits\b", text, flags=re.IGNORECASE) and re.search(
+            r"\bWithdrawals\s+and\s+Debits\b", text, flags=re.IGNORECASE
+        ):
+            is_chase = True
+            chase_debits = self._parse_debits_chase(text)
+            if chase_debits:
+                debits.extend(chase_debits)
+        
+        # Chase checks: "Checks Paid" section
+        if is_chase or re.search(r"\bChecks\s+Paid\b", text, flags=re.IGNORECASE):
+            chase_checks = self._parse_checks_paid_chase(text)
+            if chase_checks:
+                debits.extend(chase_checks)
+
         # A) ACH Debits transaction list (no check number).
         # Some extracts split the Date and Amount columns; we pair by order.
         ach_block = self._extract_block(text, r"\bACH\s+Debits\b", [r"\bCheck\s+and\s+Substitute\s+Check\s+Summary\b", r"\bMember\s+FDIC\b"])
@@ -1012,6 +1129,174 @@ class StatementExtractor:
             if me:
                 end_idx = min(end_idx, me.start())
         return tail[:end_idx]
+
+    def _parse_deposits_credits_chase(self, text: str) -> List[Dict[str, Any]]:
+        """
+        Parse Chase-format deposits:
+          Deposits and Credits
+          Ledger    Description                                 Amount
+          Date
+          01/08     Online Transfer From Chk ...5856 ...        $44,541.86
+          01/08     Online Transfer From Chk ...5856 ...        1,540.81
+        Multi-line descriptions (continuation lines without date) are merged.
+        """
+        # Anchor to the detail header (on its own line) to avoid the summary table
+        block = self._extract_section(
+            text,
+            r"(?m)^[ \t]*Deposits\s+and\s+Credits[ \t]*$",
+            [r"(?m)^[ \t]*Withdrawals\s+and\s+Debits", r"(?m)^[ \t]*Checks\s+Paid", r"(?m)^[ \t]*Daily\s+Balance"],
+        )
+        if not block:
+            return []
+        lines = [ln.strip() for ln in block.splitlines() if ln.strip()]
+
+        out: List[Dict[str, Any]] = []
+        # Chase row: MM/DD  description text  amount (possibly with $ or without)
+        # We allow whitespace after the amount at end of line.
+        row_re = re.compile(
+            r"^(?P<date>\d{2}/\d{2})\s+(?P<desc>.+?)\s+\$?(?P<amt>\d[\d,]*\.\d{2})\s*$"
+        )
+        current: Optional[Dict[str, Any]] = None
+        for ln in lines:
+            # Skip header lines
+            if re.match(r"^(Ledger|Date|Deposits\s+and\s+Credits)\b", ln, flags=re.IGNORECASE):
+                continue
+            # Skip total lines
+            if re.match(r"^Total\b", ln, flags=re.IGNORECASE):
+                continue
+            # Skip page footer lines
+            if re.search(r"Page\s+\d+\s+of\s+\d+", ln, flags=re.IGNORECASE):
+                continue
+            # Skip disclaimer/fine print lines
+            if re.match(r"^\*\s", ln) or re.search(r"Annual\s+Percentage\s+Yield", ln, flags=re.IGNORECASE):
+                continue
+            if re.search(r"Please\s+examine\s+this\s+statement", ln, flags=re.IGNORECASE):
+                continue
+            if re.search(r"(subject\s+to|notify\s+us|mailing\s+or|availability)", ln, flags=re.IGNORECASE):
+                continue
+            # Skip (continued) header
+            if re.search(r"\(continued\)", ln, flags=re.IGNORECASE):
+                continue
+            # Account/period headers on continuation pages
+            if re.search(r"Account\s+Number:", ln, flags=re.IGNORECASE):
+                continue
+            if re.search(r"\d{4}\s+through\s+", ln, flags=re.IGNORECASE):
+                continue
+
+            m = row_re.match(ln)
+            if m:
+                if current:
+                    current["description"] = current["description"].strip()
+                    out.append(current)
+                amt = self._parse_amount(m.group("amt"))
+                current = {"date": m.group("date"), "amount": amt, "description": m.group("desc").strip()}
+            else:
+                # Continuation line (no date prefix) — append to current description
+                if current:
+                    # Robustness: don't append if it looks like a new section or header
+                    if not any(h in ln.lower() for h in ("ledger date", "amount", "description")):
+                        current["description"] += " " + ln
+        if current:
+            current["description"] = current["description"].strip()
+            out.append(current)
+        return out
+
+    def _parse_debits_chase(self, text: str) -> List[Dict[str, Any]]:
+        """
+        Parse Chase-format debits:
+          Withdrawals and Debits
+          Ledger    Description                                 Amount
+          Date
+          01/05     Orig CO Name:Rainy Day Printi ...            $1.14
+        Multi-line descriptions (ACH details etc.) are merged.
+        """
+        # Anchor to the detail header (on its own line) to avoid the summary table
+        block = self._extract_section(
+            text,
+            r"(?m)^[ \t]*Withdrawals\s+and\s+Debits[ \t]*$",
+            [r"(?m)^[ \t]*Checks\s+Paid", r"(?m)^[ \t]*Daily\s+Balance", r"(?m)^[ \t]*Daily\s+Ending\s+Balance"],
+        )
+        if not block:
+            return []
+        lines = [ln.strip() for ln in block.splitlines() if ln.strip()]
+
+        out: List[Dict[str, Any]] = []
+        row_re = re.compile(
+            r"^(?P<date>\d{2}/\d{2})\s+(?P<desc>.+?)\s+\$?(?P<amt>\d[\d,]*\.\d{2})\s*$"
+        )
+        current: Optional[Dict[str, Any]] = None
+        for ln in lines:
+            # Skip headers
+            if re.match(r"^(Ledger|Date|Withdrawals\s+and\s+Debits)\b", ln, flags=re.IGNORECASE):
+                continue
+            if re.match(r"^Total\b", ln, flags=re.IGNORECASE):
+                continue
+            if re.search(r"Page\s+\d+\s+of\s+\d+", ln, flags=re.IGNORECASE):
+                continue
+            if re.search(r"\(continued\)", ln, flags=re.IGNORECASE):
+                continue
+            if re.search(r"Account\s+Number:", ln, flags=re.IGNORECASE):
+                continue
+            if re.search(r"\d{4}\s+through\s+", ln, flags=re.IGNORECASE):
+                continue
+
+            m = row_re.match(ln)
+            if m:
+                if current:
+                    current["description"] = current["description"].strip()
+                    out.append(current)
+                amt = self._parse_amount(m.group("amt"))
+                current = {
+                    "date": m.group("date"),
+                    "amount": abs(amt) if amt is not None else None,
+                    "check_no": None,
+                    "description": m.group("desc").strip(),
+                }
+            else:
+                # Continuation line
+                if current:
+                    if not any(h in ln.lower() for h in ("ledger date", "amount", "description")):
+                        current["description"] += " " + ln
+        if current:
+            current["description"] = current["description"].strip()
+            out.append(current)
+        return out
+
+    def _parse_checks_paid_chase(self, text: str) -> List[Dict[str, Any]]:
+        """
+        Parse Chase-format 'Checks Paid' section:
+          Checks Paid
+          Check No    Date    Amount
+          41936       08/06   $14,451.78
+        """
+        block = self._extract_section(
+            text,
+            r"(?m)^[ \t]*Checks\s+Paid[ \t]*$",
+            [r"(?m)^[ \t]*Daily\s+Balance", r"(?m)^[ \t]*Daily\s+Ending\s+Balance", r"(?m)^[ \t]*Summary\s+of", r"(?m)Page\s+\d+"],
+        )
+        if not block:
+            return []
+        lines = [ln.strip() for ln in block.splitlines() if ln.strip()]
+        
+        out: List[Dict[str, Any]] = []
+        # Entries may be columnar. Look for: num [optional *] date amount
+        # e.g. "41936 08/06 $14,451.78" or "1002* 01/15 100.00"
+        entry_re = re.compile(r"(?P<num>\d{3,})\*?\s+(?P<date>\d{2}/\d{2})\s+\$?(?P<amt>\d[\d,]*\.\d{2})")
+        
+        for ln in lines:
+            if re.match(r"^(Check|No|Date|Amount|Checks\s+Paid)\b", ln, flags=re.IGNORECASE):
+                continue
+            if re.match(r"^Total\b", ln, flags=re.IGNORECASE):
+                continue
+            
+            for m in entry_re.finditer(ln):
+                out.append({
+                    "date": m.group("date"),
+                    "amount": abs(self._parse_amount(m.group("amt")) or 0.0),
+                    "check_no": m.group("num"),
+                    "description": f"Check {m.group('num')}"
+                })
+        return out
 
     def _parse_deposits_credits_generic(self, text: str) -> List[Dict[str, Any]]:
         """

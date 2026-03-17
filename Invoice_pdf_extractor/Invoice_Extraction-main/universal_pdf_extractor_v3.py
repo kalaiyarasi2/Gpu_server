@@ -31,6 +31,7 @@ import threading
 import learning_engine
 import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor
+from ocr_text import OCRPDFExtractor
 
 
 
@@ -363,89 +364,15 @@ def extract_text_from_pdf_pymupdf(pdf_path: str, mode: str = "standard") -> str:
 
 def extract_text_from_pdf_ocr(pdf_path: str) -> str:
     """
-    Extract text content from a PDF file using OCR (Tesseract)
-    Renders PDF pages to images first, then applies OCR.
-    Now includes 'Optical Mirror Fix' to handle reversed text by flipping the image.
+    Extract text content from a PDF file using OCR (Standardized v3 layered fallback)
     """
     try:
-        text: str = ""
-        doc = fitz.open(pdf_path)
-        print(f"  [OCR] Total pages: {len(doc)}")
-        
-        for page_num in range(len(doc)):
-            print(f"  [OCR] Processing page {page_num + 1}/{len(doc)}...")
-            page = doc[page_num]
-            
-            # Detect Landscape
-            is_landscape = page.rect.width > page.rect.height
-            if is_landscape:
-                print(f"  [OCR][V3] Page {page_num + 1} is LANDSCAPE mode.")
-            
-            # Render page to image
-            zoom = 4.0 
-            mat = fitz.Matrix(zoom, zoom)
-            pix = page.get_pixmap(matrix=mat)
-            img = Image.open(io.BytesIO(pix.tobytes("png")))
-            
-            # Step 1: Pre-process image for better OCR accuracy
-            # Convert to grayscale and apply binary thresholding
-            # OCR Pre-processing
-            img = img.convert('L') # Grayscale
-            img = img.point(lambda x: 0 if x < 170 else 255, '1') # Binary Threshold
-            
-            # Use PSM 4 for landscape (single column of varying sizes), PSM 6 for portrait (uniform table)
-            # The BCBS document is portrait (vertical), so PSM 6 is better for table rows.
-            psm_mode = 6 
-            
-            # Run OCR
-            page_text = pytesseract.image_to_string(img, config=f'--psm {psm_mode} -c preserve_interword_spaces=1')
-            
-            # Step 2: Detect orientation/mirroring anomalies
-            # Use high-confidence normal keywords to score orientation
-            normal_keywords = ["invoice", "date", "description", "premium", "member", "blue", "shield", "total"]
-            def get_normal_score(txt: str) -> int:
-                count = 0
-                t = txt.lower()
-                for k in normal_keywords:
-                    if k in t: count += 1
-                return count
-
-            raw_score = get_normal_score(page_text)
-            # If we see mirrored patterns OR no normal text, it's an anomaly
-            is_anomaly = detect_reversed_text(page_text) or raw_score < 1
-            
-            if is_anomaly:
-                print(f"  [OCR][V3] Orientation anomaly detected on page {page_num + 1}. Attempting auto-correction...")
-                
-                # Option A: Flip Horizontal (Mirroring)
-                img_mirrored = img.transpose(Image.FLIP_LEFT_RIGHT)
-                text_mirrored = pytesseract.image_to_string(img_mirrored)
-                score_mirrored = get_normal_score(text_mirrored)
-                
-                # Option B: Rotate 180 (Upside Down)
-                img_rotated = img.rotate(180)
-                text_rotated = pytesseract.image_to_string(img_rotated)
-                score_rotated = get_normal_score(text_rotated)
-                
-                # Pick the winner based on keyword scoring
-                if score_mirrored > raw_score and score_mirrored >= score_rotated:
-                    print(f"  [OCR][V3] Page {page_num + 1} corrected via Flip H.")
-                    page_text = text_mirrored
-                elif score_rotated > raw_score:
-                    print(f"  [OCR][V3] Page {page_num + 1} corrected via Rotation 180.")
-                    page_text = text_rotated
-                else:
-                    print(f"  [OCR][V3] Page {page_num + 1} orientation could not be auto-corrected.")
-            else:
-                print(f"  [OCR][V3] Page {page_num + 1} orientation verified as normal.")
-            
-            # Always add page markers even if text is empty to maintain chunk alignment
-            text = text + f"\n[[PAGE_{page_num + 1}]]\n"
-            if page_text:
-                text = text + page_text + "\n"
-        
-        doc.close()
+        extractor = OCRPDFExtractor(pdf_path)
+        text, _ = extractor.extract(verbose=True)
         return text
+    except Exception as e:
+        print(f"  [ERROR] OCR Error: {e}")
+        return ""
     except Exception as e:
         print(f"  [ERROR] OCR Error: {e}")
         return ""

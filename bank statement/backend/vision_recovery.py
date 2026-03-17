@@ -140,8 +140,9 @@ class VisionRecoveryHandler:
                     
                     # Decisions based on OCR results
                     final_quality = verifier.page_quality(current_best_text)
-                    if final_quality.get("recommendation") == "ok" and current_best_score > 0.8:
-                        print(f"      ✓ OCR Recovery successful for Page {page_num} ({current_best_method}, Score: {current_best_score:.3f}). Skipping Vision.")
+                    if (final_quality.get("recommendation") == "ok" and current_best_score > 0.8) or current_best_score > 0.85:
+                        reason = "high score" if current_best_score > 0.85 else "recommendation ok"
+                        print(f"      ✓ OCR Recovery successful for Page {page_num} ({current_best_method}, Score: {current_best_score:.3f}, Reason: {reason}). Skipping Vision.")
                         header = f"\n{'='*80}\nPAGE {page_num} (RECOVERED via {current_best_method.upper()})\n{'='*80}\n\n"
                         page_text = header + current_best_text + "\n"
                     else:

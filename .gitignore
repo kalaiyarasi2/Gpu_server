@@ -14,3 +14,6 @@ outputs/
 
 unified_PDF_Platform/uploads/
 unified_PDF_Platform/unified_outputs
+
+monitor.log
+requests.db

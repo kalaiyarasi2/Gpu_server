@@ -187,14 +187,12 @@ class EnhancedInsuranceExtractor:
             use_vision = getattr(config, 'OCR_ENGINE', 'tesseract') == 'vision'
             
             if is_scanned:
-                if use_vision:
-                    print(f"👁️ SCANNED PDF DETECTED: Using GPT-4 Vision for HIGH PRECISION extraction")
-                    return self._extract_full_pdf_via_vision(pdf_path)
-                else:
-                    print(f"📸 SCANNED PDF DETECTED: Using Tesseract OCR fallback")
-                    from ocr_text import OCRPDFExtractor
-                    ocr_extractor = OCRPDFExtractor(pdf_path)
-                    return ocr_extractor.extract()
+                print(f"📸 SCANNED PDF DETECTED: Using Layered Extraction (OCR 600->300 -> Vision fallback)")
+                from ocr_text import OCRPDFExtractor
+                ocr_extractor = OCRPDFExtractor(pdf_path)
+                # Enforce native -> ocr (600-300) -> gpt vision flow
+                # ocr_extractor handles the layered fallback internally (600->300->vision)
+                return ocr_extractor.extract(engine='tesseract')
             else:
                 print(f"📄 DIGITAL PDF DETECTED: Using Hybrid Extraction (pdfplumber + pymupdf fallback)")
                 from pdf_plumber import extract_pdf_hybrid
