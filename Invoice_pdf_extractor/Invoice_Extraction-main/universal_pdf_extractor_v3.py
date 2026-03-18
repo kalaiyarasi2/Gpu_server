@@ -358,16 +358,16 @@ def format_date_clean(val: Optional[str]) -> Optional[str]:
         p2_int = int(p2)
         y_clean = y if len(y) == 4 else ("20" + y)
         
-        # If first part > 12, it's already D/M/YYYY (Idempotency)
-        if p1_int > 12:
-             return f"{p1_int}/{p2_int}/{y_clean}"
-        # If second part > 12, it was M/D/YYYY -> convert to D/M/YYYY
+        # If second part > 12, it's already M/D/YYYY (Idempotency)
         if p2_int > 12:
+             return f"{p1_int}/{p2_int}/{y_clean}"
+        # If first part > 12, it was D/M/YYYY -> convert to M/D/YYYY
+        if p1_int > 12:
              return f"{p2_int}/{p1_int}/{y_clean}"
         
-        # Ambiguous case (both <= 12): assume input was M/D/YYYY and convert to D/M/YYYY
-        # This part is NOT idempotent for days 1-12, so redundant calls must be avoided.
-        return f"{p2_int}/{p1_int}/{y_clean}"
+        # Ambiguous case (both <= 12): assume input was M/D/YYYY and keep it as M/D/YYYY
+        # This part is now idempotent for M/D/Y.
+        return f"{p1_int}/{p2_int}/{y_clean}"
 
     # 2. Month Name Try: "February 19, 2026" or "Feb 19 2026"
     month_pattern = r'([A-Za-z]+)\s+(\d{1,2})[,\s]+(\d{4})'
@@ -377,7 +377,7 @@ def format_date_clean(val: Optional[str]) -> Optional[str]:
         month_num = month_map.get(month_name.lower())
         if month_num:
             d_clean = str(int(d))
-            return f"{d_clean}/{month_num}/{y}"
+            return f"{month_num}/{d_clean}/{y}"
     
     # 3. Year/Month Only Try: YYYYMM (e.g. 202603)
     match_yyyymm = re.search(r'^(\d{4})(\d{2})$', s)
