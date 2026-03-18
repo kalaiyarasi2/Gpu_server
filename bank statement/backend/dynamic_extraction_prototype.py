@@ -238,9 +238,11 @@ STANDARDIZATION RULES:
 - amount: numeric (ONLY the transaction amount - the debit or credit value, NOT the running balance)
   - SIGN: {self.discovered_structure.get("currency_notes", "Standard")}. Deposits/Credits = Positive (+), Withdrawals/Debits = Negative (-).
   - BALANCE EXCLUSION: Do NOT use the Balance/Running Balance as the amount. The Balance is the cumulative account total AFTER the transaction.
-- running_balance: numeric or null. This is the account total AFTER this transaction.
-  - CRITICAL: You MUST provide this value for every row where it is visible. It is the definitive anchor for mathematical verification.
-  - RECONSTRUCTION: Look specifically for cents/decimal fragments (e.g. '.84', '.19') that appear in numeric blocks starting 30-50 lines after the dollar blocks. Merge them.
+- running_balance: numeric (MANDATORY). This is the account total AFTER this transaction (the far-right column).
+  - CRITICAL: You MUST provide this value for every single transaction row. It is the definitive anchor for our mathematical verification engine.
+  - RULE: If a line or row has multiple numbers, the one on the **FAR RIGHT** (the last one horizontally) is ALWAYS the `running_balance`.
+  - RECONSTRUCTION: In split-column layouts, the `running_balance` might appear as a decimal fragment (e.g., '.84') in a block of numbers 30-50 lines below the description. You MUST pair the Nth number in that fragment block with the Nth transaction.
+  - If you are absolutely uncertain, pick the number that seems most like a total (usually the largest or last). Never leave it null unless the entire column is blank.
 - date: MM/DD
 - description: full description string
 - check_no: physical check number only (3-6 digits).
