@@ -4,8 +4,37 @@ import base64
 import io
 from typing import List, Dict, Optional
 from PIL import Image
+from dotenv import load_dotenv
 
-from text_quality_verifier import TextQualityVerifier
+import importlib
+import importlib.util
+from pathlib import Path
+
+# Robust dynamic import of BankTextQualityVerifier to avoid collisions with 
+# other extractors in the same environment (e.g. Insurance, Work Comp).
+verifier_path = Path(__file__).parent / "text_quality_verifier.py"
+spec = importlib.util.spec_from_file_location("bank_statement_verifier_local", verifier_path)
+local_tqv = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(local_tqv)
+BankTextQualityVerifier = local_tqv.BankTextQualityVerifier
+
+# Load environment variables (Local first, then walk up to root if needed)
+local_env = Path(__file__).parent / ".env"
+root_env = Path(__file__).parent.parent.parent / ".env"
+
+if local_env.exists():
+    load_dotenv(dotenv_path=local_env)
+elif root_env.exists():
+    load_dotenv(dotenv_path=root_env)
+else:
+    load_dotenv() # Fallback to standard search
+
+# Import shared utilities from ocr_utils dynamically
+utils_path = Path(__file__).parent / "ocr_utils.py"
+utils_spec = importlib.util.spec_from_file_location("bank_statement_ocr_utils_vsn", utils_path)
+utils_mod = importlib.util.module_from_spec(utils_spec)
+utils_spec.loader.exec_module(utils_mod)
+robust_convert_pdf_to_images = utils_mod.robust_convert_pdf_to_images
 
 class VisionRecoveryHandler:
     def __init__(self, openai_client):
@@ -15,12 +44,12 @@ class VisionRecoveryHandler:
         """
         Identify pages where pdfplumber likely missed data.
         Uses both heuristic checks (CID, missing labels) and the
-        TextQualityVerifier to score each page.
+        BankTextQualityVerifier to score each page.
 
         Returns: List of page numbers (1-indexed) that need Vision patching.
         """
         pages_to_verify: List[int] = []
-        verifier = TextQualityVerifier()
+        verifier = BankTextQualityVerifier()
 
         for page in pages_metadata:
             text = page.get("text", "")
@@ -60,6 +89,7 @@ class VisionRecoveryHandler:
             # Quality-based triggers (from TextQualityVerifier) – cost-aware:
             # - 'full_vision': page is truly bad → always patch
             # - 'dpi_fallback': only patch when score is low AND noise/CID are high
+            # - 'missing_columns': table is truncated (Phase 2 fix)
             if recommendation == "full_vision":
                 print(
                     f"   ⚠️ Quality Verifier: Page {page_num} scored {score:.3f} "
@@ -75,6 +105,11 @@ class VisionRecoveryHandler:
                         f"cid={cid_count}, recommendation='{recommendation}' → patching."
                     )
                     needs_patch = True
+            
+            # New Phase 2: Missing column detection
+            if not needs_patch and verifier.detect_missing_columns(text):
+                print(f"   ⚠️ Health Check: Page {page_num} has truncated table (missing Amount column) → triggering Recovery.")
+                needs_patch = True
 
             if needs_patch:
                 pages_to_verify.append(page_num)
@@ -83,11 +118,9 @@ class VisionRecoveryHandler:
 
     def patch_text_with_vision(self, pdf_path: str, pages_metadata: List[Dict]) -> str:
         """
-        Tiered recovery strategy to reduce costs:
-        1. Identification: Identify problem pages.
-        2. Tier 1 (OCR 600 DPI): Try high-res OCR first.
-        3. Tier 2 (OCR 300 DPI): Try mid-res OCR if 600 fails quality check.
-        4. Tier 3 (GPT-4 Vision): Use Vision only if OCR quality is poor.
+        Streamlined recovery strategy:
+        1. Identification: Identify problem pages (CIF, missing columns, etc.)
+        2. Recovery: For problem pages, use the unified OCRPDFExtractor fallback sequence.
         """
         pages_to_verify = self.run_extraction_health_check(pages_metadata)
         
@@ -97,80 +130,74 @@ class VisionRecoveryHandler:
 
         print(f"🔄 Targeted Recovery: Processing {len(pages_to_verify)} problem pages...")
         
-        from pdf2image import convert_from_path
-        import pytesseract
-        verifier = TextQualityVerifier()
+        # Late Dynamic Import of OCRPDFExtractor to break circularity
+        ocr_path = Path(__file__).parent / "ocr_text.py"
+        spec = importlib.util.spec_from_file_location("bank_ocr_internal", str(ocr_path))
+        ocr_mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(ocr_mod)
         
+        OCRPDFExtractor = ocr_mod.OCRPDFExtractor
+        ocr_extractor = OCRPDFExtractor(pdf_path)
         patched_full_text = []
         
         for page in pages_metadata:
             page_num = page.get("page_number")
             page_text = page.get("text", "")
-            quality_rec = page.get("quality_recommendation")
-            quality_metrics = page.get("quality_metrics", {}) or {}
-            cid_count = quality_metrics.get("cid_count", page_text.count("(cid:"))
+            method = page.get("extraction_method", "").lower()
             
             if page_num in pages_to_verify:
+                # If the page was already extracted via Full Vision OCR in the first pass
+                # and still failed health check, we might want to try one last 'patch'
+                # or just accept that it's a very difficult page.
+                # To save cost, we avoid a second Full Vision pass.
+                if "vision" in method:
+                    print(f"   ℹ️ Page {page_num} already processed by Vision. Skipping redundant recovery.")
+                    patched_full_text.append(page_text)
+                    continue
+
                 try:
-                    # Tier 1 & 2: OCR Recovery (Lower Cost)
-                    # We try 600 DPI first as it's best for sharp text
-                    current_best_text = page_text
-                    current_best_method = "original"
-                    current_best_score = page.get("quality_score", 0.0)
+                    # Unified Recovery: Call OCRPDFExtractor for this specific page.
+                    # This will automatically handle 600 DPI -> 300 DPI -> GPT Vision.
+                    print(f"   🔍 Recovering Page {page_num} using unified OCR/Vision fallback...")
                     
-                    for dpi in [600, 300]:
-                        print(f"   🔍 Attempting OCR Recovery ({dpi} DPI) for Page {page_num}...")
-                        images = convert_from_path(str(pdf_path), first_page=page_num, last_page=page_num, dpi=dpi)
-                        if images:
-                            ocr_text = pytesseract.image_to_string(images[0])
-                            # Evaluate result quality
-                            quality = verifier.page_quality(ocr_text)
-                            score = quality.get("score", 0.0)
-                            print(f"      [DEBUG OCR] DPI {dpi} Score: {score:.3f} | Extraction length: {len(ocr_text)}")
-                            print(f"      [DEBUG OCR] Snippet: {repr(ocr_text[:150])}...")
-                            
-                            if score > current_best_score or score > 0.85:
-                                current_best_text = ocr_text
-                                current_best_score = score
-                                current_best_method = f"tesseract-{dpi}dpi"
-                                
-                                # If OCR is 'ok', we can skip further tiers
-                                if quality.get("recommendation") == "ok" and score > 0.9:
-                                    break
+                    # We render just this page
+                    # Note: We need a way to tell OCRPDFExtractor to only do one page or handle it here
+                    # To avoid re-opening the PDF many times, we can use images = robust_convert_pdf_to_images
+                    # But calling extract() is cleaner. We'll modify OCRPDFExtractor to accept first/last page maybe?
+                    # Or just use its existing logic but it might be overkill.
                     
-                    # Decisions based on OCR results
-                    final_quality = verifier.page_quality(current_best_text)
-                    if (final_quality.get("recommendation") == "ok" and current_best_score > 0.8) or current_best_score > 0.85:
-                        reason = "high score" if current_best_score > 0.85 else "recommendation ok"
-                        print(f"      ✓ OCR Recovery successful for Page {page_num} ({current_best_method}, Score: {current_best_score:.3f}, Reason: {reason}). Skipping Vision.")
-                        header = f"\n{'='*80}\nPAGE {page_num} (RECOVERED via {current_best_method.upper()})\n{'='*80}\n\n"
-                        page_text = header + current_best_text + "\n"
-                    else:
-                        # Tier 3: GPT-4 Vision (Last Resort)
-                        print(f"   👁️ OCR quality low (Score: {current_best_score:.3f}, Rec: {final_quality.get('recommendation', 'unknown')}). Falling back to GPT-4 Vision for Page {page_num}...")
-                        images = convert_from_path(str(pdf_path), first_page=page_num, last_page=page_num, dpi=300)
-                        if images:
-                            if quality_rec == "full_vision" or cid_count > 50:
-                                print(f"      👁️ Vision Re-OCR (full page) for Page {page_num}...")
-                                vision_full_text = self._get_full_vision_page_text(images[0])
-                                if vision_full_text.strip():
-                                    header = f"\n{'='*80}\nPAGE {page_num} (RECOVERED via VISION)\n{'='*80}\n\n"
-                                    page_text = header + vision_full_text + "\n"
-                                    print(f"         ✓ Replaced Page {page_num} content via Vision")
-                            else:
-                                print(f"      👁️ Vision Patching Page {page_num}...")
-                                vision_patch_text = self._get_vision_patch_for_page(images[0], page_text)
-                                if vision_patch_text:
-                                    patch_block = f"\n\n[VISION PATCH - PAGE {page_num}]\n{vision_patch_text}\n"
-                                    page_text += patch_block
-                                    print(f"         ✓ Patched Page {page_num} via Vision")
-                                    
+                    # Wait, OCRPDFExtractor.extract(dpi=600, first_page=page_num, last_page=page_num) would be better.
+                    # But OCRPDFExtractor.extract doesn't currently take first/last page.
+                    # Let's check OCRPDFExtractor.extract arguments again.
+                    # It calls robust_convert_pdf_to_images(self.pdf_path, dpi=dpi) which does the whole thing.
+                    
+                    # If quality was 'full_vision', we skip Tesseract and go straight to GPT-4 Vision
+                    # to ensure we don't get 'split-column' garbage.
+                    force_v = (page.get("quality_recommendation") == "full_vision")
+
+                    rec_text, rec_meta = ocr_extractor.extract(
+                        dpi=600, 
+                        verbose=False, 
+                        first_page=page_num, 
+                        last_page=page_num,
+                        force_vision=force_v
+                    )
+                    
+                    if rec_text.strip():
+                        # The rec_meta will contain the final extraction_method used (e.g., 'gpt-4-vision-fallback')
+                        final_method = rec_meta[0].get("extraction_method", "unknown")
+                        print(f"      ✓ Recovery successful for Page {page_num} via {final_method}.")
+                        
+                        header = f"\n{'='*80}\nPAGE {page_num} (RECOVERED via {final_method.upper()})\n{'='*80}\n\n"
+                        page_text = header + rec_text + "\n"
+                    
                 except Exception as e:
                     print(f"   ⚠️ Recovery failed for page {page_num}: {e}")
             
             patched_full_text.append(page_text)
             
         return "".join(patched_full_text)
+
 
     def _get_vision_patch_for_page(self, image: Image.Image, existing_text: str) -> str:
         """
@@ -183,18 +210,18 @@ The following text was already extracted from this page:
 {existing_text[:1200]}...
 ---
 
-Looking at the page image, identify any transaction rows or missing metadata (Account Number, Dates, Balances) that are MISSING from the above text.
-CRITICAL: Prioritize finding the **Check Number (`check_no`)** first for any individual check rows. 
+Looking at the page image, identify any transaction rows or missing metadata (Account Number, Dates, Debits, Credits, Balances) that are MISSING from the above text.
+CRITICAL: Prioritize finding the **Running Balance** for each transaction row.
 Rules:
-1. Locate the check number (usually 4-10 digits).
-2. For each check number, extract the corresponding Amount and Date.
+1. Locate the transaction (Date, Description, Amount).
+2. For each transaction, extract the corresponding 'Running Balance' from the rightmost column.
 3. Ensure the amount decimal point and digits are perfectly accurate.
-4. Do NOT include check numbers that are already present in the extracted text above.
+4. If a line is clipped on the right, use visual context to reconstruct digits.
 
 Return JSON of MISSING fields only:
 {{
   "missing_fields": [
-     {{"label": "Check Transaction", "check_no": "12345", "amount": "450.00", "date": "01/12"}},
+     {{"label": "Transaction row", "date": "01/12", "amount": "450.00", "running_balance": "12345.67", "description": "..."}},
      {{"label": "Account Number", "value": "XXXX-1234"}}
   ]
 }}
@@ -258,12 +285,20 @@ If NOTHING is missing, return {{"missing_fields": []}}.
             
             rows = []
             for f in missing:
-                if f.get("label") == "Check Transaction":
-                    chk = str(f.get("check_no", ""))
-                    amt = str(f.get("amount", ""))
-                    dt = str(f.get("date", ""))
-                    # Format as "[check_no] * [amount] [date]" so _parse_individual_check_summary can find it
+                label = f.get("label", "").lower()
+                if "check" in label:
+                    chk = str(f.get("check_no") or f.get("value") or "")
+                    amt = str(f.get("amount") or "")
+                    dt = str(f.get("date") or "")
+                    # Format as "[check_no] * [amount] [date]" 
                     rows.append(f"{chk} * {amt} {dt}")
+                elif "transaction" in label:
+                    dt = str(f.get("date") or "")
+                    amt = str(f.get("amount") or "")
+                    rb = str(f.get("running_balance") or "")
+                    desc = str(f.get("description") or "")
+                    # Format as "[date] [description] [amount] [running_balance]"
+                    rows.append(f"{dt} {desc} {amt} {rb}")
                 else:
                     rows.append(f"{f.get('label')}: {f.get('value')}")
             
@@ -283,7 +318,11 @@ If NOTHING is missing, return {{"missing_fields": []}}.
         import io as _io
         prompt = (
             "Extract ALL visible text from this bank statement page.\n"
-            "Preserve tabular layout exactly (Date, Amount, Description columns).\n"
+            "Preserve tabular layout exactly (Date, Amount, Description, Running Balance columns).\n"
+            "CRITICAL: Bank statements often have the 'Running Balance' column on the far right edge.\n"
+            "Ensure you capture these values completely. Do NOT truncate or skip digits near the right margin.\n"
+            "If a line has multiple currency values (e.g. '95.96    1,582.10'), ensure both are captured and separated by spaces.\n"
+            "Ensure descriptions are captured fully even if they are in a separate column block.\n"
             "Return ONLY the extracted text, no explanations."
         )
         try:

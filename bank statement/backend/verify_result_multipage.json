@@ -1,0 +1,658 @@
+{
+  "session_dir": "outputs\\statement_extraction_20260318_063231_0694_Bank_statement_(1)_pdf",
+  "extracted_text_file": "outputs\\statement_extraction_20260318_063231_0694_Bank_statement_(1)_pdf\\extracted_text.txt",
+  "json_file": "outputs\\statement_extraction_20260318_063231_0694_Bank_statement_(1)_pdf\\extracted_statement.json",
+  "excel_file": "outputs\\statement_extraction_20260318_063231_0694_Bank_statement_(1)_pdf\\extracted_statement.xlsx",
+  "verification_file": "outputs\\statement_extraction_20260318_063231_0694_Bank_statement_(1)_pdf\\verification_package.json",
+  "data": {
+    "metadata": {
+      "source_file": "Bank statement (1).pdf",
+      "extraction_date": "2026-03-18T06:31:43.901602",
+      "extraction_method": "pdfplumber + pymupdf_recovery + vision-recovery + dynamic-schema",
+      "rotated": false,
+      "account_number": null,
+      "period_start": null,
+      "period_end": null
+    },
+    "deposits_and_credits": [
+      {
+        "date": "02/02",
+        "description": "Deposit ACH AETNA AS01 TYPE: HCCLAIMPMT CO: AETNA AS01",
+        "amount": 95.96,
+        "check_no": null,
+        "running_balance": 1582.1,
+        "validation_fixed": true,
+        "validation_notes": "Corrected balance-as-amount error. Diff: 95.96"
+      },
+      {
+        "date": "02/02",
+        "description": "Deposit ACH MERCHANT BANKCD TYPE: DEPOSIT DATA: PPI BANKCARD DEP CO: MERCHANT BANKCD",
+        "amount": 100.0,
+        "check_no": null,
+        "running_balance": 1842.1,
+        "validation_fixed": true,
+        "validation_notes": "Corrected math discrepancy. Expected: 100.0"
+      },
+      {
+        "date": "02/03",
+        "description": "Deposit ACH MERCHANT BANKCD TYPE: DEPOSIT DATA: PPI BANKCARD DEP CO: MERCHANT BANKCD",
+        "amount": 214.0,
+        "check_no": null,
+        "running_balance": 1628.1,
+        "validation_fixed": true,
+        "validation_notes": "Corrected math discrepancy. Expected: 214.0"
+      },
+      {
+        "date": "02/03",
+        "description": "Deposit ACH McLaren Medicaid TYPE: HCCLAIMPMT CO: McLaren Medicaid",
+        "amount": 203.2,
+        "check_no": null,
+        "running_balance": 1831.3
+      },
+      {
+        "date": "02/04",
+        "description": "Deposit ACH BCBSM TYPE: HCCLAIMPMT CO: BCBSM",
+        "amount": 4467.19,
+        "check_no": null,
+        "running_balance": 1981.57,
+        "validation_fixed": true,
+        "validation_notes": "Corrected math discrepancy. Expected: 4467.19"
+      },
+      {
+        "date": "02/04",
+        "description": "Deposit ACH BCBSM TYPE: HCCLAIMPMT CO: BCBSM",
+        "amount": 1187.12,
+        "check_no": null,
+        "running_balance": 3168.69
+      },
+      {
+        "date": "02/04",
+        "description": "Deposit ACH WPS TYPE: HCCLAIMPMT CO: WPS DATA: WISCONSIN PHY SERV.",
+        "amount": 2231.84,
+        "check_no": null,
+        "running_balance": null
+      },
+      {
+        "date": "02/05",
+        "description": "Deposit ACH PHMBSFCLMS7794 TYPE: HCCLAIMPMT CO: PHMBSFCLMS7794",
+        "amount": 1633.56,
+        "check_no": null,
+        "running_balance": null
+      },
+      {
+        "date": "02/06",
+        "description": "Deposit ACH BCN CLAIMS TYPE: HCCLAIMPMT CO: BCN CLAIMS",
+        "amount": 1133.79,
+        "check_no": null,
+        "running_balance": null
+      },
+      {
+        "date": "02/06",
+        "description": "Deposit ACH BCN CLAIMS TYPE: HCCLAIMPMT CO: BCN CLAIMS",
+        "amount": 533.09,
+        "check_no": null,
+        "running_balance": null
+      },
+      {
+        "date": "02/06",
+        "description": "Deposit ACH MI MERIDIAN CLAI TYPE: HCCLAIMPMT CO: MI MERIDIAN CLAI",
+        "amount": 643.53,
+        "check_no": null,
+        "running_balance": null
+      },
+      {
+        "date": "02/06",
+        "description": "Deposit ACH MERCHANT BANKCD TYPE: DEPOSIT DATA: PPI BANKCARD DEP CO: MERCHANT BANKCD",
+        "amount": 823.07,
+        "check_no": null,
+        "running_balance": null
+      },
+      {
+        "date": "02/09",
+        "description": "Deposit ACH WPS TYPE: HCCLAIMPMT CO: WPS DATA: WISCONSIN PHY SERV.",
+        "amount": 1384.67,
+        "check_no": null,
+        "running_balance": null
+      },
+      {
+        "date": "02/09",
+        "description": "Deposit ACH AETNA ASO1 TYPE: HCCLAIMPMT CO: AETNA ASO1",
+        "amount": 1475.0,
+        "check_no": null,
+        "running_balance": null
+      },
+      {
+        "date": "02/11",
+        "description": "Deposit ACH BCBSM TYPE: HCCLAIMPMT CO: BCBSM",
+        "amount": 2000.79,
+        "check_no": null,
+        "running_balance": null
+      },
+      {
+        "date": "02/11",
+        "description": "Deposit ACH BCBSM TYPE: HCCLAIMPMT CO: BCBSM",
+        "amount": 2150.79,
+        "check_no": null,
+        "running_balance": null
+      },
+      {
+        "date": "02/12",
+        "description": "Deposit ACH AARP Supplementa TYPE: HCCLAIMPMT CO: AARP Supplementa",
+        "amount": 1982.84,
+        "check_no": null,
+        "running_balance": null
+      },
+      {
+        "date": "02/11",
+        "description": "Deposit ACH PRIORITY HEALTH TYPE: HCCLAIMPMT CO: PRIORITY HEALTH",
+        "amount": 2006.09,
+        "check_no": null,
+        "running_balance": null
+      },
+      {
+        "date": "02/13",
+        "description": "Deposit ACH McLaren Medicaid TYPE: HCCLAIMPMT CO: McLaren Medicaid",
+        "amount": 1544.01,
+        "check_no": null,
+        "running_balance": null
+      },
+      {
+        "date": "02/13",
+        "description": "Deposit ACH BCN CLAIMS TYPE: HCCLAIMPMT CO: BCN CLAIMS",
+        "amount": 1848.09,
+        "check_no": null,
+        "running_balance": null
+      },
+      {
+        "date": "02/13",
+        "description": "Deposit ACH BCN CLAIMS TYPE: HCCLAIMPMT CO: BCN CLAIMS",
+        "amount": 2063.09,
+        "check_no": null,
+        "running_balance": null
+      },
+      {
+        "date": "02/13",
+        "description": "Deposit ACH MERCHANT BANKCD TYPE: DEPOSIT DATA: PPI BANKCARD DEP CO: MERCHANT BANKCD",
+        "amount": 2425.39,
+        "check_no": null,
+        "running_balance": null
+      },
+      {
+        "date": "02/13",
+        "description": "Deposit ACH WPS TYPE: HCCLAIMPMT CO: WPS DATA: WISCONSIN PHY SERV.",
+        "amount": 2455.39,
+        "check_no": null,
+        "running_balance": null
+      },
+      {
+        "date": "02/17",
+        "description": "Deposit ACH TRUE Community C TYPE: eDeposit CO: TRUE Community C",
+        "amount": 2650.83,
+        "check_no": null,
+        "running_balance": null
+      },
+      {
+        "date": "02/17",
+        "description": "Deposit ACH MERCHANT BANKCD TYPE: DEPOSIT DATA: PPI BANKCARD DEP CO: MERCHANT BANKCD",
+        "amount": 2695.79,
+        "check_no": null,
+        "running_balance": null
+      },
+      {
+        "date": "02/17",
+        "description": "Deposit ACH MI MERIDIAN CLAI TYPE: HCCLAIMPMT CO: MI MERIDIAN CLAI",
+        "amount": 2755.44,
+        "check_no": null,
+        "running_balance": null
+      },
+      {
+        "date": "02/17",
+        "description": "Deposit ACH AETNA ASO1 TYPE: HCCLAIMPMT CO: AETNA ASO1",
+        "amount": 2846.17,
+        "check_no": null,
+        "running_balance": null
+      },
+      {
+        "date": "02/17",
+        "description": "Deposit ACH WPS TYPE: HCCLAIMPMT CO: WPS DATA: WISCONSIN PHY SERV.",
+        "amount": 2942.82,
+        "check_no": null,
+        "running_balance": null
+      },
+      {
+        "date": "02/18",
+        "description": "Deposit ACH MERCHANT BANKCD TYPE: DEPOSIT, DATA: PPI BANKCARD DEP CO: MERCHANT BANKCD",
+        "amount": 3040.09,
+        "check_no": null,
+        "running_balance": null
+      },
+      {
+        "date": "02/18",
+        "description": "Deposit ACH WPS TYPE: HCCLAIMPMT CO: WPS DATA: WISCONSIN PHY SERV.",
+        "amount": 3438.09,
+        "check_no": null,
+        "running_balance": null
+      },
+      {
+        "date": "02/18",
+        "description": "Deposit ACH BCBSM TYPE: HCCLAIMPMT CO: BCBSM",
+        "amount": 3589.39,
+        "check_no": null,
+        "running_balance": null
+      },
+      {
+        "date": "02/18",
+        "description": "Deposit ACH McLaren Medicaid TYPE: HCCLAIMPMT CO: McLaren Medicaid",
+        "amount": 853.14,
+        "check_no": null,
+        "running_balance": 4426.56,
+        "validation_fixed": true,
+        "validation_notes": "Corrected math discrepancy. Expected: 853.14"
+      },
+      {
+        "date": "02/18",
+        "description": "Deposit ACH BCBSM TYPE: HCCLAIMPMT CoO: BCBSM",
+        "amount": 123.46,
+        "check_no": null,
+        "running_balance": 4550.02,
+        "validation_fixed": true,
+        "validation_notes": "Corrected math discrepancy. Expected: 123.46"
+      },
+      {
+        "date": "02/19",
+        "description": "Deposit ACH HC CLAIM PAYMENT TYPE: HCCLAIMPMT CO: HC CLAIM PAYMENT",
+        "amount": 1000.0,
+        "check_no": null,
+        "running_balance": 3550.02,
+        "validation_fixed": true,
+        "validation_notes": "Corrected math discrepancy. Expected: 1000.0"
+      },
+      {
+        "date": "02/19",
+        "description": "Deposit ACH AARP Supplementa TYPE: HCCLAIMPMT CO: AARP Supplementa",
+        "amount": 218.7,
+        "check_no": null,
+        "running_balance": 3768.72,
+        "validation_fixed": true,
+        "validation_notes": "Corrected math discrepancy. Expected: 218.7"
+      },
+      {
+        "date": "02/19",
+        "description": "Deposit ACH WPS TYPE: HCCLAIMPMT CO: WPS DATA: WISCONSIN PHY SERV.",
+        "amount": 57.86,
+        "check_no": null,
+        "running_balance": 3880.78,
+        "validation_fixed": true,
+        "validation_notes": "Corrected math discrepancy. Expected: 57.86"
+      },
+      {
+        "date": "02/20",
+        "description": "Deposit ACH BCN CLAIMS TYPE: HCCLAIMPMT CO: BCN CLAIMS",
+        "amount": 500.0,
+        "check_no": null,
+        "running_balance": 4226.96,
+        "validation_fixed": true,
+        "validation_notes": "Corrected math discrepancy. Expected: 500.0"
+      },
+      {
+        "date": "02/19",
+        "description": "Deposit ACH AETNA AS0O1 TYPE: HCCLAIMPMT CO: AETNA ASO1",
+        "amount": 54.2,
+        "check_no": null,
+        "running_balance": 3822.92,
+        "validation_fixed": true,
+        "validation_notes": "Corrected math discrepancy. Expected: 54.2"
+      },
+      {
+        "date": "02/23",
+        "description": "Deposit ACH BCBSM TYPE: HCCLAIMPMT CoO: BCBSM",
+        "amount": 172.47,
+        "check_no": null,
+        "running_balance": 4054.49,
+        "validation_fixed": true,
+        "validation_notes": "Corrected math discrepancy. Expected: 172.47"
+      },
+      {
+        "date": "02/25",
+        "description": "Deposit ACH PHMBSFCLMS7794 TYPE: HCCLAIMPMT CO: PHMBSFCLMS7794",
+        "amount": 827.14,
+        "check_no": null,
+        "running_balance": 4164.21,
+        "validation_fixed": true,
+        "validation_notes": "Corrected math discrepancy. Expected: 827.14"
+      },
+      {
+        "date": "02/25",
+        "description": "Deposit ACH TRUE Community C TYPE: eDeposit CO: TRUE Community C",
+        "amount": 742.33,
+        "check_no": null,
+        "running_balance": 3312.16,
+        "validation_fixed": true,
+        "validation_notes": "Corrected math discrepancy. Expected: 742.33"
+      },
+      {
+        "date": "02/25",
+        "description": "Deposit ACH AARP Supplementa TYPE: HCCLAIMPMT CO: AARP Supplementa",
+        "amount": 24.91,
+        "check_no": null,
+        "running_balance": 3337.07
+      },
+      {
+        "date": "02/26",
+        "description": "Deposit ACH WPS TYPE: HCCLAIMPMT CO: WPS DATA: WISCONSIN PHY SERV.",
+        "amount": 434.83,
+        "check_no": null,
+        "running_balance": 3599.04,
+        "validation_fixed": true,
+        "validation_notes": "Corrected math discrepancy. Expected: 434.83"
+      },
+      {
+        "date": "02/26",
+        "description": "Deposit ACH PRIORITY HEALTH TYPE: HCCLAIMPMT CO: PRIORITY HEALTH",
+        "amount": 295.7,
+        "check_no": null,
+        "running_balance": 3894.74
+      },
+      {
+        "date": "02/26",
+        "description": "Deposit ACH BCN CLAIMS TYPE: HCCLAIMPMT CO: BCN CLAIMS",
+        "amount": 224.12,
+        "check_no": null,
+        "running_balance": 4118.86
+      },
+      {
+        "date": "02/27",
+        "description": "Deposit ACH BCBSM TYPE: HCCLAIMPMT CoO: BCBSM",
+        "amount": 1108.3,
+        "check_no": null,
+        "running_balance": 4477.72,
+        "validation_fixed": true,
+        "validation_notes": "Corrected math discrepancy. Expected: 1108.3"
+      },
+      {
+        "date": "02/27",
+        "description": "Deposit ACH BCN CLAIMS TYPE: HCCLAIMPMT CO: BCN CLAIMS",
+        "amount": 555.3,
+        "check_no": null,
+        "running_balance": 5033.02
+      },
+      {
+        "date": "02/27",
+        "description": "Deposit ACH TRUE Community C TYPE: eDeposit CO: TRUE Community C",
+        "amount": 45.0,
+        "check_no": null,
+        "running_balance": 5078.02
+      },
+      {
+        "date": "02/26",
+        "description": "Deposit ACH MI MERIDIAN CLAI TYPE: HCCLAIMPMT CO: MI MERIDIAN CLAI",
+        "amount": 1467.16,
+        "check_no": null,
+        "running_balance": 5586.02,
+        "validation_fixed": true,
+        "validation_notes": "Corrected math discrepancy. Expected: 1467.16"
+      },
+      {
+        "date": "02/27",
+        "description": "Deposit ACH MERCHANT BANKCD TYPE: DEPOSIT DATA: PPI BANKCARD DEP CO: MERCHANT BANKCD",
+        "amount": 570.24,
+        "check_no": null,
+        "running_balance": 6825.72,
+        "validation_fixed": true,
+        "validation_notes": "Corrected math discrepancy. Expected: 570.24"
+      },
+      {
+        "date": "02/27",
+        "description": "Deposit ACH TRUE Community C TYPE: eDeposit CO: TRUE Community C",
+        "amount": 80.37,
+        "check_no": null,
+        "running_balance": 6906.09
+      },
+      {
+        "date": "02/28",
+        "description": "Deposit Dividend 0.100% Annual Percentage Yield Earned 0.100% from 02/01/26 through 02/28/26 on Average Daily Balance of $2,721.56",
+        "amount": 0.21,
+        "check_no": null,
+        "running_balance": 4755.69
+      }
+    ],
+    "checks_and_other_debits": [
+      {
+        "date": "02/02",
+        "description": "Withdrawal ACH VANGUARD BUY TYPE: INVESTMENT DATA: INDIVIDUAL BUY CO: VANGUARD BUY",
+        "amount": 144.0,
+        "check_no": null,
+        "running_balance": 1742.1,
+        "validation_fixed": true,
+        "validation_notes": "Corrected math discrepancy. Expected: 144.0"
+      },
+      {
+        "date": "02/02",
+        "description": "Withdrawal ACH CAPITAL ONE TYPE: ONLINE PMT CO: CAPITAL ONE",
+        "amount": 16.0,
+        "check_no": null,
+        "running_balance": 1598.1,
+        "validation_fixed": true,
+        "validation_notes": "Corrected math discrepancy. Expected: 16.0"
+      },
+      {
+        "date": "02/03",
+        "description": "Withdrawal ACH MERCHANT BANKCD TYPE: DEPOSIT DATA: PPI BANKCARD DEP CO: MERCHANT BANKCD",
+        "amount": 1000.0,
+        "check_no": null,
+        "running_balance": 3080.06,
+        "validation_fixed": true,
+        "validation_notes": "Corrected math discrepancy. Expected: 1000.0"
+      },
+      {
+        "date": "02/03",
+        "description": "Withdrawal Transfer 2026Pay 0001 To PRUITT,MARK D XXXXXXXXXX Share 0001",
+        "amount": 248.76,
+        "check_no": null,
+        "running_balance": 2080.06,
+        "validation_fixed": true,
+        "validation_notes": "Corrected math discrepancy. Expected: 248.76"
+      },
+      {
+        "date": "02/04",
+        "description": "Withdrawal ACH LIVELY INC TYPE: TXN CO: LIVELY INC NAME: Pruitt, Mark",
+        "amount": 2321.84,
+        "check_no": null,
+        "running_balance": null
+      },
+      {
+        "date": "02/04",
+        "description": "Withdrawal Digital Transfer To Loan 0150",
+        "amount": 3341.84,
+        "check_no": null,
+        "running_balance": null
+      },
+      {
+        "date": "02/04",
+        "description": "Withdrawal Digital Transfer To Loan 0150",
+        "amount": 2133.84,
+        "check_no": null,
+        "running_balance": null
+      },
+      {
+        "date": "02/09",
+        "description": "Withdrawal Transfer 2026pay 0110 To PRUITT,MARK D XXXXXXXXXX Share 0110",
+        "amount": 2417.27,
+        "check_no": null,
+        "running_balance": null
+      },
+      {
+        "date": "02/10",
+        "description": "Withdrawal Digital Transfer To Loan 0150",
+        "amount": 2482.19,
+        "check_no": null,
+        "running_balance": null
+      },
+      {
+        "date": "02/12",
+        "description": "Withdrawal Transfer To PRUITT,MARK D XXXXXXXXXX Share 0110 Consolidated Medical reimburse to 0110",
+        "amount": 2190.89,
+        "check_no": null,
+        "running_balance": null
+      },
+      {
+        "date": "02/18",
+        "description": "Withdrawal Transfer 2026pay 0110 To PRUITT,MARK D XXXXXXXXXX Share 0110",
+        "amount": 42566.73,
+        "check_no": null,
+        "running_balance": 3573.42,
+        "validation_fixed": true,
+        "validation_notes": "Corrected math discrepancy. Expected: 42566.73"
+      },
+      {
+        "date": "02/20",
+        "description": "Withdrawal Digital Transfer To Loan 0150",
+        "amount": 153.82,
+        "check_no": null,
+        "running_balance": 3726.96,
+        "validation_fixed": true,
+        "validation_notes": "Corrected math discrepancy. Expected: 153.82"
+      },
+      {
+        "date": "02/26",
+        "description": "Withdrawal Transfer 2026pay 0110 To PRUITT,MARK D XXXXXXXXXX Share 0110",
+        "amount": 1000.0,
+        "check_no": null,
+        "running_balance": 3164.21
+      },
+      {
+        "date": "02/27",
+        "description": "Withdrawal Digital Transfer To Loan 0150",
+        "amount": 1177.46,
+        "check_no": null,
+        "running_balance": 6255.48,
+        "validation_fixed": true,
+        "validation_notes": "Corrected math discrepancy. Expected: 1177.46"
+      },
+      {
+        "date": "02/28",
+        "description": "Withdrawal Transfer 2026pay 0110 To PRUITT,MARK D XXXXXXXXXX Share 0110",
+        "amount": 2150.61,
+        "check_no": null,
+        "running_balance": 4755.48,
+        "validation_fixed": true,
+        "validation_notes": "Corrected math discrepancy. Expected: 2150.61"
+      }
+    ],
+    "dynamic_intelligence": {
+      "structure": {
+        "archetype": "standard",
+        "balance_column_identified": true,
+        "balance_column_position": "far-right",
+        "sections": [
+          {
+            "name": "Account Summary",
+            "start_marker": "^\\s*ACCOUNT SUMMARY\\b",
+            "end_marker": "^\\s*A MESSAGE FROM YOUR CREDIT UNION\\b",
+            "columns": [
+              "Account Type",
+              "Ending Balance"
+            ],
+            "has_checks": false,
+            "beginning_balance": null
+          },
+          {
+            "name": "Business Regular Shares",
+            "start_marker": "^\\s*ID 0002 BUSINESS REGULAR SHARES\\b",
+            "end_marker": "^\\s*ID 0120 BUSINESS CHECKING\\b",
+            "columns": [
+              "Beginning Balance",
+              "Total Deposits/Credits",
+              "Total Withdrawals/Debits",
+              "Ending Balance",
+              "Year-To-Date Dividends"
+            ],
+            "has_checks": false,
+            "beginning_balance": 47.67
+          },
+          {
+            "name": "Business Checking",
+            "start_marker": "^\\s*ID 0120 BUSINESS CHECKING\\b",
+            "end_marker": "^\\s*SHARE DRAFT RECONCILEMENT\\b",
+            "columns": [
+              "Trans. Date",
+              "Posting Date",
+              "Withdrawal/Debit",
+              "Deposit/Credit",
+              "Balance",
+              "Transaction Description"
+            ],
+            "has_checks": false,
+            "beginning_balance": 1486.14
+          },
+          {
+            "name": "Share Draft Reconcilement",
+            "start_marker": "^\\s*SHARE DRAFT RECONCILEMENT\\b",
+            "end_marker": "^\\s*Th Ee\\b",
+            "columns": [
+              "Draft Number",
+              "Amount"
+            ],
+            "has_checks": true,
+            "beginning_balance": null
+          }
+        ],
+        "date_format": "MM/DD/YY",
+        "currency_notes": "Separate columns for Debits/Credits. Debits are listed under 'Withdrawal/Debit' and credits under 'Deposit/Credit'."
+      },
+      "schema": {
+        "mappings": [
+          {
+            "field": "Transaction Date",
+            "source_section": "Business Checking",
+            "extraction_logic": "Extract from the 'Trans. Date' column. If only one date is present, use that.",
+            "confidence_boosters": [
+              "Trans. Date",
+              "Transaction Date"
+            ]
+          },
+          {
+            "field": "Description",
+            "source_section": "Business Checking",
+            "extraction_logic": "Extract from the 'Transaction Description' column.",
+            "confidence_boosters": [
+              "Description",
+              "Transaction Description",
+              "Merchant Name"
+            ]
+          },
+          {
+            "field": "Withdrawal Amount",
+            "source_section": "Business Checking",
+            "extraction_logic": "Extract from the 'Withdrawal/Debit' column. Do NOT capture the 'Balance' values.",
+            "confidence_boosters": [
+              "Withdrawal",
+              "Debit",
+              "Amount Debited"
+            ]
+          },
+          {
+            "field": "Deposit Amount",
+            "source_section": "Business Checking",
+            "extraction_logic": "Extract from the 'Deposit/Credit' column. Do NOT capture the 'Balance' values.",
+            "confidence_boosters": [
+              "Deposit",
+              "Credit",
+              "Amount Credited"
+            ]
+          },
+          {
+            "field": "Check Number",
+            "source_section": "Share Draft Reconcilement",
+            "extraction_logic": "Extract from the 'Draft Number' column. Look for numbers typically 3-6 digits long. Avoid long numbers (10+ digits) as they may be Bill Payment IDs.",
+            "confidence_boosters": [
+              "Check",
+              "CK",
+              "Draft Number"
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

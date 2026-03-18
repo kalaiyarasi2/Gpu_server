@@ -1,7 +1,7 @@
 import re
 from typing import Dict, List, Tuple
 
-class TextQualityVerifier:
+class BankTextQualityVerifier:
     """
     Analyzes extracted text quality to detect noise, garbage characters,
     or incomplete extractions.
@@ -10,15 +10,16 @@ class TextQualityVerifier:
     def __init__(self, thresholds: Dict = None):
         self.thresholds = thresholds or {
             'min_chars_per_page': 100,     # Bank statements can be very sparse on some pages
-            'max_cid_count': 30,           # CID issues indicate unreadable digital text
-            'max_noise_ratio': 0.25,       # Non-alphanumeric char ratio (tables have delimiters)
-            'min_keywords': 3,             # Expect basic bank terms
-            'max_noisy_line_ratio': 0.40   # Tabular layouts can have symbol-heavy lines
+            'max_cid_count': 15,           # Lowered from 30 to catch earlier CID issues
+            'max_noise_ratio': 0.18,       # Lowered from 0.25 to catch earlier noise
+            'min_keywords': 4,             # Increased from 3
+            'max_noisy_line_ratio': 0.25   # Lowered from 0.40 to be more sensitive to garbled lines
         }
         
         self.critical_keywords = [
             'account', 'statement', 'balance', 'date', 'amount', 'transaction', 
-            'deposit', 'withdrawal', 'credit', 'debit', 'summary', 'check'
+            'deposit', 'withdrawal', 'credit', 'debit', 'summary', 'check',
+            'posting', 'effective', 'description'
         ]
 
     def analyze_quality(self, text: str, num_pages: int = 1) -> Dict:
@@ -124,6 +125,56 @@ class TextQualityVerifier:
                 'noisy_line_ratio': round(noisy_line_ratio, 3)
             }
         }
+
+    def detect_missing_columns(self, text: str) -> bool:
+        """
+        Detects if an 'Amount' column exists in headers but is missing in rows.
+        Crucial for catching right-clipped OCR.
+        """
+        lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+        if not lines:
+            return False
+
+        # 1. Header Detection
+        has_amount_header = False
+        amount_header_line_idx = -1
+        # Look for headers in first 25 lines (bank statements can have long headers)
+        for i, line in enumerate(lines[:25]): 
+            if re.search(r'\b(Amount|Total|Balance|Charge|Credit|Debit)\b', line, re.IGNORECASE):
+                has_amount_header = True
+                amount_header_line_idx = i
+                break
+        
+        if not has_amount_header:
+            return False
+
+        # 2. Row Analysis (looking for rows with dates but no amounts)
+        date_rows = 0
+        rows_with_amounts = 0
+        
+        # Start checking after the header
+        for line in lines[amount_header_line_idx + 1:]:
+            # Quick check for date-like pattern (MM/DD or MM-DD or Month DD)
+            has_date = bool(re.search(r'\b\d{1,2}[/\-]\d{1,2}\b', line)) or \
+                       bool(re.search(r'\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* \d{1,2}\b', line, re.IGNORECASE))
+            
+            if has_date:
+                date_rows += 1
+                # Check for currency/decimal pattern: 1,234.56 or 12.34
+                if re.search(r'\b\d[\d,]*\.\d{2}\b', line):
+                    rows_with_amounts += 1
+        
+        # 3. Thresholding
+        # Be extremely sensitive. 
+        if date_rows >= 2:
+            ratio = rows_with_amounts / date_rows
+            # If at least 15% of rows are missing amounts, or if we have at least 1 missing amount in a short list
+            missing_count = date_rows - rows_with_amounts
+            if ratio < 0.85 or missing_count >= 1:
+                print(f"   ⚠️ Quality Alert: Structural Gap detected (Dates: {date_rows}, With Amounts: {rows_with_amounts}, Missing: {missing_count})")
+                return True
+        
+        return False
 
     def should_fallback_to_vision(self, text: str, num_pages: int = 1) -> Tuple[bool, str]:
         """

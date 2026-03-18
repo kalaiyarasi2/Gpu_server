@@ -11,6 +11,9 @@ import base64
 from io import BytesIO
 import pytesseract
 from pdf2image import convert_from_path
+import fitz # PyMuPDF
+from PIL import Image
+import io
 from openai import OpenAI
 from dotenv import load_dotenv
 
@@ -40,6 +43,39 @@ class OCRPDFExtractor:
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
         self.client = OpenAI(api_key=self.api_key) if self.api_key else None
         self.output_text = ""
+    
+    def _convert_pdf_to_images(self, dpi=600, first_page=None, last_page=None):
+        """
+        Helper to convert PDF to images with PyMuPDF fallback.
+        """
+        try:
+            # Primary: pdf2image (Poppler)
+            return convert_from_path(
+                str(self.pdf_path),
+                dpi=dpi,
+                fmt='jpeg',
+                first_page=first_page,
+                last_page=last_page
+            )
+        except Exception as e:
+            print(f"   ⚠️ pdf2image failed ({e}). Falling back to PyMuPDF (fitz)...")
+            images = []
+            try:
+                doc = fitz.open(str(self.pdf_path))
+                start = (first_page - 1) if first_page else 0
+                end = last_page if last_page else len(doc)
+                
+                for i in range(start, end):
+                    page = doc[i]
+                    pix = page.get_pixmap(dpi=dpi)
+                    img_data = pix.tobytes("jpeg")
+                    img = Image.open(io.BytesIO(img_data))
+                    images.append(img)
+                doc.close()
+                return images
+            except Exception as e2:
+                print(f"   ❌ PyMuPDF fallback also failed: {e2}")
+                raise e
     
     def extract(self, dpi=600, language='eng', psm_mode=1, verbose=True, engine='tesseract', **kwargs):
         """
@@ -78,11 +114,7 @@ class OCRPDFExtractor:
                 print("Converting PDF to images...")
             
             # Initial high-DPI render (default 600)
-            images = convert_from_path(
-                str(self.pdf_path),
-                dpi=dpi,
-                fmt='jpeg'
-            )
+            images = self._convert_pdf_to_images(dpi=dpi)
             
             total_pages = len(images)
             pages_metadata = []
@@ -105,10 +137,17 @@ class OCRPDFExtractor:
                     config=custom_config,
                     lang=language
                 )
-                page_text_hi = text_hi if text_hi.strip() else "[No text detected on this page]\n"
-                quality_hi = verifier.page_quality(page_text_hi)
-                score_hi = quality_hi.get("score", 0.0)
-                rec_hi = quality_hi.get("recommendation", "ok")
+                
+                # If Tesseract returns totally empty, force a low quality score to trigger fallback
+                if not text_hi.strip():
+                    page_text_hi = "[No text detected on this page]\n"
+                    score_hi = 0.0
+                    rec_hi = "full_vision"
+                else:
+                    page_text_hi = text_hi
+                    quality_hi = verifier.page_quality(page_text_hi)
+                    score_hi = quality_hi.get("score", 0.0)
+                    rec_hi = quality_hi.get("recommendation", "ok")
                 
                 final_text = page_text_hi
                 extraction_method = "tesseract-ocr-600dpi"
@@ -122,10 +161,8 @@ class OCRPDFExtractor:
                             f"Retrying Tesseract at 300 DPI..."
                         )
                     try:
-                        low_images = convert_from_path(
-                            str(self.pdf_path),
+                        low_images = self._convert_pdf_to_images(
                             dpi=300,
-                            fmt='jpeg',
                             first_page=page_num,
                             last_page=page_num
                         )
@@ -165,10 +202,8 @@ class OCRPDFExtractor:
                         )
                     try:
                         # Render just this page for Vision at moderate DPI
-                        vis_images = convert_from_path(
-                            str(self.pdf_path),
+                        vis_images = self._convert_pdf_to_images(
                             dpi=300,
-                            fmt='jpeg',
                             first_page=page_num,
                             last_page=page_num
                         )
@@ -253,7 +288,7 @@ class OCRPDFExtractor:
         """
         print("Converting PDF to images for detailed OCR...")
         
-        images = convert_from_path(str(self.pdf_path), dpi=dpi, fmt='jpeg')
+        images = self._convert_pdf_to_images(dpi=dpi)
         results = []
         
         for page_num, image in enumerate(images, 1):
@@ -291,7 +326,7 @@ class OCRPDFExtractor:
             raise ValueError("OpenAI API key is required for Vision OCR. Set OPENAI_API_KEY environment variable.")
             
         print("Converting PDF to images for Vision OCR...")
-        images = convert_from_path(str(self.pdf_path), dpi=dpi)
+        images = self._convert_pdf_to_images(dpi=dpi)
         
         full_text = []
         metadata = []

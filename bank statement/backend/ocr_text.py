@@ -10,14 +10,38 @@ import os
 import base64
 from io import BytesIO
 import pytesseract
-from pdf2image import convert_from_path
 from openai import OpenAI
 from dotenv import load_dotenv
 
-from text_quality_verifier import TextQualityVerifier
+from PIL import Image
+import importlib
+import importlib.util
 
-load_dotenv()
+# Import shared utilities from ocr_utils
+utils_path = Path(__file__).parent / "ocr_utils.py"
+utils_spec = importlib.util.spec_from_file_location("bank_statement_ocr_utils", str(utils_path))
+utils_mod = importlib.util.module_from_spec(utils_spec)
+utils_spec.loader.exec_module(utils_mod)
+robust_convert_pdf_to_images = utils_mod.robust_convert_pdf_to_images
 
+# Robust dynamic import of BankTextQualityVerifier to avoid collisions
+verifier_path = Path(__file__).parent / "text_quality_verifier.py"
+spec = importlib.util.spec_from_file_location("bank_statement_verifier_local_ocr", str(verifier_path))
+local_tqv = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(local_tqv)
+BankTextQualityVerifier = local_tqv.BankTextQualityVerifier
+
+
+# Load environment variables
+local_env = Path(__file__).parent / ".env"
+root_env = Path(__file__).parent.parent.parent / ".env"
+
+if local_env.exists():
+    load_dotenv(dotenv_path=local_env)
+elif root_env.exists():
+    load_dotenv(dotenv_path=root_env)
+else:
+    load_dotenv() 
 
 class OCRPDFExtractor:
     """
@@ -41,7 +65,7 @@ class OCRPDFExtractor:
         self.client = OpenAI(api_key=self.api_key) if self.api_key else None
         self.output_text = ""
     
-    def extract(self, dpi=600, language='eng', psm_mode=1, verbose=True, engine='tesseract', **kwargs):
+    def extract(self, dpi=600, language='eng', psm_mode=1, verbose=True, engine='tesseract', first_page=None, last_page=None, force_vision=False, **kwargs):
         """
         Extract text using OCR (Tesseract or GPT-4 Vision).
         
@@ -51,6 +75,9 @@ class OCRPDFExtractor:
             psm_mode: Page segmentation mode (1=auto with OSD, 3=auto, 6=single block)
             verbose: Print progress information
             engine: OCR engine to use ('tesseract' or 'vision')
+            first_page: First page to extract (1-indexed)
+            last_page: Last page to extract (1-indexed)
+            force_vision: If True, bypass Tesseract and use GPT-4 Vision directly.
             
         Returns:
             str: OCR-extracted text
@@ -67,22 +94,20 @@ class OCRPDFExtractor:
                 print(f"PSM Mode: {psm_mode}")
             print()
         
-        if engine == 'vision':
-            return self._extract_with_vision(dpi=dpi, verbose=verbose)
+        if engine == 'vision' or force_vision:
+            if verbose and force_vision:
+                print("   ℹ️ Forced Vision mode enabled. Bypassing Tesseract layers...")
+            return self._extract_with_vision(dpi=dpi, verbose=verbose, first_page=first_page, last_page=last_page)
         
         extracted_text = []
-        verifier = TextQualityVerifier()
+        verifier = BankTextQualityVerifier()
         
         try:
             if verbose:
                 print("Converting PDF to images...")
             
-            # Initial high-DPI render (default 600)
-            images = convert_from_path(
-                str(self.pdf_path),
-                dpi=dpi,
-                fmt='jpeg'
-            )
+            # Use robust conversion helper with page range
+            images = robust_convert_pdf_to_images(self.pdf_path, dpi=dpi, first_page=first_page, last_page=last_page)
             
             total_pages = len(images)
             pages_metadata = []
@@ -90,9 +115,12 @@ class OCRPDFExtractor:
             if verbose:
                 print(f"Processing {total_pages} pages with OCR (layered fallback)...\n")
             
-            for page_num, image in enumerate(images, 1):
+            for i, image in enumerate(images):
+                # Calculate the actual page number
+                page_num = (first_page + i) if first_page else (i + 1)
+                
                 if verbose:
-                    print(f"OCR processing page {page_num}/{total_pages} (DPI {dpi})...")
+                    print(f"OCR processing page {page_num} (DPI {dpi})...")
                 
                 # Add page separator
                 page_header = f"\n{'='*80}\nPAGE {page_num}\n{'='*80}\n\n"
@@ -105,10 +133,17 @@ class OCRPDFExtractor:
                     config=custom_config,
                     lang=language
                 )
-                page_text_hi = text_hi if text_hi.strip() else "[No text detected on this page]\n"
-                quality_hi = verifier.page_quality(page_text_hi)
-                score_hi = quality_hi.get("score", 0.0)
-                rec_hi = quality_hi.get("recommendation", "ok")
+                
+                # If Tesseract returns totally empty, force a low quality score to trigger fallback
+                if not text_hi.strip():
+                    page_text_hi = "[No text detected on this page]\n"
+                    score_hi = 0.0
+                    rec_hi = "full_vision"
+                else:
+                    page_text_hi = text_hi
+                    quality_hi = verifier.page_quality(page_text_hi)
+                    score_hi = quality_hi.get("score", 0.0)
+                    rec_hi = quality_hi.get("recommendation", "ok")
                 
                 final_text = page_text_hi
                 extraction_method = "tesseract-ocr-600dpi"
@@ -122,10 +157,9 @@ class OCRPDFExtractor:
                             f"Retrying Tesseract at 300 DPI..."
                         )
                     try:
-                        mid_images = convert_from_path(
-                            str(self.pdf_path),
+                        mid_images = robust_convert_pdf_to_images(
+                            self.pdf_path,
                             dpi=300,
-                            fmt='jpeg',
                             first_page=page_num,
                             last_page=page_num
                         )
@@ -165,10 +199,9 @@ class OCRPDFExtractor:
                         )
                     try:
                         # Render just this page for Vision at moderate DPI
-                        vis_images = convert_from_path(
-                            str(self.pdf_path),
+                        vis_images = robust_convert_pdf_to_images(
+                            self.pdf_path,
                             dpi=300,
-                            fmt='jpeg',
                             first_page=page_num,
                             last_page=page_num
                         )
@@ -190,7 +223,7 @@ class OCRPDFExtractor:
                     "is_scanned": True,
                     "extraction_method": extraction_method,
                     "confidence": final_score,
-                    "quality_metrics": quality_hi.get("analysis", {}).get("metrics", {})
+                    "quality_metrics": verifier.page_quality(final_text).get("analysis", {}).get("metrics", {})
                 })
                 
                 extracted_text.append("\n\n")
@@ -253,7 +286,7 @@ class OCRPDFExtractor:
         """
         print("Converting PDF to images for detailed OCR...")
         
-        images = convert_from_path(str(self.pdf_path), dpi=dpi, fmt='jpeg')
+        images = robust_convert_pdf_to_images(self.pdf_path, dpi=dpi)
         results = []
         
         for page_num, image in enumerate(images, 1):
@@ -283,7 +316,7 @@ class OCRPDFExtractor:
         
         return results
 
-    def _extract_with_vision(self, dpi=300, verbose=True):
+    def _extract_with_vision(self, dpi=300, verbose=True, first_page=None, last_page=None):
         """
         Extract text using GPT-4 Vision for near-perfect layout and word accuracy.
         """
@@ -291,22 +324,25 @@ class OCRPDFExtractor:
             raise ValueError("OpenAI API key is required for Vision OCR. Set OPENAI_API_KEY environment variable.")
             
         print("Converting PDF to images for Vision OCR...")
-        images = convert_from_path(str(self.pdf_path), dpi=dpi)
+        images = robust_convert_pdf_to_images(self.pdf_path, dpi=dpi, first_page=first_page, last_page=last_page)
         
         full_text = []
         metadata = []
         
-        for i, image in enumerate(images, 1):
+        for i, image in enumerate(images):
+            # Calculate actual page number
+            page_num = (first_page + i) if first_page else (i + 1)
+            
             if verbose:
-                print(f"Vision processing page {i}/{len(images)}...")
+                print(f"Vision processing page {page_num}...")
             
             page_text, conf = self._extract_page_with_vision(image)
             
-            header = f"\n{'='*80}\nPAGE {i}\n{'='*80}\n\n"
+            header = f"\n{'='*80}\nPAGE {page_num}\n{'='*80}\n\n"
             full_text.append(header + page_text + "\n\n")
             
             metadata.append({
-                "page_number": i,
+                "page_number": page_num,
                 "text": header + page_text,
                 "is_scanned": True,
                 "extraction_method": "gpt-4-vision",
@@ -328,9 +364,12 @@ class OCRPDFExtractor:
         img_base64 = base64.b64encode(buffered.getvalue()).decode()
 
         prompt = (
-            "Extract ALL text from this document page.\n"
+            "Extract ALL text from this bank statement page.\n"
             "PRESERVE the EXACT layout including columns, tables, and spacing.\n"
-            "Return ONLY the extracted text."
+            "CRITICAL: Bank statements often have a 'Balance' or 'Running Balance' column on the far right edge.\n"
+            "You MUST capture this column completely. Do NOT truncate or skip digits near the right margin.\n"
+            "If a line has multiple currency values (e.g. '95.96    1,582.10'), ensure both are captured and separated by spaces.\n"
+            "Return ONLY the extracted text, no explanations."
         )
 
         response = self.client.chat.completions.create(
