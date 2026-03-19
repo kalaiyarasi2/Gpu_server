@@ -1053,16 +1053,18 @@ Extract data from the document text provided below.
         - If "Vision" -> **VISION**
         - If "Life" or "AD&D" -> **LIFE** or **AD&D**
     - **UHC Plan Labels (CRITICAL)**: Many UHC rows have sub-labels below the plan name (e.g., `Admin/Excess Loss`, `Max Claims Liability`, `Claims Liability`, `PPO Savings`, `Stop-Loss`). You MUST include these labels in the `PLAN_NAME` EXACTLY as they appear (e.g., `P5000i80LX21B - Max Claims Liability`). DO NOT omit words like 'Max' if they are present in the PDF.
-    - **Fees and Adjustments (CRITICAL)**:
-        - Capture standalone global fees or 'Prior Period' adjustments as regular rows with PLAN_NAME 'FEES' or 'ADJUSTMENTS'.
-        - UHC often has INLINE adjustments for members (e.g. retroactive additions/terminations).
-        - CRITICAL FOR ADJUSTMENTS: Do NOT extract a number as ADJUSTMENT_PREMIUM unless the row EXPLICITLY contains a date period and a 3-letter adjustment code like 'ADD', 'TRM', 'CHG'.
-        - If a row simply has two numbers (e.g., '$658.51 $696.27') with NO adjustment period/code, the second number is the 'Total Billed' for the employee. Do NOT capture the Total Billed as an adjustment! Leave ADJUSTMENT_PREMIUM as null.
-        - Extract the member's current charge into `CURRENT_PREMIUM`
-        - If a row has BOTH a current charge and a VALID adjustment (with code like ADD/TRM): Put the current charge in CURRENT_PREMIUM and the adjustment amount in ADJUSTMENT_PREMIUM.
-        - If a row has ONLY an adjustment (starts with Period and Code, no current charge): Put the amount in ADJUSTMENT_PREMIUM and capture CURRENT_PREMIUM as 0 or null.
-        - DO NOT put any final row `Total` column into `ADJUSTMENT_PREMIUM` or `CURRENT_PREMIUM`.
-    - **UHC STRICT SPACING FIDELITY (HIGHEST PRIORITY)**: You MUST maintain 100% accuracy to the spacing in the source PDF for all plan names and codes. If the PDF shows a value like `P5000` (no space), you MUST NOT output it as `P 5000`. This rule overrides any previous UHC instructions or examples that mention a "mandatory space". For groups like MGSI where the file structure requires no space, this is CRITICAL for 100% accuracy.
+    - **UHC COLUMN & ADJUSTMENT LOGIC (DYNAMIC - CRITICAL)**:
+        - **DYNAMIC COLUMN DETECTION**: UHC invoices have two distinct detail sections: "Current Detail" and "Adjustment Detail".
+          - Value under "Charge Amount" (3rd column from right in Current section) MUST map to `CURRENT_PREMIUM`.
+          - Value under "Adjustment Detail Amount" or "Amount" (2nd column from right in Adjustment section) MUST map to `ADJUSTMENT_PREMIUM`.
+          - **CRITICAL**: If a single row has values in BOTH columns, you MUST populate both fields for that record.
+          - **NO CONSOLIDATION / NO MASHING**: YOU MUST extract EVERY physical row in the PDF as a separate object.
+          - **FORBIDDEN**: NEVER combine multiple plans (e.g. Medical and Life) into a single `PLAN_NAME` string.
+          - **MANDATORY SPLITTING**: If the text shows `Sarah Sarah Sarah ... $1095.61 $2.75 $0.75`, you MUST output THREE separate objects: 
+            1. Plan: Medical, Current: 1095.61
+            2. Plan: Life, Current: 2.75
+            3. Plan: AD&D, Current: 0.75
+          - **EXTRACT ALL ROWS**: If a member has multiple adjustments for the same plan (e.g. Gale Alana having two '-$2.75' rows), YOU MUST output TWO separate JSON objects with identical plan names and amounts. DO NOT skip the second one.
     - **BCBS (BlueCross BlueShield)**: 
     - **Subscriber ID** or **Member ID** -> maps to `MEMBERID`.
     - **Coverage Mapping**: 
@@ -1754,7 +1756,14 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
     print(f"[V3] {'='*70}")
     
     # Extract text from PDF
-    text = extract_text_from_pdf_improved(pdf_path)
+    # [V4][UHC] UHC documents suffer from horizontal mashing with pdfplumber.
+    # We force PyMuPDF (structured text) for UHC to preserve line-by-line plan separation.
+    is_likely_uhc = "UHC" in pdf_path.upper() or "UNITED" in pdf_path.upper()
+    if is_likely_uhc:
+        print(f"  [V4][UHC] Detected likely UHC. Using structured text (PyMuPDF) for better line separation.")
+        text = extract_text_from_pdf_pymupdf(pdf_path, mode="horizontal")
+    else:
+        text = extract_text_from_pdf_improved(pdf_path)
     
     # [V3][MIRROR] Early Mirror Detection & Correction
     # If the text is mirrored, we fix it before any chunking or quality checks
@@ -2345,8 +2354,17 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                          ex_plan = str(existing.get("PLAN_NAME") or "").strip().lower()
                          ex_clean = ex_plan if ex_plan not in ["n/a", "none", ""] else None
                          # Relaxed check: merge if plan names match OR if one is an adjustment/total label
-                         is_adj_or_total = lambda s: any(kw in str(s).upper() for kw in ["ADJUSTMENT", "TOTAL", "ADD", "TRM", "CHG"])
-                         if not clean_plan or not ex_clean or clean_plan == ex_clean or is_adj_or_total(clean_plan) or is_adj_or_total(ex_clean):
+                         # [V4][FIX] Use word boundaries for 'ADD' to avoid matching 'AD&D'
+                         # Adjustment check with word boundaries for ADD to avoid matching AD&D
+                         is_adj_or_total = lambda s: any(kw in str(s).upper() for kw in ["ADJUSTMENT", "TOTAL", "RETRO", "TRM", "CHG"]) or \
+                                            bool(re.search(r"\bADD\b", str(s).upper()))
+
+                         # [V4][SAFEGUARD] Never merge different non-null plan types (e.g. Life into Medical)
+                         curr_type = str(item.get("PLAN_TYPE") or "").upper()
+                         ex_type = str(existing.get("PLAN_TYPE") or "").upper()
+                         type_mismatch = curr_type and ex_type and curr_type != ex_type
+
+                         if not type_mismatch and (not clean_plan or not ex_clean or clean_plan == ex_clean or is_adj_or_total(clean_plan) or is_adj_or_total(ex_clean)):
                              match_index = potential_idx
                 
                 # 3. Try Name-Only Match (ULTRA-LOOSE) if one side is a "shell" record (missing identifiers)
@@ -2383,8 +2401,16 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                                 ex_plan = str(ex.get("PLAN_NAME") or "").strip().lower()
                                 ex_clean = ex_plan if ex_plan not in ["n/a", "none", ""] else None
                                 # Relaxed check: merge if plan names match OR if one is an adjustment/total label
-                                is_adj_or_total = lambda s: any(kw in str(s).upper() for kw in ["ADJUSTMENT", "TOTAL", "ADD", "TRM", "CHG"])
-                                if not clean_plan or not ex_clean or clean_plan == ex_clean or is_adj_or_total(clean_plan) or is_adj_or_total(ex_clean):
+                                # [V4][FIX] Use word boundaries for 'ADD' to avoid matching 'AD&D'
+                                is_adj_or_total = lambda s: any(kw in str(s).upper() for kw in ["ADJUSTMENT", "TOTAL", "RETRO", "TRM", "CHG"]) or \
+                                                   bool(re.search(r"\bADD\b", str(s).upper()))
+
+                                # [V4][SAFEGUARD] Never merge different non-null plan types (e.g. Life into Medical)
+                                curr_type = str(item.get("PLAN_TYPE") or "").upper()
+                                ex_type = str(ex.get("PLAN_TYPE") or "").upper()
+                                type_mismatch = curr_type and ex_type and curr_type != ex_type
+
+                                if not type_mismatch and (not clean_plan or not ex_clean or clean_plan == ex_clean or is_adj_or_total(clean_plan) or is_adj_or_total(ex_clean)):
                                     matched_by_name_idx = idx
                                     break
                     
@@ -2440,18 +2466,8 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                 if match_index is not None:
                     existing = merged_items[match_index]
                     
-                    # [V4][SAFEGUARD] If incoming has identical Current and Adjustment premiums, 
-                    # it's almost certainly an LLM mapping error for an adjustment row.
-                    inc_curr = to_float(item.get("CURRENT_PREMIUM"))
-                    inc_adj = to_float(item.get("ADJUSTMENT_PREMIUM"))
-                    if inc_curr > 0 and inc_adj > 0 and abs(inc_curr - inc_adj) < 0.01:
-                         # BCBS EXCEPTION: If it is BCBS and the product/plan name suggests it's an adjustment, do not nullify
-                         pn_upper = str(item.get("PLAN_NAME") or "").upper()
-                         fn_upper = source_filename.upper()
-                         is_bcbs = "BLUE" in pn_upper or "BLUE" in fn_upper or "BCBS" in fn_upper
-                         if not (is_bcbs and any(kw in pn_upper for kw in ["ADD", "TRM", "ADJ", "RETRO"])):
-                            print(f"      [V3][SAFEGUARD] Nulling CURRENT_PREMIUM for {fname} {lname} as it matches ADJUSTMENT_PREMIUM.")
-                            item["CURRENT_PREMIUM"] = None
+                    # [V4][FIX] Removed over-aggressive safeguard that nulled CURRENT_PREMIUM if it matched ADJUSTMENT_PREMIUM.
+                    # This was causing data loss for legitimate UHC adjustments (e.g. adding a plan retroactively).
                     
                     incoming_total = check_total(item)
                     existing_total = check_total(existing)
@@ -2487,8 +2503,9 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                                 new_v = str(v).strip()
                                 
                                 # [V4] Smart Plan Name Merging: Do not append adjustment labels to real plan names
-                                adj_keywords = ["ADD", "TRM", "ADJUSTMENT", "RETRO", "ADJ", "ON-BILL"]
-                                is_incoming_adj = any(kw in new_v.upper() for kw in adj_keywords)
+                                # [V4][FIX] Use word boundaries for 'ADD' to avoid matching 'AD&D'
+                                adj_keywords = ["TOTAL", "ADJUSTMENT", "RETRO", "TRM"]
+                                is_incoming_adj = any(kw in new_v.upper() for kw in adj_keywords) or bool(re.search(r"\bADD\b", new_v.upper()))
                                 if k == "PLAN_NAME" and is_incoming_adj and ex_v and not any(kw in ex_v.upper() for kw in adj_keywords):
                                     # Existing name is a real plan, incoming is a label. Skip concatenation.
                                     pass
