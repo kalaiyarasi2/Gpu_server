@@ -266,4 +266,4 @@ if __name__ == "__main__":
     print("UNIFIED INTELLIGENT ROUTER STARTING")
     print(f"Access the UI at: http://localhost:{port}")
     print("="*50 + "\n")
-    uvicorn.run("unified_app:app", host="0.0.0.0", port=port, reload=True)
+    uvicorn.run("unified_app:app", host="0.0.0.0", port=port, reload=False)

@@ -1,0 +1,14 @@
+2026-03-13 18:49:07,124 - monitor_db - INFO - Database initialized successfully
+2026-03-13 18:49:07,135 - monitor_middleware - INFO - Monitoring middleware added to FastAPI application
+2026-03-20 12:08:35,352 - monitor_db - INFO - Database initialized successfully
+2026-03-20 12:08:35,364 - monitor_middleware - INFO - Monitoring middleware added to FastAPI application
+2026-03-20 12:08:35,529 - monitor_middleware - INFO - Monitoring middleware added to FastAPI application
+2026-03-20 12:20:24,023 - monitor_db - INFO - Created request: 6ccb9f42-f4de-46a9-8a28-081a8e464b72 - unknown
+2026-03-20 12:20:24,030 - monitor_service - INFO - Started monitoring request 6ccb9f42-f4de-46a9-8a28-081a8e464b72
+2026-03-20 12:20:24,032 - monitor_middleware - INFO - Monitoring started for request 6ccb9f42-f4de-46a9-8a28-081a8e464b72: unknown
+2026-03-20 12:20:24,046 - monitor_db - INFO - Updated request 6ccb9f42-f4de-46a9-8a28-081a8e464b72 status to: processing
+2026-03-20 12:20:26,657 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-03-20 12:21:15,762 - monitor_db - INFO - Updated request 6ccb9f42-f4de-46a9-8a28-081a8e464b72 status to: completed
+2026-03-20 12:21:15,769 - monitor_db - INFO - Added output files for request 6ccb9f42-f4de-46a9-8a28-081a8e464b72: ['http://localhost:8007/api/download/KCL- Quality Aircraft- March 26  2_invoice.xlsx', 'http://localhost:8007/api/download/KCL- Quality Aircraft- March 26  2_invoice.json']
+2026-03-20 12:21:15,770 - monitor_service - INFO - Completed monitoring for request 6ccb9f42-f4de-46a9-8a28-081a8e464b72 in 51.74s
+2026-03-20 12:21:15,770 - monitor_middleware - INFO - Request 6ccb9f42-f4de-46a9-8a28-081a8e464b72 completed successfully in 51.74s
