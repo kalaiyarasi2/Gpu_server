@@ -437,10 +437,14 @@ def extract_text_from_pdf_pymupdf(pdf_path: str, mode: str = "standard") -> str:
             page = doc[page_num]
             
             if mode == "vertical":
-                # Preserves column integrity by extracting blocks of text sequentially
+                # [V4] Enhanced Column-Aware Vertical Sorting
+                # Preserves column integrity by extracting blocks of text sequentially within each column.
+                # Useful for KCL (Kansas City Life) 3-column layouts.
                 blocks = page.get_text("blocks")
-                # Sort blocks: top-to-bottom, then left-to-right (if same vertical level)
-                blocks.sort(key=lambda b: (b[1], b[0]))
+                # Heuristic: Detect 3 columns if width > 500
+                col_width = page.rect.width / 3 if page.rect.width > 500 else page.rect.width
+                # Sort blocks: first by column (x // col_width), then by top y-coordinate
+                blocks.sort(key=lambda b: (int(b[0] / col_width), b[1]))
                 page_text = "\n".join([b[4] for b in blocks])
             else:
                 # Standard horizontal flow, but sorted to maintain line order
@@ -1145,6 +1149,10 @@ Extract data from the document text provided below.
         - Do NOT extract the value from the `EP` or `COVERAGE` columns (which are usually large numbers like `3,750` or `865`) as a premium.
     - **TOTALS IGNORE**: Ignore lines labeled "TOTALS" for each member (e.g., the row that sums LTD + STD for that person). Focus ONLY on the individual plan rows.
     - **NAMES**: Ensure names are un-mirrored correctly (e.g., "NAPKA, LEANNE" not "AKPAN"). 
+    - **ADJUSTMENT DETAIL (CRITICAL)**: KCL invoices often have an "ADJUSTMENT DETAIL" section (Page 5).
+        - Rows in this section usually start with a date (e.g., `1/1/2026`).
+        - YOU MUST map the premium amount from these rows to **ADJUSTMENT_PREMIUM**.
+        - Do NOT map them to `CURRENT_PREMIUM`.
     - **NAME SPLITTING (CRITICAL)**: If First and Last names appear joined (e.g. "MELLAMANDI"), use capital letters or common name patterns to split them (e.g. "MELLA MANDI" -> FIRST: MELLA, LAST: MANDI).
     - **GENERAL DATES**: Always return only the STARTING date for `BILLING_PERIOD`. If the text says `02/01/26-02/28/26`, return `02/01/26`.
     - **REVERSE-AWARENESS TIP**: If you see names like `YAWOLLOH` or `NAPKA`, it means the system failed to un-mirror. In this case, YOU must mentally reverse every string (e.g., `YAWOLLOH` -> `HOLLOWAY`) before extraction.
@@ -1756,12 +1764,17 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
     print(f"[V3] {'='*70}")
     
     # Extract text from PDF
-    # [V4][UHC] UHC documents suffer from horizontal mashing with pdfplumber.
-    # We force PyMuPDF (structured text) for UHC to preserve line-by-line plan separation.
-    is_likely_uhc = "UHC" in pdf_path.upper() or "UNITED" in pdf_path.upper()
-    if is_likely_uhc:
-        print(f"  [V4][UHC] Detected likely UHC. Using structured text (PyMuPDF) for better line separation.")
+    # [V4][UHC/KCL] Certain carriers suffer from horizontal mashing with pdfplumber.
+    # We force PyMuPDF (structured text) for these carriers with appropriate sorting modes.
+    is_uhc = "UHC" in pdf_path.upper() or "UNITED" in pdf_path.upper()
+    is_kcl = "KCL" in pdf_path.upper() or "KANSAS" in pdf_path.upper()
+    
+    if is_uhc:
+        print(f"  [V4][UHC] Detected likely UHC. Using structured text (PyMuPDF) with horizontal sorting.")
         text = extract_text_from_pdf_pymupdf(pdf_path, mode="horizontal")
+    elif is_kcl:
+        print(f"  [V4][KCL] Detected likely KCL. Using structured text (PyMuPDF) with vertical/columnar sorting.")
+        text = extract_text_from_pdf_pymupdf(pdf_path, mode="vertical")
     else:
         text = extract_text_from_pdf_improved(pdf_path)
     
