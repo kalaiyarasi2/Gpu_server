@@ -97,7 +97,9 @@ def map_and_segment_text(text):
             split_patterns = [
                 r"(\n.*All Employees Totals:)",
                 r"(\n.*Invoice Sub Total)",
-                r"(\n.*Invoice Summary)"
+                r"(\n.*Invoice Summary)",
+                r"(\n.*ADJUSTMENT DETAIL)",
+                r"(\n.*Adjustment Totals)"
             ]
             
             split_found = False
@@ -157,8 +159,17 @@ def process_with_structural_layer(pdf_path, output_excel=None):
     print(f"\n[Structural Layer] Analyzing: {pdf_path}")
     
     # 1. Extract raw text with markers
-    print("  [Debug] Calling v3.extract_text_from_pdf_improved...")
-    text = v3.extract_text_from_pdf_improved(pdf_path)
+    print("  [Debug] Detecting carrier for optimized mode...")
+    # Quick check for KCL
+    is_kcl = "KCL" in pdf_path or "Kansas City Life" in pdf_path
+    
+    if is_kcl:
+        print("  [Layer] KCL detected. Using VERTICAL extraction mode for 3-column layout.")
+        text = v3.extract_text_from_pdf_pymupdf(pdf_path, mode="vertical")
+    else:
+        print("  [Debug] Calling v3.extract_text_from_pdf_improved...")
+        text = v3.extract_text_from_pdf_improved(pdf_path)
+    
     print(f"  [Debug] Text extraction complete. Length: {len(text)} chars.")
     
     # 2. Segment text using structural logic
@@ -220,6 +231,21 @@ def process_with_structural_layer(pdf_path, output_excel=None):
                     "\n[CRITICAL - SECTIONS] If a row is in an 'Adjustments' or 'Retroactivity' section, do NOT put its value in CURRENT_PREMIUM. "
                     "Use ADJUSTMENT_PREMIUM for those rows instead. "
                     "Check the section header - only rows under 'Current Membership' should have CURRENT_PREMIUM."
+                )
+                is_adj_chunk = "ADJUSTMENT DETAIL" in chunk_text or "Adjustment Totals" in chunk_text
+                section_label = "\n[SECTION: ADJUSTMENT DETAIL]" if is_adj_chunk else "\n[SECTION: CURRENT CHARGES]"
+                
+                prompt_hint = (
+                    f"{section_label}"
+                    "\n[CRITICAL INSTRUCTIONS FOR KANSAS CITY LIFE (KCL)]"
+                    "\n1. This document has a main 'Detail of Current Charges' section and an 'ADJUSTMENT DETAIL' section."
+                    "\n2. **ADJUSTMENT IDENTIFICATION**: "
+                    "\n   - IF the chunk is labeled [SECTION: ADJUSTMENT DETAIL], YOU MUST map ALL premiums here to ADJUSTMENT_PREMIUM."
+                    "\n   - IF a row includes a specific date (e.g., 1/1/2026), it is an ADJUSTMENT row -> map to ADJUSTMENT_PREMIUM."
+                    "\n   - Set CURRENT_PREMIUM to NULL for all adjustment rows."
+                    "\n3. **NO CONSOLIDATION**: Do NOT sum current premiums with adjustment premiums for the same person. Return them as SEPARATE line item objects."
+                    "\n4. **ACTUAL AMOUNT**: Ensure 'Actual Amount' or 'Volume' is captured if present. Map 'Actual Amount' to CURRENT_PREMIUM or total columns as appropriate."
+                    "\n5. **ROSTAING_OCR (ROTATION)**: If text appears rotated or unreadable, apply rotation logic (rostaing_ocr) to normalize the view before extraction."
                 )
             
             # Extract line items
