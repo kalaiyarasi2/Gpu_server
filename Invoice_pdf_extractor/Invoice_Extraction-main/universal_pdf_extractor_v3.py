@@ -1005,7 +1005,7 @@ def extract_fields_with_llm(text: str, client: OpenAI, pdf_filename: str = "", m
 ### VERTICAL BLOCK RULES:
 - The text is in a vertical/stacked format (e.g., Column 1 then Column 2).
 - Each member typically starts with their NAME (e.g., "SMITH JOHN").
-- AGGREGATE all premiums for a single member into one `CURRENT_PREMIUM` field.
+- PRESERVE separate rows for adjustments or retro-active changes.
 """
 
     prompt = f"""You are a professional bank and insurance auditor specializing in complex PDF data recovery (V3).
@@ -1136,26 +1136,19 @@ Extract data from the document text provided below.
     - **MIRRORING**: Unum invoices are often MIRRORED (reversed). The system fixes this, but LLMs sometimes misread digits (e.g., '3' vs '8'). BE EXTREMELY CAREFUL with digits.
     - **MEMBERID**: Extract from the "ID NO:" field or equivalent numeric column (e.g., `278069173`).
     - **MULTIPLE PLAN ROWS (CRITICAL)**: A member may have MULTIPLE rows (e.g., one for **LTD** and one for **STD**). You MUST extract EACH row as a separate line item. DO NOT consolidate them into one row; the system will handle it.
-- **KCL (Kansas City Life)**:
-    - **INV_NUMBER SOURCE**: Extract the "Group Number" (e.g., `27716`) and map it to `INV_NUMBER`. In KCL documents, this is the primary invoice identifier.
-    - **HEADER DATA**: Extract `INV_DATE` (e.g., "Date Prepared") and `BILLING_PERIOD` (e.g., "Provides coverage from").
-    - **PLAN_TYPE**: Map "TG Life" to **LIFE** and "TG AD&D" to **AD&D**.
-    - **PLAN_TYPE MAPPING**: 
-        - If "LTD" appears in the row -> `PLAN_TYPE`: **LTD**
-        - If "STD" appears in the row -> `PLAN_TYPE`: **STD**
-    - **PREMIUM EXTRACTION (CRITICAL)**: The table has columns like `ER COST`, `EE COST`, and `TOTAL DUE`. 
-        - You MUST extract the **EE COST** (usually the column with values like `3.03`, `39.89`, `134.83`) as the `CURRENT_PREMIUM`. 
-        - The `TOTAL DUE` column is the SUM of ER + EE costs; DO NOT use it for `CURRENT_PREMIUM` unless EE is missing.
-        - Do NOT extract the value from the `EP` or `COVERAGE` columns (which are usually large numbers like `3,750` or `865`) as a premium.
-    - **TOTALS IGNORE**: Ignore lines labeled "TOTALS" for each member (e.g., the row that sums LTD + STD for that person). Focus ONLY on the individual plan rows.
-    - **NAMES**: Ensure names are un-mirrored correctly (e.g., "NAPKA, LEANNE" not "AKPAN"). 
-    - **ADJUSTMENT DETAIL (CRITICAL)**: KCL invoices often have an "ADJUSTMENT DETAIL" section (Page 5).
-        - Rows in this section usually start with a date (e.g., `1/1/2026`).
-        - YOU MUST map the premium amount from these rows to **ADJUSTMENT_PREMIUM**.
-        - Do NOT map them to `CURRENT_PREMIUM`.
-    - **NAME SPLITTING (CRITICAL)**: If First and Last names appear joined (e.g. "MELLAMANDI"), use capital letters or common name patterns to split them (e.g. "MELLA MANDI" -> FIRST: MELLA, LAST: MANDI).
-    - **GENERAL DATES**: Always return only the STARTING date for `BILLING_PERIOD`. If the text says `02/01/26-02/28/26`, return `02/01/26`.
-    - **REVERSE-AWARENESS TIP**: If you see names like `YAWOLLOH` or `NAPKA`, it means the system failed to un-mirror. In this case, YOU must mentally reverse every string (e.g., `YAWOLLOH` -> `HOLLOWAY`) before extraction.
+- **KCL (Kansas City Life) (STRICT RULES)**:
+    - **SECTION PRIORITY (CRITICAL)**: Look for the injected markers `### SECTION: ... ###`.
+        1. **`### SECTION: CURRENT_CHARGES ###`**: Find member names and capture their **CURRENT_PREMIUM** (e.g., `$2.90`).
+        2. **`### SECTION: ADJUSTMENTS ###`**: Find member names and capture their **ADJUSTMENT_PREMIUM** (e.g., `$5.80`).
+        3. **`### SECTION: ADJUSTMENT_TOTALS ###`**: DO NOT assign rows from this table to the previous member. Map them to a dummy user named "COMPANY SUMMARY" or skip if you already have member-level adjustments.
+    - **TOTALS EXCLUSION**: YOU MUST IGNORE any row where the "Name" or "Product" contains the word "Total" (e.g., "Total for VALDES RITA", "Adjustment Totals"). Extraction should focus ONLY on individual benefit lines.
+    - **NO-NAME ATTRIBUTION**: Never attribute a premium to a member if their name is not explicitly on that line or clearly associated via row grouping. Do not guess or use the last seen member for summary tables.
+    - **HEURISTIC MAPPING**:
+        - In the "CURRENT_CHARGES" section, set **ADJUSTMENT_PREMIUM** to 0.
+        - In the "ADJUSTMENTS" section, set **CURRENT_PREMIUM** to 0.
+        - If you see a member having both current charges and adjustments across different pages, create separate rows for each; the system will join them.
+    - **PLAN_TYPE**: Map "TG Life" to **LIFE**, "TG AD&D" to **AD&D**, "Vision" to **VISION**, "Dental" to **DENTAL**, "Ltd" to **LTD**, "Std" to **STD**.
+    - **FRAGMENTED HEADERS**: Sections markers like `### SECTION: ... ###` are final. Trust them over fragmented text.
 - **APL (American Public Life)**:
     - **Header Identifiers**: Extract "Group Number" as **INV_NUMBER**.
     - **Member Columns**: "Policy" -> **POLICYID**, "Name" -> **FIRSTNAME/LASTNAME**, "SSN" -> **SSN**, "Product" -> **PLAN_NAME**, "Billed"/"Due" -> **CURRENT_PREMIUM**.
@@ -1421,7 +1414,10 @@ Extract data from the document text provided below.
    - If you see multiple amount columns (e.g. Subscriber, Dep, Total):
      - **CURRENT_PREMIUM** MUST be the **TOTAL** amount.
      - **DO NOT** use "Subscriber Amount" or "Dependent Amount" as ADJUSTMENT_PREMIUM.
-   - **ADJUSTMENT_PREMIUM** requires an explicit column header like "Adjustment", "Retro", "Credit", "Prorated".
+   - **ADJUSTMENT_PREMIUM** requires an explicit column header like "Adjustment", "Retro", "Credit", "Prorated", or "Adjustment Amount".
+   - **ALIASED MAPPING**:
+     - "Actual Amount" -> map to **CURRENT_PREMIUM**
+     - "Adjustment Amount" -> map to **ADJUSTMENT_PREMIUM**
    - If no explicit adjustment column exists, `ADJUSTMENT_PREMIUM` is null.
 
 
@@ -1775,6 +1771,11 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
     elif is_kcl:
         print(f"  [V4][KCL] Detected likely KCL. Using structured text (PyMuPDF) with vertical/columnar sorting.")
         text = extract_text_from_pdf_pymupdf(pdf_path, mode="vertical")
+        
+        # [V5] FALLBACK: If vertical extraction seems too thin, try improved mode
+        if len(text.strip()) < 1000:
+            print(f"  [V5][KCL] Vertical text seems too short ({len(text)}). Retrying with improved mode...")
+            text = extract_text_from_pdf_improved(pdf_path)
     else:
         text = extract_text_from_pdf_improved(pdf_path)
     
@@ -1820,6 +1821,24 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
         pages.pop(0)
     
     pages = [p.strip() for p in pages]
+
+    # [V5] KCL Section Marker Injection
+    # Injects explicit markers into each page's text to resolve section ambiguity for KCL invoices.
+    is_kcl = "KCL" in pdf_path.upper() or "KANSAS CITY LIFE" in text.upper()
+    if is_kcl:
+        print(f"  [V5][KCL] Injecting section markers...")
+        current_kcl_section = "UNKNOWN"
+        for i in range(len(pages)):
+            # Detect section shifts
+            if "Detail of Current Charges" in pages[i] or "Premium Statement" in pages[i]:
+                current_kcl_section = "CURRENT_CHARGES"
+            elif "ADJUSTMENT DETAIL" in pages[i]:
+                current_kcl_section = "ADJUSTMENTS"
+            elif "Adjustment Totals" in pages[i]:
+                current_kcl_section = "ADJUSTMENT_TOTALS"
+            
+            # Prepend marker to the page text
+            pages[i] = f"### SECTION: {current_kcl_section} ###\n" + pages[i]
     
     # [V3][VERIFY] Data Integrity Check for Chunking
     original_len = len(text)
@@ -2450,6 +2469,7 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                                 # If one side is a "detail" adjustment, do not merge.
                                 fn_upper = source_filename.upper()
                                 is_bcbs_doc = "BLUE" in fn_upper or "BCBS" in fn_upper
+                                is_kcl_doc = "KCL" in fn_upper or "KANSAS" in fn_upper
                                 
                                 pn1 = str(item.get("PLAN_NAME") or "").upper()
                                 pn2 = str(merged_items[matched_by_name_idx].get("PLAN_NAME") or "").upper()
@@ -2458,16 +2478,35 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                                 is_adj1 = any(kw in pn1 for kw in detail_keywords)
                                 is_adj2 = any(kw in pn2 for kw in detail_keywords)
                                 
-                                if is_bcbs_doc and (is_adj1 or is_adj2):
-                                    # Still merge if they are the SAME adjustment (e.g. split across pages)
-                                    # but otherwise keep separate for "three time" auditability.
-                                    if pn1 == pn2:
-                                        match_index = matched_by_name_idx
-                                    else:
-                                        print(f"      [V4][BCBS] Ledger Mode: Keeping detail adjustment separate: {pn1} vs {pn2}")
+                                # [V4][KCL] Also consider a row an adjustment if ADJUSTMENT_PREMIUM is filled 
+                                # and CURRENT_PREMIUM is NOT (or vice-versa)
+                                has_adj_val1 = to_float(item.get("ADJUSTMENT_PREMIUM")) != 0
+                                has_adj_val2 = to_float(merged_items[matched_by_name_idx].get("ADJUSTMENT_PREMIUM")) != 0
+                                has_cur_val1 = to_float(item.get("CURRENT_PREMIUM")) != 0
+                                has_cur_val2 = to_float(merged_items[matched_by_name_idx].get("CURRENT_PREMIUM")) != 0
+
+                                if (is_bcbs_doc or is_kcl_doc):
+                                    # STRICT SEPARATION for KCL/BCBS: 
+                                    # Don't merge if one is CURRENT and other is ADJUSTMENT
+                                    if (has_cur_val1 and has_adj_val2 and not has_adj_val1) or \
+                                       (has_adj_val1 and has_cur_val2 and not has_cur_val1) or \
+                                       (is_adj1 != is_adj2):
+                                        msg = "BCBS" if is_bcbs_doc else "KCL"
+                                        print(f"      [V4][{msg}] Ledger Mode: Keeping CURRENT and ADJUSTMENT separate for {pn1}")
                                         match_index = None
+                                    else:
+                                        match_index = matched_by_name_idx
                                 else:
-                                    match_index = matched_by_name_idx
+                                    # Standard logic for other carriers
+                                    if (is_adj1 or is_adj2): # Redundant but safe
+                                        if pn1 == pn2:
+                                            match_index = matched_by_name_idx
+                                        else:
+                                            msg = "BCBS" if is_bcbs_doc else "KCL" # This msg is for the print below
+                                            print(f"      [V4][{msg}] Ledger Mode: Keeping detail adjustment separate: {pn1} vs {pn2}")
+                                            match_index = None
+                                    else:
+                                        match_index = matched_by_name_idx
                 
                 # [V3][DEBUG] Trace match result
                 if match_index is not None:
