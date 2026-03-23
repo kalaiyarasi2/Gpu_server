@@ -1671,6 +1671,69 @@ def process_verified_text_file(txt_path: str, client: OpenAI, source_filename: O
     return extracted_data
 
 
+def merge_carrier_rows(items, carrier):
+    """
+    Robustly consolidates line items for the same person and plan.
+    Uses aggressive normalization to handle variance in name/plan formatting (e.g. "Name, First" vs "First Name").
+    """
+    if not items:
+        return items
+        
+    print(f"  [V5][{carrier}] Starting robust merge for {len(items)} items...")
+    merged = {}
+    other_items = []
+    
+    def normalize_str(s):
+        if not s: return ""
+        # Remove all non-alphanumeric characters and whitespace
+        return re.sub(r'[^A-Z0-9]', '', str(s).upper())
+
+    for item in items:
+        # Standard fields
+        fname = str(item.get("FIRSTNAME") or "").strip()
+        lname = str(item.get("LASTNAME") or "").strip()
+        pname = str(item.get("PLAN_NAME") or "").strip()
+        ptype = str(item.get("PLAN_TYPE") or "").strip()
+        
+        # Normalized versions for the key
+        norm_first = normalize_str(fname)
+        norm_last = normalize_str(lname)
+        norm_plan = normalize_str(pname)
+        norm_type = normalize_str(ptype)
+        
+        # Summary/Total row protection
+        is_summary = "TOTAL" in norm_first or "TOTAL" in norm_last or "TOTAL" in norm_plan or (not norm_first and not norm_last)
+        if is_summary:
+            other_items.append(item)
+            continue
+            
+        # Composite Key: Match on Name components (order-independent) and the Plan Type (anchor)
+        # We sort the first/last parts to handle "FLAST" vs "LASTF" variance
+        name_key = "".join(sorted([norm_first, norm_last]))
+        plan_key = norm_type if norm_type else norm_plan
+        
+        key = (name_key, plan_key)
+        
+        if key not in merged:
+            merged[key] = item.copy()
+        else:
+            existing = merged[key]
+            print(f"    [V5][MERGE] Matching found for {fname} {lname} [{ptype}] -> Consolidating rows.")
+            
+            # Merge Premiums (Sum them)
+            existing["CURRENT_PREMIUM"] = to_float(existing.get("CURRENT_PREMIUM", 0)) + to_float(item.get("CURRENT_PREMIUM", 0))
+            existing["ADJUSTMENT_PREMIUM"] = to_float(existing.get("ADJUSTMENT_PREMIUM", 0)) + to_float(item.get("ADJUSTMENT_PREMIUM", 0))
+            
+            # Carry over identifying info if missing in existing
+            for field in ["SSN", "MEMBERID", "POLICYID", "COVERAGE", "PLAN_TYPE", "PLAN_NAME"]:
+                if not existing.get(field) and item.get(field):
+                    existing[field] = item.get(field)
+    
+    final_items = list(merged.values()) + other_items
+    print(f"  [V5][{carrier}] Robust merge complete: {len(items)} -> {len(final_items)} rows.")
+    return final_items
+
+
 def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
     """
     Process a single PDF file and extract fields
@@ -2024,6 +2087,11 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
     # [V4][STRICT FEE FILTER] Programmatic de-duplication of $25 billing fees
     if is_uhc_invoice:
         all_line_items = deduplicate_uhc_fees(all_line_items)
+        data["LINE_ITEMS"] = all_line_items
+
+    # [V5][KCL MERGE] Consolidate multiple rows for the same person/plan (e.g. Current + Adjustment)
+    if is_kcl:
+        all_line_items = merge_carrier_rows(all_line_items, "KCL")
         data["LINE_ITEMS"] = all_line_items
 
     return data
