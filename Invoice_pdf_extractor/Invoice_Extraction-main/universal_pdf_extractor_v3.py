@@ -995,7 +995,7 @@ Extract data from the document text provided below.
             1. Plan: Medical, Current: 1095.61
             2. Plan: Life, Current: 2.75
             3. Plan: AD&D, Current: 0.75
-          - **EXTRACT ALL ROWS**: If a member has multiple adjustments for the same plan (e.g. Gale Alana having two '-$2.75' rows), YOU MUST output TWO separate JSON objects with identical plan names and amounts. DO NOT skip the second one.
+          - **EXTRACT ALL ROWS (100% CAPTURE & LEDGER DETAIL)**: If a member has multiple adjustments for the same plan (e.g. Gale Alana having two '-$2.75' rows or Samuel Smith having multiple TRM rows for different periods like 1/01-1/31 and 2/01-2/28), YOU MUST output EACH as a separate JSON object. Do NOT sum or consolidate them. Even if a row has no name (floating adjustment), extract it as a distinct item based on its position, preserving any unique labels or periods.
     - **BCBS (BlueCross BlueShield)**: 
     - **Subscriber ID** or **Member ID** -> maps to `MEMBERID`.
     - **Coverage Mapping**: 
@@ -1116,26 +1116,20 @@ Extract data from the document text provided below.
     - **Mutual of Omaha**:
     - **Identification**: Look for "Mutual of Omaha" in any header or page.
     - **ID Handling**: Ignore "693399" and "7605" - these are footer/group codes, not member IDs.
-    - **Coverage Mapping (STRICT)**:
-        - `Participant` or `Ppt` -> **EE**
-        - `Spouse` or `Sps` -> **ES**
-        - `Dependent` or `Dep` or `Dep(s)` -> **EC**
-        - `Ppt & Sps` or `Ppt & Spouse` -> **ES**
-        - `Ppt & Dep(s)` or `Ppt & Child` -> **EC**
-        - `Ppt/Dep` -> **EC**
-        - `Family` or `Ppt & Fam` -> **ESC**
-    - **Column Mapping (CRITICAL)**:
-        - Map column `CURRENT` to `CURRENT_PREMIUM`.
-        - Map column `ADJUSTMENT` to `ADJUSTMENT_PREMIUM`.
-        - The member's final total is in the `NET` column (= CURRENT + ADJUSTMENT). You MUST extract BOTH component values.
+    - **Table Structure (CRITICAL)**: Columns typically follow: `[NAME] [ID] [COVERAGE TIER] [EFF DATE] [PLAN NAME] ...`. Note that Name and ID might only appear on the first row of a group.
+    - **Coverage Mapping (IRONCLAD)**:
+        - You MUST extract the coverage tier from the label column (labels: `Participant`, `Spouse`, `Dependent`, `Ppt & Sps`, `Ppt & Dep`, `Family`).
+        - **MAPPING**: `Participant` or `Ppt` -> **EE**; `Spouse` or `Sps` -> **ES**; `Dependent` or `Dep` -> **EC**; `Ppt & Sps` -> **ES**; `Ppt & Dep` -> **EC**; `Family` -> **FAM**.
+        - **MANDATORY**: Every row for a Mutual of Omaha member MUST have a non-null COVERAGE value. If the row starts with or follows the ID with the word "Participant", set COVERAGE to "EE".
+        - DO NOT rely on the plan name to find the coverage; use the explicit label/column.
+    - **Plan Name Capture (CRITICAL)**:
+        - Capture the FULL plan name exactly as it appears. 
+        - **DO NOT** truncate or strip suffixes like `Hi`, `Lo`, `EE`, `Sp`, or `Dep` from the plan name. These are part of the plan's identity (e.g., "VDen Pass Hi" is the High Dental plan, "Life Vol EE" is Life Voluntary for Employee).
     - **Row Capture (STRICT)**:
         - **Source**: Extract ONLY from tables explicitly labeled "**PARTICIPANT DETAIL**".
-        - **Comma-Name Rule (MANDATORY)**: You MUST only extract rows that have a specific individual's name in "**Lastname, Firstname**" format (containing a comma). 
-        - **SKIP ALL SUMMARIES**: If a row does not have a name with a comma, or if it shows a "Count" (e.g. 72) or "Volume" (e.g. 1,000,000), it is a summary row. **YOU MUST SKIP THESE ROWS.**
-        - **No Orphans**: Do NOT extract "ORPHAN" rows or rows without names. If you cannot find a name for the specific row, skip it.
-        - **Retroactive Changes**: These are ADJUSTMENTS. Map to `ADJUSTMENT_PREMIUM` for the member it follows.
-    - **Authoritative Total (MANDATORY)**: ONLY extract the absolute "TOTAL AMOUNT DUE" (e.g., `$9,379.56`) if it is explicitly present in the text (usually Page 3 or 5). Map it as a standalone LINE_ITEM with `PLAN_NAME`: "REPORTED INVOICE TOTAL (FOR AUDIT)" and `FIRSTNAME`: "INVOICE TOTAL". 
-    - **STRICT RULE ON TOTALS**: If the authoritative total (e.g. 9379.56) is NOT in the current document text chunk, DO NOT extract a total row. Do NOT calculate a sub-total for the chunk or use branch totals.
+        - **Member Context Inheritance**: For Mutual of Omaha, member names and IDs only appear on the first line of their group. Subsequent rows within the group MUST inherit the last seen `LASTNAME`, `FIRSTNAME`, `MEMBERID`, and `COVERAGE`.
+        - **Retroactive Changes**: These are ADJUSTMENTS. Inherit Name, ID, and Plan Name from the row immediately above. Map amount to `ADJUSTMENT_PREMIUM`.
+    - **Authoritative Total (MANDATORY)**: ONLY extract the absolute "TOTAL AMOUNT DUE" (e.g., `$9,379.56`) if it is explicitly present in the text. Map it as a standalone LINE_ITEM with `PLAN_NAME`: "REPORTED INVOICE TOTAL (FOR AUDIT)" and `FIRSTNAME`: "INVOICE TOTAL".
 - **Adjustment Table (GUARDIAN)**:
       - If you see **"New Premium"** and **"New Premium Adjustment"**:
         - `New Premium` (e.g., 2.50) -> `CURRENT_PREMIUM`.
@@ -1238,7 +1232,7 @@ Extract data from the document text provided below.
    - **MAPPING (NORMALIZATION)**:
      - "EE+SP", "EE/SP", "EMP+SPOUSE", "DEP", "S" -> **ES**
      - "EE+CH", "EE/CH", "EMP+CHILD", "EMPLOYEE/CHILD", "EMPLOYEE/CHILDREN", "EMP/CHILD", "FPC", "C", "CHILD" -> **EC**
-      - "EE", "EMP ONLY", "SINGLE", "INDIVIDUAL", "IND", "E" -> **EE**
+      - "EE", "EMP ONLY", "SINGLE", "INDIVIDUAL", "IND", "E", "PARTICIPANT", "Participant", "PPT", "Ppt" -> **EE**
       - "FAM", "FAMILY", "F" -> **FAM**
    - **DO NOT GUESS**: Never infer coverage based on premium amounts.
    - If no explicit tier is found OR if the tier cannot be mapped to the allowed set: return **NULL**.
@@ -2113,6 +2107,12 @@ def process_single_pdf_to_excel(pdf_path: str, output_excel: str):
     
     # Flatten data for Excel
     source_filename = os.path.basename(pdf_path)
+    
+    # DEBUG: Print Samuel Smith rows before flattening
+    for item in data.get("LINE_ITEMS", []):
+        if "Smith" in str(item.get("LASTNAME", "")) or "Smith" in str(item.get("FIRSTNAME", "")):
+            print(f">>> DEBUG RAW LLM ITEM: {item}")
+            
     rows = flatten_extracted_data(data, source_filename)
     
     if not rows:
@@ -2285,7 +2285,7 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                 # Strip excessive leading zeros (e.g. "000000000027716" -> "27716")
                 # Only do this if: the value is all-numeric, has 4+ leading zeros, and dropping them
                 # leaves a meaningful number (3+ digits). This avoids stripping BCBS 12-digit IDs
-                # like "260210001403" which don't start with 4+ zeros.
+                                            # like "260210001403" which don't start with 4+ zeros.
                 if clean_header.get("INV_NUMBER") and inv_num_val:
                     inv_num_val = str(clean_header["INV_NUMBER"])
                     if inv_num_val.replace(".", "").replace("-", "").isdigit():
@@ -2295,7 +2295,7 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                         if leading_zeros >= 4 and len(stripped) >= 3:
                             print(f"    [V3][FIX] Stripping leading zeros from INV_NUMBER '{inv_num_val}' -> '{stripped}'")
                             clean_header["INV_NUMBER"] = stripped
-            
+                            
             # CLEANUP: to_float and check_total moved to global scope
             def is_keyword_match(text, keywords):
                 t = str(text or "").upper()
@@ -2318,7 +2318,7 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                 
                 # SPECIAL CASE: Sharad Saxton is a REAL member (Account Owner)
                 is_sharad = (first_name == "SHARAD" and last_name == "SAXTON") or \
-                           (first_name == "SAXTON" and last_name == "SHARAD")
+                        (first_name == "SAXTON" and last_name == "SHARAD")
                 
                 if is_sharad:
                     print(f"    [V3][INFO] Protecting REAL member Sharad Saxton from dummy filter.")
@@ -2333,15 +2333,15 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                 lname = str(item.get("LASTNAME") or "").strip().lower()
                 member_id = str(item.get("MEMBERID") or "").strip().lower()
                 ssn = str(item.get("SSN") or "").strip().lower()
-                
-                # Check for weak identifiers
+                                            
+                                            # Check for weak identifiers
                 is_weak_id = not member_id or member_id in ["n/a", "none", "unknown", ""]
                 is_weak_ssn = not ssn or ssn in ["n/a", "none", "unknown", ""]
                 is_weak_name = not fname and not lname
                 
                 if is_weak_id and is_weak_ssn and is_weak_name:
                     # [V4][ADJUSTMENT ALLOW] Allow orphan adjustments through the filter
-                    is_adjustment_label = is_keyword_match(item.get("PLAN_NAME"), ["ADJUSTMENT", "ADJUSTMENTS", "RETRO"])
+                    is_adjustment_label = is_keyword_match(item.get("PLAN_NAME"), ["ADJUSTMENT", "ADJUSTMENTS", "RETRO", "ADD", "TRM", "CHG", "CH"])
                     has_premium = to_float(item.get("CURRENT_PREMIUM")) != 0 or to_float(item.get("ADJUSTMENT_PREMIUM")) != 0
                     if not (is_adjustment_label and has_premium):
                         # Skip empty/noise items that have no identifier and no name
@@ -2576,7 +2576,7 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                     # [V4][ADJUSTMENT MERGE] Handle Orphan Adjustments
                     # If this is a row with no name but has an adjustment amount/label,
                     # try to merge it into the LAST member row we just added.
-                    is_adjustment_label = is_keyword_match(item.get("PLAN_NAME"), ["ADJUSTMENT", "ADJUSTMENTS", "RETRO"])
+                    is_adjustment_label = is_keyword_match(item.get("PLAN_NAME"), ["ADJUSTMENT", "ADJUSTMENTS", "RETRO", "ADD", "TRM", "CHG", "CH"])
                     has_premium = to_float(item.get("CURRENT_PREMIUM")) != 0 or to_float(item.get("ADJUSTMENT_PREMIUM")) != 0
                     
                     if is_weak_name and is_adjustment_label and has_premium and merged_items:
@@ -2589,12 +2589,23 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                         
                         if last_member_idx is not None:
                             last_member = merged_items[last_member_idx]
-                            print(f"    [V4][MERGE] Merging orphan adjustment '{item.get('PLAN_NAME')}' into member {last_member.get('FIRSTNAME')} {last_member.get('LASTNAME')}")
                             
-                            # Move CURRENT_PREMIUM to ADJUSTMENT_PREMIUM if the label is "Adjustment"
-                            adj_val = to_float(item.get("CURRENT_PREMIUM")) + to_float(item.get("ADJUSTMENT_PREMIUM"))
-                            existing_adj = to_float(last_member.get("ADJUSTMENT_PREMIUM"))
-                            last_member["ADJUSTMENT_PREMIUM"] = round(existing_adj + adj_val, 2)
+                            # [V4][UHC][LEDGER MODE] Preserve separate rows for UHC adjustments 
+                            is_uhc_doc = "UHC" in source_filename.upper() or "TIN LIZZIE" in source_filename.upper()
+                            
+                            if is_uhc_doc:
+                                print(f"    [V4][MERGE][UHC] Keeping orphan adjustment '{item.get('PLAN_NAME')}' as separate row for member {last_member.get('FIRSTNAME')} {last_member.get('LASTNAME')}")
+                                new_adj_row = last_member.copy()
+                                new_adj_row["CURRENT_PREMIUM"] = 0
+                                new_adj_row["ADJUSTMENT_PREMIUM"] = to_float(item.get("CURRENT_PREMIUM")) + to_float(item.get("ADJUSTMENT_PREMIUM"))
+                                new_adj_row["PLAN_NAME"] = item.get("PLAN_NAME") # e.g. (TRM)
+                                merged_items.append(new_adj_row)
+                                continue # Successfully added as new separate record
+                            else:
+                                print(f"    [V4][MERGE] Merging orphan adjustment '{item.get('PLAN_NAME')}' into member {last_member.get('FIRSTNAME')} {last_member.get('LASTNAME')}")
+                                adj_val = to_float(item.get("CURRENT_PREMIUM")) + to_float(item.get("ADJUSTMENT_PREMIUM"))
+                                existing_adj = to_float(last_member.get("ADJUSTMENT_PREMIUM"))
+                                last_member["ADJUSTMENT_PREMIUM"] = round(existing_adj + adj_val, 2)
                             
                             # Update plan name if relevant (optional)
                             # last_member["PLAN_NAME"] = f"{last_member.get('PLAN_NAME')} (incl. {item.get('PLAN_NAME')})"
