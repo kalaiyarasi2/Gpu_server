@@ -53,41 +53,28 @@ class StatementValidator:
                 
                 if diff > 0.01:
                     # DISCREPANCY DETECTED
-                    # Check if it's the 'Balance-as-Amount' error
-                    # i.e., did the extractor mistakenly put the running balance into the amount field?
-                    # HEURISTIC 1: Check if Balance was mistakenly taken as Amount
+                    # HEURISTIC 1: Current Amount matches Current Running Balance (Swap)
                     if abs(abs(val) - extracted_running_balance) < 0.01:
-                        # YES: Balance was taken as Amount
                         actual_diff = round(extracted_running_balance - current_calc_balance, 2)
                         tx["amount"] = abs(actual_diff)
                         tx["validation_fixed"] = True
-                        tx["validation_notes"] = f"Corrected balance-as-amount error. Diff: {actual_diff}"
-                        flagged_rows.append({"index": i, "description": desc, "extracted_amount": amount, "expected_amount": abs(actual_diff), "reason": "balance_as_amount_collision"})
-                        status = "corrected"
+                        tx["validation_notes"] = f"Corrected balance-as-amount swap. Derived amt: {abs(actual_diff)}"
                         current_calc_balance = extracted_running_balance
                         continue
 
-                    # HEURISTIC 2: General arithmetic mismatch or Page-Boundary Gap
-                    # If this is not a balance-as-amount error, but we have a running balance,
-                    # we should probably TRUST the running balance and reset our baseline
-                    # to prevent a waterfall of errors if a previous row was missed.
-                    logger.warning(f"⚠️ VALIDATOR: Discrepancy at row {i} ({desc[:30]}...). Syncing to extracted balance.")
-                    
-                    # Optional: attempt correction if it's a minor mismatch
+                    # HEURISTIC 2: Trust the running balance and fix the amount to match
                     corrected_val = round(extracted_running_balance - current_calc_balance, 2)
-                    if abs(corrected_val) < 1000000: # Sanity check for massive gaps
-                        tx["amount"] = abs(corrected_val)
-                        tx["validation_fixed"] = True
-                        tx["validation_notes"] = f"Corrected math discrepancy. Expected: {abs(corrected_val)}"
-                        flagged_rows.append({"index": i, "description": desc, "extracted_amount": amount, "expected_amount": abs(corrected_val), "reason": "math_discrepancy"})
-                        status = "corrected"
-                    
+                    tx["amount"] = abs(corrected_val)
+                    tx["validation_fixed"] = True
+                    tx["validation_notes"] = f"Corrected discrepancy using balance anchor. Extracted {abs(val)} -> Corrected {abs(corrected_val)}"
                     current_calc_balance = extracted_running_balance
                 else:
-                    # Balance matches expectation, update baseline
                     current_calc_balance = extracted_running_balance
             else:
-                # No running balance provided for THIS row, keep the cumulative sum
+                # NO RUNNING BALANCE provided for this row
+                # Check for "Phantom Balance": Does the amount look like a likely balance?
+                # (e.g. is it very large and close to the previous balance?)
+                # We'll trust the math for now, but if the NEXT row has a balance, we'll fix this row retrospectively.
                 current_calc_balance = expected_next_balance
                 
         return {

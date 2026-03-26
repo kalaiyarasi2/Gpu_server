@@ -163,8 +163,9 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
     
     def process_pdf_with_verification(self, pdf_path: str, target_claim_number: Optional[str] = None) -> Dict:
         """
-        Complete pipeline with verification steps - Overridden to support chunking report.
+        OVERRIDE: Main entry point for chunked extraction.
         """
+        self.current_pdf_path = pdf_path
         from datetime import datetime
         import os
         
@@ -622,9 +623,21 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
                 merged["carrier_name"] = inferred_carrier
                 print(f"   ✓ Inferred global carrier_name: {inferred_carrier}")
             
+        # Build a mapping of clean_policy -> carrier for propagation
+        policy_carrier_map = {}
+        for res in results_list:
+            p = res.get("policy_number")
+            c = res.get("carrier_name")
+            if p and c and "," not in str(c):
+                # Clean the policy number if it has the suffix
+                if " - " in str(p):
+                    p = re.split(r'\s-\s\d{4}', str(p))[0].strip()
+                policy_carrier_map[p] = c
+        
         # Global post-processing + deduplication (RC4 tie-breaker is in _post_process_claims)
         print(f"   🔍 Performing global post-extraction audit...")
-        merged = self._post_process_claims(merged, master_claim_list=global_master_list or None)
+        merged = self._post_process_claims(merged, master_claim_list=global_master_list or None,
+                                           policy_carrier_map=policy_carrier_map)
         
         print(f"   ✅ After merge: {len(merged['claims'])} total claims.")
         
@@ -661,6 +674,11 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
             else:
                 print(f"   ✅ All {len(global_master_list)} global claim IDs accounted for.")
         # ─────────────────────────────────────────────────────────────────────
+        
+        # STAGE 4: Deep Repair Layer (Dynamic placeholder fixing)
+        # This is the final safety net for any claims that still have placeholders
+        # after both chunked extraction and global recovery.
+        merged = self._repair_degenerate_claims(all_text, merged, pdf_path=getattr(self, 'current_pdf_path', None))
         
         return merged
 

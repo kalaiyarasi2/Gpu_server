@@ -110,12 +110,15 @@ class StructuredExcelExtractor:
         
         if ext == ".csv":
             try:
-                # Use engine='python' for better robustness with varying field counts
-                # Use utf-8-sig to automatically handle Byte Order Mark (BOM)
-                df = pd.read_csv(file_path, header=None, engine='python', on_bad_lines='skip', encoding='utf-8-sig')
+                # Use names=range(100) to force a wide dataframe. 
+                # This prevents on_bad_lines='skip' from dropping data if header is wider than preamble.
+                df = pd.read_csv(file_path, header=None, engine='python', names=range(100), on_bad_lines='skip', encoding='utf-8-sig')
             except Exception as e:
                 print(f"  [WARN] UTF-8 read failed ({e}). Trying latin-1 fallback...")
-                df = pd.read_csv(file_path, header=None, engine='python', on_bad_lines='skip', encoding='latin-1')
+                df = pd.read_csv(file_path, header=None, engine='python', names=range(100), on_bad_lines='skip', encoding='latin-1')
+            
+            # Drop completely empty columns that were forced by names=range(100)
+            df = df.dropna(axis=1, how='all')
         else:
             df = pd.read_excel(file_path, header=None)
 
@@ -123,30 +126,54 @@ class StructuredExcelExtractor:
         header_idx = -1
         for i, row in df.iterrows():
             row_str = " ".join(row.fillna("").astype(str)).lower()
-            if "member name" in row_str or "member id" in row_str:
+            if "member name" in row_str or "member id" in row_str or "subscriber name" in row_str:
                 header_idx = i
                 break
         
         if header_idx == -1:
             print("  [WARN] Header not found by keywords. Defaulting to row 1.")
-            header_idx = 1 # Fallback
+            header_idx = min(1, len(df)-1) if len(df) > 0 else 0
+        
+        if header_idx >= len(df):
+            print(f"  [ERR] Header index {header_idx} out of bounds for dataframe with {len(df)} rows.")
+            return None
         
         # Extract global metadata (Billing Period/Inv Date) from above header
         global_billing_period = None
         global_inv_number = None
+        global_inv_date = None
         
         # Try to find Invoice Number in filename
-        # Pattern: "Tacton Guardian 2.1-2.28" -> Maybe capture something
         match_inv = re.search(r'(\d+\.\d+-\d+\.\d+)', file_path.name)
         if match_inv:
             global_inv_number = match_inv.group(1)
 
         for i in range(header_idx):
-            row_str = " ".join(df.iloc[i].fillna("").astype(str))
+            row = df.iloc[i].fillna("").astype(str).tolist()
+            row_str = " ".join(row).lower()
+            
+            # 1. Billing Period Regex (Range)
             if not global_billing_period:
                 match_bp = re.search(r'\d{1,2}/\d{1,2}/\d{2,4}\s*-\s*\d{1,2}/\d{1,2}/\d{2,4}', row_str)
                 if match_bp:
                     global_billing_period = match_bp.group(0)
+            
+            # 2. Key-Value Extraction for Invoice Number/Date
+            for idx, cell in enumerate(row):
+                cell_lower = cell.strip().lower()
+                if not global_inv_number and ("invoice_number" in cell_lower or "inv_number" in cell_lower or "invoice number" in cell_lower):
+                    # Value is likely in the next non-empty cell
+                    for next_cell in row[idx+1:]:
+                        val = next_cell.strip().replace("=", "").replace('"', "")
+                        if val:
+                            global_inv_number = val
+                            break
+                if not global_inv_date and ("invoice_date" in cell_lower or "inv_date" in cell_lower or "invoice date" in cell_lower):
+                    for next_cell in row[idx+1:]:
+                        val = next_cell.strip()
+                        if val:
+                            global_inv_date = val
+                            break
 
         # 2. Set columns and slice data
         df.columns = [str(c).strip() for c in df.iloc[header_idx]]
@@ -251,7 +278,7 @@ class StructuredExcelExtractor:
                         elif "VISION" in benefit_prefix.upper(): benefit_type = "VISION"
 
                     item = {
-                        "INV_DATE": row.get("Billing Due Date", None),
+                        "INV_DATE": row.get("Billing Due Date", global_inv_date),
                         "INV_NUMBER": global_inv_number,
                         "BILLING_PERIOD": from_date or bp,
                         "LASTNAME": last,

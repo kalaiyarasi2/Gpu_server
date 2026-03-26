@@ -1415,7 +1415,7 @@ Follow the format-specific instructions above. Validate your extractions."""
                             except Exception as e:
                                 print(f"      ⚠️  Recovery batch attempt {attempt+1} failed: {e}")
                                     
-                        # Final merge check
+                # Final merge check
                     data = self._post_process_claims(data)
                 final_count = len(data.get("claims", []))
                 print(f"   ✓ Recovery complete. Final count: {final_count}/{claims_in_text}")
@@ -1423,7 +1423,10 @@ Follow the format-specific instructions above. Validate your extractions."""
                 print(f"   ✓ All claims accounted for ({claims_in_text} total)")
                 # Unconditionally run post-processing even if no claims were missing
                 # to ensure claim_year and other normalizations are applied.
-                data = self._post_process_claims(data)
+            # STAGE 3: Deep Repair Layer (Dynamic placeholder fixing)
+            # Use original_pdf_path if available for vision fallback
+            pdf_path = getattr(self, 'current_pdf_path', None)
+            data = self._repair_degenerate_claims(all_text, data, pdf_path=pdf_path)
                 
         except Exception as e:
             print(f"   ❌ Error in recovery phase: {e}")
@@ -1434,7 +1437,8 @@ Follow the format-specific instructions above. Validate your extractions."""
             
 
     
-    def _post_process_claims(self, data: Dict, master_claim_list: Optional[List[str]] = None) -> Dict:
+    def _post_process_claims(self, data: Dict, master_claim_list: Optional[List[str]] = None, 
+                            policy_carrier_map: Optional[Dict[str, str]] = None) -> Dict:
         """
         Post-process extracted claims to fix formatting and field mapping
         Cleanup and deduplicate claims using math-driven quality scores.
@@ -1479,19 +1483,36 @@ Follow the format-specific instructions above. Validate your extractions."""
             if not claim_num:
                 continue
                 
-            # 0. Metadata Propagation
+            # 0. Policy Number Normalization
+            # Clean "WSA 5070786 02 - 2025/2026" -> "WSA 5070786 02"
+            raw_policy = str(claim.get("policy_number") or "").strip()
+            if " - " in raw_policy:
+                # Regex to match " - 20XX/20YY" or " - 20XX"
+                clean_policy = re.split(r'\s-\s\d{4}', raw_policy)[0].strip()
+                if clean_policy:
+                    claim["policy_number"] = clean_policy
+            
+            # 0a. Metadata Propagation
             if not claim.get("policy_number") and default_policy:
                 claim["policy_number"] = default_policy
-            if not claim.get("carrier_name") and default_carrier:
-                # RC4 FIX: Only propagate top-level carrier if it doesn't look like an aggregated list.
-                # We block commas (aggregated list) but ALLOW spaces (multi-word company names).
-                if "," not in str(default_carrier):
+            
+            # 0b. Carrier Filling with Policy-Aware Mapping
+            # If we have a policy but no carrier, try to use the map
+            current_policy = claim.get("policy_number")
+            if not claim.get("carrier_name") or claim.get("carrier_name") == "null":
+                if policy_carrier_map and current_policy in policy_carrier_map:
+                    claim["carrier_name"] = policy_carrier_map[current_policy]
+                elif default_carrier and "," not in str(default_carrier):
+                    # RC4 FIX: Only propagate top-level carrier if it doesn't look like an aggregated list.
                     claim["carrier_name"] = default_carrier
             
             # Guard against calibration hallucinations from the prompt
             current_carrier = str(claim.get("carrier_name") or "").lower()
             if current_carrier in ["insurance company name", "the insurance company for this claim or report"]:
-                claim["carrier_name"] = default_carrier if default_carrier else None
+                if policy_carrier_map and current_policy in policy_carrier_map:
+                    claim["carrier_name"] = policy_carrier_map[current_policy]
+                else:
+                    claim["carrier_name"] = default_carrier if default_carrier and "," not in str(default_carrier) else None
                 
             # Enforce policy_number format rule at claim level
             if claim.get("policy_number") and not _is_valid_policy_number(claim.get("policy_number")):
@@ -1752,6 +1773,302 @@ Follow the format-specific instructions above. Validate your extractions."""
         
         is_valid = len(errors) == 0
         return is_valid, errors
+
+    def _is_degenerate_claim(self, claim: Dict) -> bool:
+        """
+        Identify if a claim has placeholder values or suspiciously empty data.
+        """
+        placeholders = [
+            "YYYY-MM-DD", "description", "class code", "body part", 
+            "unknown", "nature of injury", "not provided", "not available"
+        ]
+        
+        # 1. CRITICAL CHECK: Missing basic identification
+        # If we have a claim number but no employee name, it's degenerate.
+        if claim.get("claim_number") and not claim.get("employee_name"):
+            return True
+            
+        # 2. Check for literal placeholders in various fields
+        fields_to_check = ["employee_name", "injury_date_time", "injury_description", "claim_class", "body_part"]
+        for field in fields_to_check:
+            val = str(claim.get(field) or "").lower()
+            if any(p in val for p in placeholders):
+                return True
+        
+        # 3. Check for empty financials (if it's not a dummy/phantom)
+        financial_fields = [
+            "medical_paid", "medical_reserve", "indemnity_paid", "indemnity_reserve",
+            "expense_paid", "expense_reserve"
+        ]
+        
+        try:
+            def to_float(v):
+                if v is None: return 0.0
+                if isinstance(v, (int, float)): return float(v)
+                s = str(v).replace(',', '').replace('$', '').strip()
+                return float(s) if s and s != '-' else 0.0
+                
+            all_zero = all(to_float(claim.get(f)) == 0.0 for f in financial_fields)
+        except:
+            all_zero = True
+            
+        # If all financials are zero but we have identification, it's possibly degenerate
+        if all_zero and claim.get("claim_number"):
+            # Further check: if injury_description is also short/generic or missing
+            desc = str(claim.get("injury_description") or "").lower()
+            if not desc or len(desc) < 10 or any(p in desc for p in ["description", "injury", "unknown"]):
+                # If we have a name but no details and no money, let's try to repair it
+                return True
+                
+        return False
+
+    def _repair_degenerate_claims(self, all_text: str, data: Dict, pdf_path: Optional[str] = None) -> Dict:
+        """
+        Orchestrates the repair of low-quality claims using hyper-focused extraction.
+        Now includes a Dynamic Vision Fallback if text-based repair fails.
+        """
+        claims = data.get("claims", [])
+        degenerate_indices = [i for i, c in enumerate(claims) if self._is_degenerate_claim(c)]
+        
+        if not degenerate_indices:
+            return data
+            
+        print(f"\n   🛠️  DEEP REPAIR LAYER: Found {len(degenerate_indices)} degenerate claim(s).")
+        
+        for idx in degenerate_indices:
+            claim = claims[idx]
+            claim_id = str(claim.get("claim_number"))
+            print(f"      🔄 Targeting claim #{claim_id} ({claim.get('employee_name')}) for repair...")
+            
+            # Step 1: Attempt Text-based Deep Repair first (Fast & Cheap)
+            repaired_claim = self._deep_extract_claim(all_text, claim_id)
+            
+            # Step 2: If text repair fails or remains degenerate, try Vision Fallback
+            if (not repaired_claim or self._is_degenerate_claim(repaired_claim)) and pdf_path:
+                print(f"         ⚠️  Text-based repair insufficient. Attempting targeted Vision Repair...")
+                page_num = self._find_page_number_for_claim(all_text, claim_id)
+                if page_num:
+                    print(f"         👁️  Vision Repair: Processing Page {page_num} for claim {claim_id}...")
+                    vision_claim = self._extract_claim_vision(pdf_path, page_num, claim_id)
+                    if vision_claim and not self._is_degenerate_claim(vision_claim):
+                        repaired_claim = vision_claim
+                        print(f"         ✅ Vision Repair Success!")
+                    else:
+                        print(f"         ❌ Vision Repair failed or result still degenerate.")
+                else:
+                    print(f"         ❌ Could not identify page number from text for Vision fallback.")
+            
+            # Update the original claim data if repair succeeded
+            if repaired_claim and not self._is_degenerate_claim(repaired_claim):
+                # Ensure repaired claim has all required fields (normalization)
+                for k, v in repaired_claim.items():
+                    if v is not None:
+                        claim[k] = v
+                print(f"         ✅ Success! Claim #{claim_id} fully repaired.")
+            else:
+                print(f"         ❌ Deep Repair failed for claim #{claim_id}. Retaining original.")
+                
+        return data
+
+    def _find_page_number_for_claim(self, all_text: str, claim_id: str) -> Optional[int]:
+        """
+        Identify the page number for a claim by looking at PAGE markers in the text.
+        """
+        if not all_text or not claim_id:
+            return None
+        try:
+            # Find location of claim_id in text
+            pos = all_text.find(claim_id)
+            if pos == -1:
+                return None
+            
+            # Look backwards for the nearest "PAGE X" marker
+            preceding_text = all_text[:pos]
+            page_markers = list(re.finditer(r'={2,}\s*PAGE\s+(\d+)\s*={2,}', preceding_text))
+            if page_markers:
+                return int(page_markers[-1].group(1))
+            
+            return 1 # Default to page 1 if no markers found
+        except:
+            return None
+
+    def _extract_claim_vision(self, pdf_path: str, page_num: int, claim_id: str) -> Optional[Dict]:
+        """
+        Targeted Vision-based extraction for a single claim from a specific PDF page.
+        """
+        from pdf2image import convert_from_path
+        
+        try:
+            # Convert specifically the targeted page
+            images = convert_from_path(
+                pdf_path, 
+                first_page=page_num, 
+                last_page=page_num,
+                poppler_path=os.environ.get("POPPLER_PATH")
+            )
+            if not images:
+                return None
+            
+            img = images[0]
+            buffered = BytesIO()
+            img.save(buffered, format="JPEG", quality=95)
+            img_base64 = base64.b64encode(buffered.getvalue()).decode('utf-8')
+            
+            prompt = f"""You are an elite insurance data extractor. 
+I am showing you an image of Page {page_num} from a loss run.
+
+Your Task: Extract COMPLETE data for Claim #{claim_id}.
+CRITICAL: Do NOT use any placeholders. Look carefully at the column headers.
+
+Return ONLY a JSON object for this ONE claim:
+{{
+  "employee_name": "full name",
+  "claim_number": "{claim_id}",
+  "injury_date_time": "YYYY-MM-DD",
+  "status": "Open/Closed",
+  "injury_description": "full nature and cause of injury",
+  "body_part": "body part",
+  "injury_type": "Indemnity or Medical Only",
+  "claim_class": "class code",
+  "medical_paid": 0.0,
+  "medical_reserve": 0.0,
+  "indemnity_paid": 0.0,
+  "indemnity_reserve": 0.0,
+  "expense_paid": 0.0,
+  "expense_reserve": 0.0,
+  "total_paid": 0.0,
+  "total_reserve": 0.0,
+  "total_incurred": 0.0,
+  "litigation": "Yes/No",
+  "confidence_score": 1.0
+}}
+
+JSON output:"""
+
+            response = self.client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": f"data:image/jpeg;base64,{img_base64}"}
+                            }
+                        ]
+                    }
+                ],
+                response_format={"type": "json_object"},
+                temperature=0.0
+            )
+            
+            vision_result = json.loads(response.choices[0].message.content)
+            
+            # Numeric normalization
+            num_fields = [
+                "medical_paid", "medical_reserve", "indemnity_paid", "indemnity_reserve",
+                "expense_paid", "expense_reserve", "total_paid", "total_reserve", "total_incurred"
+            ]
+            for field in num_fields:
+                val = vision_result.get(field)
+                if isinstance(val, str):
+                    clean_val = re.sub(r'[^\d.]', '', val)
+                    vision_result[field] = float(clean_val) if clean_val else 0.0
+            
+            return vision_result
+            
+        except Exception as e:
+            print(f"         ⚠️  Vision repair process error: {e}")
+            return None
+
+    def _deep_extract_claim(self, all_text: str, claim_id: str) -> Optional[Dict]:
+        """
+        Uses a hyper-focused prompt and precise context window to re-extract a single claim.
+        """
+        if not all_text or not claim_id:
+            return None
+            
+        try:
+            # 1. Locate the claim ID to create a focused window
+            # Find all occurrences
+            matches = list(re.finditer(re.escape(claim_id), all_text))
+            if not matches:
+                return None
+                
+            # Take the first occurrence and create a 8000 char window (4000 before, 4000 after)
+            pos = matches[0].start()
+            start = max(0, pos - 4000)
+            end = min(len(all_text), pos + 4000)
+            focused_context = all_text[start:end]
+            
+            prompt = f"""You are an elite insurance data extraction agent. 
+You are repairing a single claim that previously failed extraction.
+
+⚠️ CRITICAL: The data IS present in the text context below. 
+⚠️ DO NOT use placeholders like "YYYY-MM-DD", "description", "class code", or "body part".
+⚠️ If you cannot find a value, use null, but look VERY carefully at the column headers.
+
+TARGET CLAIM ID: {claim_id}
+
+Return ONLY a JSON object with these EXACT fields:
+{{
+  "employee_name": "full name as shown (e.g. 'Last, First')",
+  "claim_number": "{claim_id}",
+  "injury_date_time": "YYYY-MM-DD",
+  "status": "Open or Closed or Reopened",
+  "injury_description": "full detail of what happened",
+  "body_part": "body part injured",
+  "injury_type": "Indemnity or Medical Only",
+  "claim_class": "4-digit class code if visible",
+  "medical_paid": 0.0,
+  "medical_reserve": 0.0,
+  "indemnity_paid": 0.0,
+  "indemnity_reserve": 0.0,
+  "expense_paid": 0.0,
+  "expense_reserve": 0.0,
+  "total_paid": 0.0,
+  "total_reserve": 0.0,
+  "total_incurred": 0.0,
+  "litigation": "Yes or No",
+  "confidence_score": 1.0
+}}
+
+TEXT CONTEXT (around claim):
+...
+{focused_context}
+...
+
+Return ONLY the JSON."""
+
+            response = self.client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "user", "content": prompt}],
+                response_format={"type": "json_object"},
+                temperature=0.0
+            )
+            
+            repaired_data = json.loads(response.choices[0].message.content)
+            
+            # Numeric cleanup for the repaired data
+            num_fields = [
+                "medical_paid", "medical_reserve", "indemnity_paid", "indemnity_reserve",
+                "expense_paid", "expense_reserve", "total_paid", "total_reserve", "total_incurred"
+            ]
+            for field in num_fields:
+                val = repaired_data.get(field)
+                if isinstance(val, str):
+                    clean_val = re.sub(r'[^\d.]', '', val)
+                    try:
+                        repaired_data[field] = float(clean_val) if clean_val else 0.0
+                    except:
+                        repaired_data[field] = 0.0
+            
+            return repaired_data
+            
+        except Exception as e:
+            print(f"      ⚠️  Deep extraction error: {e}")
+            return None
     
     
     def _extract_missing_claims_by_number(self, all_text: str, existing_data: Dict, missing_claim_numbers: List[str], is_correction: bool = False) -> Dict:
@@ -1979,6 +2296,7 @@ Return ONLY the JSON object for claim {target_claim_number}."""
         Uses PyMuPDF + Tesseract for text extraction
         Returns all extracted data for user verification
         """
+        self.current_pdf_path = pdf_path
         print(f"\n{'='*60}")
         print(f"🚀 PROCESSING: {os.path.basename(pdf_path)}")
         print(f"{'='*60}")

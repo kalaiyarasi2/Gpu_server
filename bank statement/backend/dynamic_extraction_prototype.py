@@ -151,6 +151,7 @@ Return JSON:
             raise ValueError("No dynamic schema generated")
 
         all_transactions = []
+        global_index = 0
         
         # Strategy: Segment text by discovered sections and extract rows
         sections = self.discovered_structure.get("sections", [])
@@ -235,12 +236,14 @@ If the text appears in BLOCKS (a block of Trans. Dates, then a block of Posting 
 4. The 'Withdrawal/Debit' and 'Deposit/Credit' columns may merge with the 'Balance' column in OCR output. Parse carefully.
 
 STANDARDIZATION RULES:
-- amount: numeric (ONLY the transaction amount - the debit or credit value, NOT the running balance)
+- amount: numeric (ONLY the transaction amount - the debit or credit value).
   - SIGN: {self.discovered_structure.get("currency_notes", "Standard")}. Deposits/Credits = Positive (+), Withdrawals/Debits = Negative (-).
-  - BALANCE EXCLUSION: Do NOT use the Balance/Running Balance as the amount. The Balance is the cumulative account total AFTER the transaction.
+  - CRITICAL - BALANCE SHIELD: The column on the FAR RIGHT is the **Running Balance**. You are STRICTLY PROHIBITED from extracting the Running Balance value into the `amount` field.
+  - If a row has `95.96` and `1,582.10`, where `1,582.10` is on the far right: `95.96` is the amount, and `1,582.10` is the running balance.
 - running_balance: numeric (MANDATORY). This is the account total AFTER this transaction (the far-right column).
   - CRITICAL: You MUST provide this value for every single transaction row. It is the definitive anchor for our mathematical verification engine.
   - RULE: If a line or row has multiple numbers, the one on the **FAR RIGHT** (the last one horizontally) is ALWAYS the `running_balance`.
+  - NO MISMATCH: Mismatching the transaction amount with the running balance is a CRITICAL FAILURE. Accuracy is the highest priority.
   - RECONSTRUCTION: In split-column layouts, the `running_balance` might appear as a decimal fragment (e.g., '.84') in a block of numbers 30-50 lines below the description. You MUST pair the Nth number in that fragment block with the Nth transaction.
   - If you are absolutely uncertain, pick the number that seems most like a total (usually the largest or last). Never leave it null unless the entire column is blank.
 - date: MM/DD
@@ -264,9 +267,12 @@ Return JSON:
                                 response_format={"type": "json_object"},
                                 temperature=0.0
                             )
-                            
+                             
                             rows = json.loads(response.choices[0].message.content).get("transactions", [])
-                            all_transactions.extend(rows)
+                            for r in rows:
+                                r["original_index"] = global_index
+                                global_index += 1
+                                all_transactions.append(r)
                         
                         last_pos = next_search_pos
                         if last_pos >= len(full_text):

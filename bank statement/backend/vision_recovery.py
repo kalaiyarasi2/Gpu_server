@@ -57,7 +57,11 @@ class VisionRecoveryHandler:
 
             # Heuristic checks (bank-specific)
             transaction_markers = re.findall(r'Date|Amount|Description|Balance|Transaction|Deposit|Withdrawal', text, re.IGNORECASE)
-            headers_found = any(k in text for k in ["Account Number", "Beginning Balance", "Ending Balance", "Statement Period"])
+            # Heuristic: headers found on the START of a new account section
+            has_beginning_balance = any(k in text for k in ["Beginning Balance", "ACCOUNT SUMMARY", "Direct Deposit Information"])
+            # Continuation pages often have footers like "Account No. ... Page X of Y". 
+            # We ignore those so they don't count as "headers found".
+            headers_found = has_beginning_balance
             cid_count = text.count("(cid:")
             is_unreadable = cid_count > 10
             is_columnar_missing = ("Date" in text and "Amount" in text) and not transaction_markers
@@ -73,11 +77,19 @@ class VisionRecoveryHandler:
             page["quality_recommendation"] = recommendation
             page["quality_metrics"] = quality.get("analysis", {}).get("metrics", {})
 
+            # Check for "shredded" OCR by looking for many short lines with numbers
+            lines = text.split('\n')
+            short_numeric_lines = [l for l in lines if len(l.strip()) < 15 and any(c.isdigit() for c in l)]
+            is_shredded = len(short_numeric_lines) > 20
+
             needs_patch = False
 
             # Strong heuristic triggers (cheap, non-AI) – always patch
-            if is_unreadable:
-                print(f"   ⚠️ Health Check: Page {page_num} is unreadable ({cid_count} CID codes).")
+            if is_unreadable or is_shredded:
+                if is_shredded:
+                    print(f"   ⚠️ Health Check: Page {page_num} looks 'shredded' (Too many short numeric lines).")
+                else:
+                    print(f"   ⚠️ Health Check: Page {page_num} is unreadable ({cid_count} CID codes).")
                 needs_patch = True
             elif is_columnar_missing or is_sparse:
                 print(f"   ⚠️ Health Check: Page {page_num} looks incomplete (Missing content).")
@@ -107,11 +119,9 @@ class VisionRecoveryHandler:
                     needs_patch = True
             
             # New Phase 2: Missing column detection
-            if not needs_patch and verifier.detect_missing_columns(text):
-                print(f"   ⚠️ Health Check: Page {page_num} has truncated table (missing Amount column) → triggering Recovery.")
-                needs_patch = True
-
             if needs_patch:
+                # FORCE VISION for all continuation pages or shredded pages
+                page["force_high_fidelity"] = (page_num > 1) or is_shredded or (recommendation == "full_vision")
                 pages_to_verify.append(page_num)
 
         return pages_to_verify
@@ -171,9 +181,8 @@ class VisionRecoveryHandler:
                     # Let's check OCRPDFExtractor.extract arguments again.
                     # It calls robust_convert_pdf_to_images(self.pdf_path, dpi=dpi) which does the whole thing.
                     
-                    # If quality was 'full_vision', we skip Tesseract and go straight to GPT-4 Vision
-                    # to ensure we don't get 'split-column' garbage.
-                    force_v = (page.get("quality_recommendation") == "full_vision")
+                    # Use high-fidelity (Vision) if the page was marked as structurally problematic
+                    force_v = page.get("force_high_fidelity", False)
 
                     rec_text, rec_meta = ocr_extractor.extract(
                         dpi=600, 

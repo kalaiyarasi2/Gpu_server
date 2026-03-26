@@ -1940,7 +1940,10 @@ Return ONLY the company name or UNKNOWN:"""
                     print(f"   Location: {schema_file}")
                     print("\n[STEP] Converting JSON to Excel...")
                     excel_path = self.json_to_xlsx(schema_file)
-                    print(f"[OK] Excel File: {Path(excel_path).name}")
+                    if excel_path:
+                        print(f"[OK] Excel File: {Path(excel_path).name}")
+                    else:
+                        print(f"[ERR] JSON to Excel conversion returned None")
                     print("\n" + "="*70)
                     print("[OK] INSURANCE EXTRACTION COMPLETE")
                     print("="*70)
@@ -1990,7 +1993,10 @@ Return ONLY the company name or UNKNOWN:"""
                             print(f"   Location: {schema_json}")
                             print("\n[STEP] Converting JSON to Excel...")
                             excel_path = self.json_to_xlsx(schema_json)
-                            print(f"[OK] Excel File: {Path(excel_path).name}")
+                            if excel_path:
+                                print(f"[OK] Excel File: {Path(excel_path).name}")
+                            else:
+                                print(f"[ERR] JSON to Excel conversion returned None")
                             print("\n" + "="*70)
                             print("[OK] INSURANCE EXTRACTION COMPLETE")
                             print("="*70)
@@ -2265,16 +2271,20 @@ Return ONLY the company name or UNKNOWN:"""
             
             # Save to unified_outputs
             output_json = OUTPUT_BASE / f"{Path(pdf_path).stem}_id.json"
-            with open(output_json, 'w') as f:
-                json.dump(data, f, indent=4)
+            with open(output_json, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=4, ensure_ascii=False)
             
             # Convert to Excel
             excel_path = self.json_to_xlsx(output_json)
             
+            if not excel_path:
+                print(f"[ERR] Identification Excel conversion failed.")
+            
+            
             return {
                 "type": "IDENTIFICATION",
                 "json": str(output_json),
-                "excel": excel_path,
+                "excel": excel_path if excel_path else "None",
                 "data": data
             }
         except Exception as e:
@@ -2349,7 +2359,7 @@ Return ONLY the company name or UNKNOWN:"""
     def json_to_xlsx(self, json_path):
         """Convert JSON output to Excel."""
         try:
-            with open(json_path, 'r') as f:
+            with open(json_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
             
             xlsx_path = Path(json_path).with_suffix(".xlsx")

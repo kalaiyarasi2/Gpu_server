@@ -126,31 +126,41 @@ class OCRPDFExtractor:
                 page_header = f"\n{'='*80}\nPAGE {page_num}\n{'='*80}\n\n"
                 extracted_text.append(page_header)
                 
-                # 1) First attempt: high-DPI Tesseract
-                custom_config = f'--oem 3 --psm {psm_mode}'
-                text_hi = pytesseract.image_to_string(
-                    image,
-                    config=custom_config,
-                    lang=language
-                )
-                
-                # If Tesseract returns totally empty, force a low quality score to trigger fallback
-                if not text_hi.strip():
-                    page_text_hi = "[No text detected on this page]\n"
-                    score_hi = 0.0
+                # 0) If force_vision is set, we bypass Tesseract
+                if force_vision:
+                    if verbose:
+                        print(f"   ℹ️ Page {page_num} marked for high-fidelity Vision. Skipping Tesseract.")
                     rec_hi = "full_vision"
+                    final_score = 0.0
+                    page_text_hi = "[Forced Vision]"
+                    final_text = page_text_hi
+                    extraction_method = "forced-vision-preparation"
                 else:
-                    page_text_hi = text_hi
-                    quality_hi = verifier.page_quality(page_text_hi)
-                    score_hi = quality_hi.get("score", 0.0)
-                    rec_hi = quality_hi.get("recommendation", "ok")
-                
-                final_text = page_text_hi
-                extraction_method = "tesseract-ocr-600dpi"
-                final_score = score_hi
+                    # 1) First attempt: high-DPI Tesseract
+                    custom_config = f'--oem 3 --psm {psm_mode}'
+                    text_hi = pytesseract.image_to_string(
+                        image,
+                        config=custom_config,
+                        lang=language
+                    )
+                    
+                    # If Tesseract returns totally empty, force a low quality score to trigger fallback
+                    if not text_hi.strip():
+                        page_text_hi = "[No text detected on this page]\n"
+                        score_hi = 0.0
+                        rec_hi = "full_vision"
+                    else:
+                        page_text_hi = text_hi
+                        quality_hi = verifier.page_quality(page_text_hi)
+                        score_hi = quality_hi.get("score", 0.0)
+                        rec_hi = quality_hi.get("recommendation", "ok")
+                    
+                    final_score = score_hi
+                    final_text = page_text_hi
+                    extraction_method = "tesseract-ocr-600dpi"
                 
                 # 2) Second attempt: mid-DPI Tesseract if needed
-                if rec_hi in ("dpi_fallback", "full_vision"):
+                if rec_hi in ("dpi_fallback", "full_vision") and not force_vision:
                     if verbose:
                         print(
                             f"   ↪ High-DPI OCR quality low (score {score_hi:.3f}, rec '{rec_hi}'). "

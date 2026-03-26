@@ -22,6 +22,22 @@ elif root_env.exists():
 else:
     load_dotenv() # Fallback to standard search
 
+# --- Robust Dynamic Imports to avoid namespace collisions ---
+def _load_local_module(module_name, file_name):
+    mod_path = Path(__file__).parent / file_name
+    spec = importlib.util.spec_from_file_location(module_name, str(mod_path))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+# Dynamically load local dependencies using absolute paths
+_tqv_mod = _load_local_module("bank_statement_verifier_local", "text_quality_verifier.py")
+BankTextQualityVerifier = _tqv_mod.BankTextQualityVerifier
+
+_val_mod = _load_local_module("bank_statement_validator_local", "validation_engine.py")
+StatementValidator = _val_mod.StatementValidator
+# -------------------------------------------------------------
+
 
 def _safe_import_openpyxl():
     try:
@@ -142,8 +158,7 @@ class StatementExtractor:
             DynamicExtractionManager = proto_mod.DynamicExtractionManager
             
             from openai import OpenAI
-            from text_quality_verifier import BankTextQualityVerifier
-            from validation_engine import StatementValidator
+            from openai import OpenAI
             
             intel_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
             intel_manager = DynamicExtractionManager(intel_client)
@@ -401,6 +416,12 @@ class StatementExtractor:
             # 2) Within same date, use running_balance as the definitive tie-breaker.
             # 3) Fall back to original order.
             def validation_sort_key(tx):
+                # Priority 1: Original extraction order (if using dynamic/adaptive)
+                idx = tx.get("original_index")
+                if idx is not None:
+                    return (idx,)
+                
+                # Priority 2: Date + Balance (for legacy/deterministic rows)
                 dt = tx.get("date", "00/00")
                 rb = tx.get("running_balance")
                 # Ensure rb_val is a float for sorting

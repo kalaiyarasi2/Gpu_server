@@ -1,4 +1,14 @@
-from text_quality_verifier import BankTextQualityVerifier as TextQualityVerifier
+import importlib.util
+from pathlib import Path
+
+# Robust dynamic import
+mod_path = Path(__file__).parent / "text_quality_verifier.py"
+spec = importlib.util.spec_from_file_location("bank_verifier_test_local", str(mod_path))
+mod = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(mod)
+BankTextQualityVerifier = mod.BankTextQualityVerifier
+
+TextQualityVerifier = BankTextQualityVerifier
 
 verifier = TextQualityVerifier()
 
