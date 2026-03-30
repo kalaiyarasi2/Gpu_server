@@ -258,6 +258,37 @@ def normalize_uhc_coverage(items: list) -> list:
                 item["COVERAGE"] = UHC_COVERAGE_MAP[key]
     return items
 
+def normalize_legal_shield_data(items: list) -> list:
+    """
+    Post-process Legal Shield line items:
+    1. Map Plan Name based on Member ID prefix:
+       - 101... -> Legal Plan
+       - 700... -> Identity Theft Plan
+    2. Handle adjustments: If a row comes from the "prior month" section,
+       it should typically be an ADJUSTMENT_PREMIUM.
+    """
+    for item in items:
+        # 1. Plan Name Mapping
+        mid = str(item.get("MEMBERID") or "").strip()
+        pn = str(item.get("PLAN_NAME") or "").strip().upper()
+        
+        # Overwrite if missing OR if it's noise like "Invoice"
+        if (not pn or pn == "INVOICE") and mid:
+            if mid.startswith("101"):
+                item["PLAN_NAME"] = "Legal Plan"
+                item["PLAN_TYPE"] = "VOLUNTARY"
+            elif mid.startswith("700"):
+                item["PLAN_NAME"] = "Identity Theft Plan"
+                item["PLAN_TYPE"] = "VOLUNTARY"
+            
+        # 2. Section aware premium mapping (if LLM missed it)
+        # In Legal Shield, "Members effective prior month" usually means 
+        # these are adjustments. If current_premium is set but it looks like 
+        # it should be an adjustment, we could move it, but the prompt update 
+        # should handle this mostly.
+        
+    return items
+
 def deduplicate_uhc_fees(items: list) -> list:
     """
     Programmatically ensure global fees/credits are included exactly once and
@@ -1216,6 +1247,7 @@ Extract data from the document text provided below.
     - "Product" / "Plan Description" / "Coverage Type" -> `PLAN_NAME`
     - "Policy No." / "Policy Number" -> `POLICYID`
     - "Amount Due" / "Invoiced Amount" / "Balance Due" / "Grand Total" / "Invoice Total" -> `AMOUNT_DUE`
+    - "Invoice Date" (in header) / "Date of Invoice" -> `INV_DATE` (PRIORITIZE HEADER DATE)
 3. **Multiline Value Aggregation**:
    - **CRITICAL**: Some columns (especially 'Product', 'Plan', or 'Address') span multiple lines vertically.
    - You MUST look at the lines immediately following a member row. If they contain hanging text (e.g., "LG GRP PLAN 49-" and "RC" below "BLUECARE NFQ"), AGGREGATE them into the appropriate field (e.g., `PLAN_NAME`) with a space.
@@ -1387,6 +1419,7 @@ Extract data from the document text provided below.
      - "Adjustments"
      - "ON-BILL ADJUSTMENTS"
      - "Prior Period Adjustments"
+     - "Members effective prior month(s) and did not appear on invoice noted."
    - These are corrections for PRIOR periods
    - Amounts can be positive (charges) or negative (credits)
    - Extract to: **ADJUSTMENT_PREMIUM** field
@@ -1686,27 +1719,54 @@ def process_verified_text_file(txt_path: str, client: OpenAI, source_filename: O
         final_header = {}
         all_line_items = []
         is_uhc = "UNITEDHEALTH" in text.upper() or "UHC" in text.upper()
-
+        is_legal_shield = "LEGAL SHIELD" in text.upper() or "LEGALSHIELD" in text.upper()
+        global_carrier = "Legal Shield" if is_legal_shield else None
+        
+        current_section = "CURRENT"
         for i, page_text in enumerate(parts):
             if not page_text.strip(): continue
             
-            page_num = page_markers[i] if i < len(page_markers) else i + 1
-            print(f"  [AI] Extracting from Page {page_num}...")
+            # Detect section shifts for stateful carriers (Legal Shield)
+            if "Members effective prior month(s)" in page_text:
+                current_section = "ADJUSTMENT"
             
-            # Simple UHC Summary Skip (similar to process_single_pdf)
-            # We still extract LINE_ITEMS because global fees like "Billing Fee" are often on these pages
+            page_num = page_markers[i] if i < len(page_markers) else i + 1
+            print(f"  [AI] Extracting from Page {page_num} (Section: {current_section})...")
+            
+            # Inject section context for LLM
+            contextual_text = f"### CURRENT SECTION: {current_section} ###\n\n{page_text}"
+            
+            # Simple UHC Summary Skip
             if is_uhc and i > 0 and (("Summary" in page_text and "Description" in page_text) or ("Total Volume" in page_text)):
                  print(f"    [V4] Page {page_num} looks like a UHC summary. Collecting LINE_ITEMS + HEADER.")
-                 page_data = extract_fields_with_llm(page_text, client, f"Page {page_num} (Summary/Fee Page)", mode="standard") or {}
+                 page_data = extract_fields_with_llm(contextual_text, client, f"Page {page_num} (Summary/Fee Page)", mode="standard", detected_carrier=global_carrier) or {}
                  if "HEADER" in page_data: final_header.update({k: v for k, v in page_data["HEADER"].items() if v})
-                 if "LINE_ITEMS" in page_data: all_line_items.extend(page_data["LINE_ITEMS"])
+                 if "LINE_ITEMS" in page_data: 
+                     # Force adjustment premium if section is ADJUSTMENT
+                     if current_section == "ADJUSTMENT":
+                         for itm in page_data["LINE_ITEMS"]:
+                             if itm.get("CURRENT_PREMIUM") and not itm.get("ADJUSTMENT_PREMIUM"):
+                                 itm["ADJUSTMENT_PREMIUM"] = itm.pop("CURRENT_PREMIUM")
+                     all_line_items.extend(page_data["LINE_ITEMS"])
                  continue
 
-            page_data = extract_fields_with_llm(page_text, client, f"Page {page_num}", mode="standard") or {}
+            page_data = extract_fields_with_llm(contextual_text, client, f"Page {page_num}", mode="standard", detected_carrier=global_carrier) or {}
+            
+            # Post-process premiums based on section state
+            if current_section == "ADJUSTMENT" and "LINE_ITEMS" in page_data:
+                for itm in page_data["LINE_ITEMS"]:
+                    if to_float(itm.get("CURRENT_PREMIUM")) != 0 and to_float(itm.get("ADJUSTMENT_PREMIUM")) == 0:
+                        print(f"    [V4][STATE] Moving ${itm.get('CURRENT_PREMIUM')} to ADJUSTMENT for {itm.get('FIRSTNAME')} {itm.get('LASTNAME')} (Section STATE)")
+                        itm["ADJUSTMENT_PREMIUM"] = itm.get("CURRENT_PREMIUM")
+                        itm["CURRENT_PREMIUM"] = None
             
             # Merge Header
+            # Merge Header - Keep first non-null encounter (Page 1 priority)
             if "HEADER" in page_data:
-                final_header.update({k: v for k, v in page_data["HEADER"].items() if v})
+                for k, v in page_data["HEADER"].items():
+                    if v and str(v).lower() not in ["n/a", "none", ""]:
+                        if not final_header.get(k):
+                            final_header[k] = v
             
             # Collect Line Items
             if "LINE_ITEMS" in page_data:
@@ -1728,6 +1788,10 @@ def process_verified_text_file(txt_path: str, client: OpenAI, source_filename: O
         if is_uhc:
             print(f"  [V4][UHC] Detected UHC via content. Applying fee deduplication.")
             extracted_data["LINE_ITEMS"] = deduplicate_uhc_fees(extracted_data["LINE_ITEMS"])
+
+    # [V4][LEGALSHIELD] Legal Shield Normalization
+    if "LINE_ITEMS" in extracted_data and extracted_data["LINE_ITEMS"] and is_legal_shield:
+        extracted_data["LINE_ITEMS"] = normalize_legal_shield_data(extracted_data["LINE_ITEMS"])
 
     # Add source filename
     if source_filename:
@@ -1954,6 +2018,12 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
     is_unum_invoice = any(_unum_mirrored_signature in p for p in pages) or \
                       any(_unum_normal_signature in p.upper() for p in pages)
     
+    # Legal Shield Detection
+    is_legal_shield = any("LEGAL SHIELD" in p.upper() or "LEGALSHIELD" in p.upper() for p in pages)
+    if is_legal_shield:
+        global_carrier = "Legal Shield"
+        print(f"  [V4][LEGALSHIELD] Legal Shield invoice detected.")
+    
     # [GIS] Dedicated Fast Parser for GIS
     if is_gis_invoice:
         print(f"  [V3][GIS] GIS Benefits invoice detected. Using direct parser for detail pages.")
@@ -2157,8 +2227,12 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
         data["LINE_ITEMS"] = all_line_items
 
     # [V5][KCL MERGE] Consolidate multiple rows for the same person/plan (e.g. Current + Adjustment)
-    if is_kcl:
         all_line_items = merge_carrier_rows(all_line_items, "KCL")
+        data["LINE_ITEMS"] = all_line_items
+
+    # [V4][LEGALSHIELD] Legal Shield Normalization
+    if "Legal Shield" in str(global_carrier):
+        all_line_items = normalize_legal_shield_data(all_line_items)
         data["LINE_ITEMS"] = all_line_items
 
     return data
