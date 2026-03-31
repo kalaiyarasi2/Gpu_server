@@ -1010,10 +1010,15 @@ class UnifiedRouter:
             return "INSURANCE_CLAIMS", "Filename loss run keyword"
 
         # RULE F3: Explicit insurance billing keywords in filename
-        insurance_fn_kw = ["medlink", "medsupp", "cobra", "group benefit", "beneficiary", "uhc", "unitedhealthcare", "bcbs", "bluecross", "blueshield", "anthem", "humana", "aetna", "cigna"]
+        insurance_fn_kw = [
+            "medlink", "medsupp", "cobra", "group benefit", "beneficiary", 
+            "uhc", "unitedhealthcare", "bcbs", "bluecross", "blueshield", 
+            "anthem", "humana", "aetna", "cigna", "legal shield", "legalshield",
+            "benefit invoice", "benefit", "master"
+        ]
         if any(kw in filename_lower for kw in insurance_fn_kw):
             # If it's an insurance carrier keyword and ALSO contains an invoice keyword, it's very likely an INVOICE
-            if any(ik in filename_lower for ik in ["inv", "invoice", "bill", "billing"]):
+            if any(ik in filename_lower for ik in ["inv", "invoice", "bill", "billing", "benefit", "master"]):
                 print(f"[Pre-Classify] Insurance carrier + Invoice keyword in filename → INVOICE")
                 return "INVOICE", "Filename insurance + invoice keyword"
             
@@ -1115,6 +1120,7 @@ class UnifiedRouter:
             "american public life", "apl",
             "member premium", "subscriber premium",
             "unitedhealthcare", "uhc", "bluecross", "blueshield", "bcbs", "humana", "aetna", "cigna",
+            "legal shield", "legalshield",
             "policy no.", "subscriber id", "member id",
             "benefit invoice", "premium statement", "billing summary"
         ]
@@ -1260,12 +1266,12 @@ CRITICAL RULES (apply in order, first match wins):
 4. "Account", "chase.com", "Chase Bank", "Bank of America", "Wells Fargo", "Citibank",
    "Operating Account", "Checking", "Savings" combined with bank/financial context -> BANK_STATEMENT
    NOTE: "Operating Account" or any bank name (Chase, Wells Fargo, etc.) -> BANK_STATEMENT, NOT INVOICE.
-5. "Invoice", "Inv", "Bill", "Billing" in filename -> INVOICE
-   NOTE: Even if an insurance carrier name (like Anthem) is present, if "Inv" or "Invoice" is also there, pick INVOICE.
+5. "Invoice", "Inv", "Bill", "Billing", "Benefit", "Legal Shield", "Master" in filename -> INVOICE
+   NOTE: Even if an insurance carrier name (like Anthem or Legal Shield) is present, if "Inv", "Invoice", or "Benefit" is also there, pick INVOICE.
 6. "Passport", "Driver License", "ID Card", "SSN" in filename -> IDENTIFICATION
 7. Any insurance CARRIER or TPA name (Accident Fund, CCMSI, BerkleyNet, KeyRisk, Travelers,
    Zurich, CNA, AmTrust, Liberty Mutual, Markel, Stonetrust, FCBI, State Fund, Clear Springs,
-   Chesapeake Employers, Berkshire Hathaway) paired with no invoice keywords -> INSURANCE_CLAIMS
+   Chesapeake Employers, Berkshire Hathaway) paired with no invoice or benefit keywords -> INSURANCE_CLAIMS
 
 Return EXACTLY TWO lines:
 Line 1: INSURANCE_CLAIMS | WORK_COMPENSATION | INVOICE | invoice_poc_extractor | IDENTIFICATION | BANK_STATEMENT

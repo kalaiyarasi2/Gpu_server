@@ -94,8 +94,8 @@ class OCRPDFExtractor:
                 if verbose:
                     print(f"OCR processing page {page_num}/{total_pages} (DPI {dpi})...")
                 
-                # Add page separator
-                page_header = f"\n{'='*80}\nPAGE {page_num}\n{'='*80}\n\n"
+                # Add page separator in standardized [[PAGE_n]] format
+                page_header = f"\n[[PAGE_{page_num}]]\n"
                 extracted_text.append(page_header)
                 
                 # 1) First attempt: high-DPI Tesseract
@@ -302,7 +302,7 @@ class OCRPDFExtractor:
             
             page_text, conf = self._extract_page_with_vision(image)
             
-            header = f"\n{'='*80}\nPAGE {i}\n{'='*80}\n\n"
+            header = f"\n[[PAGE_{i}]]\n"
             full_text.append(header + page_text + "\n\n")
             
             metadata.append({

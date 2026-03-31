@@ -1857,11 +1857,11 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
     except Exception as e:
         print(f"  [V3][ERROR] Failed to save raw text: {e}")
 
-    # Split text into pages
-    # Regex allows for potential OCR whitespace/symbol variance around markers
-    # We look for [[PAGE_n]] markers, allowing for [ [ or [  [ etc.
-    page_markers = re.findall(r'\[\s*\[\s*PAGE_\d+\s*\]\s*\]', text)
-    pages = re.split(r'\[\s*\[\s*PAGE_\d+\s*\]\s*\]', text)
+    # [V5] Standardized Page Splitter
+    # Markers can be [[PAGE_1]], [ [PAGE_1] ], or have OCR-induced whitespace variation.
+    page_marker_pattern = r'\[\s*\[\s*PAGE_\d+\s*\]\s*\]'
+    page_markers = re.findall(page_marker_pattern, text)
+    pages = re.split(page_marker_pattern, text)
     
     # Remove empty chunks but preserve empty pages (which will have minimal text after split)
     # Actually, re.split with a marker at the start returns [''] as first element.

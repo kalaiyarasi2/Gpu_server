@@ -124,11 +124,26 @@ class StructuredExcelExtractor:
 
         # 1. Find the header row
         header_idx = -1
+        # High-signal keywords that definitely indicate a participant/member table
+        primary_keywords = ["participant name", "member name", "subscriber name", "employee name", "participant name"]
+        # Generic keywords that might be in summary or detail headers
+        secondary_keywords = ["member id", "participant id", "employee id", "ssn", "dob"]
+        
+        # Pass 1: Look for primary anchors
         for i, row in df.iterrows():
             row_str = " ".join(row.fillna("").astype(str)).lower()
-            if "member name" in row_str or "member id" in row_str or "subscriber name" in row_str:
+            if any(k in row_str for k in primary_keywords):
                 header_idx = i
                 break
+        
+        # Pass 2: Fallback to secondary keywords if no primary found
+        if header_idx == -1:
+            for i, row in df.iterrows():
+                row_str = " ".join(row.fillna("").astype(str)).lower()
+                if any(k in row_str for k in secondary_keywords):
+                    if row.count() >= 3:
+                        header_idx = i
+                        break
         
         if header_idx == -1:
             print("  [WARN] Header not found by keywords. Defaulting to row 1.")

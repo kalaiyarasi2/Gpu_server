@@ -21,11 +21,18 @@ def test_identifier():
             "name": "Insurance Signal",
             "text": "Loss Run Report\nClaimant: John Doe\nDate of Loss: 01/01/2023\nIncurred Amount",
             "expected": "INSURANCE_CLAIMS"
+        },
+        {
+            "name": "Legal Shield Benefit Invoice",
+            "filename": "Legal Shield- Master- Feb 26.pdf",
+            "text": "Legal Shield\nBenefit Invoice\nMaster Policy\nMember Premium: $50.00",
+            "expected": "INVOICE"
         }
     ]
     
     for case in test_cases:
-        doc_type, reason = router._pre_classify("test.pdf", ".pdf", case["text"])
+        filename = case.get("filename", "test.pdf")
+        doc_type, reason = router._pre_classify(filename, ".pdf", case["text"])
         print(f"Test '{case['name']}': Expected {case['expected']}, Got {doc_type} ({reason})")
         assert doc_type == case["expected"]
 
