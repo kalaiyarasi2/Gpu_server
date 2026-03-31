@@ -264,8 +264,9 @@ def normalize_legal_shield_data(items: list) -> list:
     1. Map Plan Name based on Member ID prefix:
        - 101... -> Legal Plan
        - 700... -> Identity Theft Plan
-    2. Handle adjustments: If a row comes from the "prior month" section,
-       it should typically be an ADJUSTMENT_PREMIUM.
+    2. Handle adjustments: 
+       - If a row has a date (e.g. 01/15/2026), it is an ADJUSTMENT_PREMIUM.
+       - If a row has no date, it is a CURRENT_PREMIUM.
     """
     for item in items:
         # 1. Plan Name Mapping
@@ -281,12 +282,20 @@ def normalize_legal_shield_data(items: list) -> list:
                 item["PLAN_NAME"] = "Identity Theft Plan"
                 item["PLAN_TYPE"] = "VOLUNTARY"
             
-        # 2. Section aware premium mapping (if LLM missed it)
-        # In Legal Shield, "Members effective prior month" usually means 
-        # these are adjustments. If current_premium is set but it looks like 
-        # it should be an adjustment, we could move it, but the prompt update 
-        # should handle this mostly.
+        # 2. Row-level Adjustment Logic (User Request)
+        # If there is a date in the row (captured in INV_DATE or PRICING_ADJUSTMENT),
+        # move it to adjustment if it's not already there.
+        row_date = item.get("INV_DATE") or item.get("PRICING_ADJUSTMENT")
+        # Check if it looks like a date (e.g. contains / or -)
+        is_date_row = row_date and isinstance(row_date, str) and (('/' in row_date) or ('-' in row_date))
         
+        if is_date_row:
+            cur_prem = to_float(item.get("CURRENT_PREMIUM"))
+            adj_prem = to_float(item.get("ADJUSTMENT_PREMIUM"))
+            if cur_prem != 0 and adj_prem == 0:
+                item["ADJUSTMENT_PREMIUM"] = cur_prem
+                item["CURRENT_PREMIUM"] = 0.0
+                
     return items
 
 def deduplicate_uhc_fees(items: list) -> list:
@@ -1490,6 +1499,13 @@ Extract data from the document text provided below.
         - **Member Context Inheritance**: For Mutual of Omaha, member names and IDs only appear on the first line of their group. Subsequent rows within the group MUST inherit the last seen `LASTNAME`, `FIRSTNAME`, `MEMBERID`, and `COVERAGE`.
         - **Retroactive Changes**: These are ADJUSTMENTS. Inherit Name, ID, and Plan Name from the row immediately above. Map amount to `ADJUSTMENT_PREMIUM`.
     - **Authoritative Total (MANDATORY)**: ONLY extract the absolute "TOTAL AMOUNT DUE" (e.g., `$9,379.56`) if it is explicitly present in the text. Map it as a standalone LINE_ITEM with `PLAN_NAME`: "REPORTED INVOICE TOTAL (FOR AUDIT)" and `FIRSTNAME`: "INVOICE TOTAL".
+- **Legal Shield**:
+    - **ADJUSTMENT LOGIC (CRITICAL)**: If a member row contains a date (e.g., `01/15/2026`), the amount in that row MUST be placed in `ADJUSTMENT_PREMIUM` and `CURRENT_PREMIUM` MUST be NULL. 
+    - **CURRENT PREMIUM LOGIC**: If a member row has NO date, the amount MUST be placed in `CURRENT_PREMIUM`.
+    - **MEMBERID prefix mapping**:
+        - Member IDs starting with **101** -> PLAN_NAME: "Legal Plan", PLAN_TYPE: "VOLUNTARY"
+        - Member IDs starting with **700** -> PLAN_NAME: "Identity Theft Plan", PLAN_TYPE: "VOLUNTARY"
+    - Preserve the row-level date in the `INV_DATE` field for that line item.
 - **Adjustment Table (GUARDIAN)**:
       - If you see **"New Premium"** and **"New Premium Adjustment"**:
         - `New Premium` (e.g., 2.50) -> `CURRENT_PREMIUM`.
