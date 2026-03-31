@@ -955,6 +955,11 @@ class UnifiedRouter:
         filename_lower = filename.lower()
         text_lower = (text_snippet or "").lower()
 
+        # ── HIGH PRIORITY DETERMINISTIC RULES ─────────────────────────────────
+        if "legal shield" in filename_lower or "legalshield" in filename_lower:
+            print("[Pre-Classify] Legal Shield detected via filename → INVOICE")
+            return "INVOICE", "Legal Shield priority keyword"
+
         # ── FILENAME RULES (deterministic, no content needed) ─────────────────
 
         # RULE F1: ACORD keyword in filename → Workers Comp application
@@ -972,7 +977,7 @@ class UnifiedRouter:
             return "INSURANCE_CLAIMS", "Filename loss run keyword"
 
         # RULE F3: Explicit insurance billing keywords in filename
-        insurance_fn_kw = ["medlink", "medsupp", "cobra", "group benefit", "beneficiary", "uhc", "unitedhealthcare", "bcbs", "bluecross", "blueshield", "anthem", "humana", "aetna", "cigna"]
+        insurance_fn_kw = ["medlink", "medsupp", "cobra", "group benefit", "beneficiary", "uhc", "unitedhealthcare", "bcbs", "bluecross", "blueshield", "anthem", "humana", "aetna", "cigna", "legal shield", "legalshield"]
         if any(kw in filename_lower for kw in insurance_fn_kw):
             # If it's an insurance carrier keyword and ALSO contains an invoice keyword, it's very likely an INVOICE
             if any(ik in filename_lower for ik in ["inv", "invoice", "bill", "billing"]):
@@ -1033,7 +1038,7 @@ class UnifiedRouter:
             "member premium", "subscriber premium",
             "unitedhealthcare", "uhc", "bluecross", "blueshield", "bcbs", "humana", "aetna", "cigna",
             "policy no.", "subscriber id", "member id",
-            "benefit invoice", "premium statement", "billing summary"
+            "benefit invoice", "premium statement", "billing summary", "legal shield", "legalshield"
         ]
         premium_hits = sum(1 for kw in premium_billing_signals if kw in text_lower)
         if premium_hits >= 2:

@@ -429,6 +429,7 @@ def format_date_clean(val: Optional[str]) -> Optional[str]:
 
 # Configuration
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+CHUNK_OVERLAP_CHARS = 1000  # Default overlap for invoice chunking
 
 REQUIRED_FIELDS = [
     "INV_DATE",
@@ -446,6 +447,226 @@ REQUIRED_FIELDS = [
     "CURRENT_PREMIUM",
     "ADJUSTMENT_PREMIUM"
 ]
+
+class InvoicePolicyChunker:
+    """Helper class to split large invoices into logical chunks based on sections/headers."""
+    
+    def __init__(self, client: OpenAI):
+        self.client = client
+
+    def detect_logical_boundaries(self, text: str) -> List[Dict]:
+        """
+        Use AI to detect logical boundaries (sub-groups, accounts, major headers).
+        Returns a list of dicts: {"identifier": "...", "start_index": int}
+        """
+        print(f"\n🔍 Detecting logical boundaries in invoice text ({len(text)} chars)...")
+        
+        # Sample for AI analysis to avoid token limits on detection
+        text_preview = text if len(text) < 100000 else text[:60000] + "\n...\n" + text[-40000:]
+        
+        prompt = f"""Analyze the following invoice text and identify major logical sections (Sub-groups, Account Names, Locations, or Plan Categories).
+Look for headers like "Sub-Account:", "Group Name:", "Location:", "Policy Detail for:", or any repeating header that marks a new employee block.
+
+Return a JSON object with a list of detected boundaries and the EXACT snippet of text that identifies the header.
+
+Example Response:
+{{
+  "boundaries": [
+    {{
+      "identifier": "Account - [NAME_OR_ID]",
+      "header_snippet": "Sub-Account: [EXACT_TEXT]"
+    }},
+    {{
+      "identifier": "Location - [NAME_OR_ID]",
+      "header_snippet": "Location: [EXACT_TEXT]"
+    }}
+  ]
+}}
+
+Important:
+- The "header_snippet" MUST be EXACT text copied verbatim from the document below.
+- Do NOT invent snippets.
+- Only return boundaries if they clearly separate large groups of data.
+
+DOCUMENT TEXT:
+{text_preview}
+"""
+
+        try:
+            response = self.client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "user", "content": prompt}],
+                response_format={"type": "json_object"},
+                max_tokens=2000,
+                temperature=0.0
+            )
+            
+            result = json.loads(response.choices[0].message.content)
+            items = result.get("boundaries", [])
+            
+            boundaries = []
+            for p in items:
+                snippet = p.get("header_snippet")
+                if snippet:
+                    idx = text.find(snippet)
+                    if idx != -1:
+                        boundaries.append({
+                            "identifier": p.get("identifier"),
+                            "start_index": idx,
+                            "header_snippet": snippet
+                        })
+            
+            boundaries.sort(key=lambda x: x["start_index"])
+            
+            # Deduplicate
+            unique_boundaries = []
+            last_idx = -1
+            for b in boundaries:
+                if b["start_index"] != last_idx:
+                    unique_boundaries.append(b)
+                    last_idx = b["start_index"]
+            
+            print(f"✓ Detected {len(unique_boundaries)} logical boundaries")
+            return unique_boundaries
+
+        except Exception as e:
+            print(f"⚠️ Boundary detection failed: {e}")
+            return []
+
+    def split_into_overlapping_chunks(self, text: str, boundaries: List[Dict], overlap: int = CHUNK_OVERLAP_CHARS) -> List[Dict]:
+        """Splits the text into chunks with context overlap at the start of each chunk."""
+        if not boundaries:
+            return [{"identifier": "Full Document", "text": text}]
+            
+        chunks = []
+        
+        # Initial section
+        if boundaries[0]["start_index"] > 200:
+            chunks.append({
+                "identifier": "Initial Header",
+                "text": text[:boundaries[0]["start_index"]].strip()
+            })
+        
+        for i in range(len(boundaries)):
+            start_idx = boundaries[i]["start_index"]
+            end_idx = boundaries[i+1]["start_index"] if i+1 < len(boundaries) else len(text)
+            
+            # Overlap context from previous chunk
+            overlap_start = max(0, start_idx - overlap) if i > 0 else start_idx
+            
+            chunk_text = text[overlap_start:end_idx].strip()
+            chunks.append({
+                "identifier": boundaries[i]["identifier"],
+                "text": chunk_text
+            })
+            
+        return chunks
+
+def _detect_member_ids_ai(text: str, client: OpenAI) -> List[str]:
+    """
+    Build GLOBAL master list of MEMBERIDs from full document.
+    Ensures 100% capture during the final Recovery Pass.
+    """
+    print(f"\n[V3][AUDIT] Building GLOBAL master Member ID list...")
+    
+    # Rough split into blocks for auditing if very large
+    max_len = 120000
+    text_blocks = [text[i:i+max_len] for i in range(0, len(text), max_len)]
+    
+    all_detected_ids = set()
+    
+    for idx, block in enumerate(text_blocks):
+        if len(text_blocks) > 1:
+            print(f"   Scanning block {idx+1}/{len(text_blocks)}...")
+            
+        prompt = f"""Identify every UNIQUE Member ID, Subscriber ID, or Payroll ID in this invoice text.
+These are usually 6-12 character alphanumeric strings or masked strings like '*****557900'.
+
+Return a JSON object with a list of IDs.
+
+Example:
+{{ "member_ids": ["12345678", "ABC987654", "*****557900"] }}
+
+DOCUMENT TEXT:
+{block}
+"""
+        try:
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "user", "content": prompt}],
+                response_format={"type": "json_object"},
+                max_tokens=4000,
+                temperature=0.0
+            )
+            data = json.loads(response.choices[0].message.content)
+            ids = data.get("member_ids", [])
+            all_detected_ids.update([str(i).strip() for i in ids])
+        except Exception as e:
+            print(f"   ⚠️ ID detection error in block {idx+1}: {e}")
+
+    master_list = sorted(list(all_detected_ids))
+    print(f"   ✅ Global master list: {len(master_list)} unique IDs found.")
+    return master_list
+
+def _extract_missing_members(full_text: str, current_items: List[Dict], master_list: List[str], client: OpenAI) -> List[Dict]:
+    """Recovery Pass: Target missing Member IDs in the full text."""
+    if not master_list:
+        return []
+        
+    # Find what's missing
+    extracted_ids = {str(item.get("MEMBERID", "")).strip() for item in current_items if item.get("MEMBERID")}
+    # Normalize for comparison (lstrip zeros)
+    extracted_ids_norm = {cid.lstrip("0") for cid in extracted_ids if cid}
+    
+    missing_ids = [
+        mid for mid in master_list 
+        if str(mid).strip() not in extracted_ids 
+        and str(mid).strip().lstrip("0") not in extracted_ids_norm
+    ]
+    
+    if not missing_ids:
+        print("   ✅ All global Member IDs accounted for.")
+        return []
+        
+    print(f"\n   🔁 RECOVERY PASS: {len(missing_ids)} IDs missing after initial extraction.")
+    print(f"   Missing: {', '.join(missing_ids[:20])}{'...' if len(missing_ids) > 20 else ''}")
+    
+    recovered_items = []
+    # Process in small batches to maintain focus
+    batch_size = 10
+    for i in range(0, len(missing_ids), batch_size):
+        batch = missing_ids[i:i+batch_size]
+        print(f"      Batch {i//batch_size + 1}/{max(1, len(missing_ids)//batch_size)}: {', '.join(batch)}")
+        
+        # Locate context for these IDs in full text (first 2000 chars near match)
+        context_snippets = []
+        for mid in batch:
+            idx = full_text.find(mid)
+            if idx != -1:
+                start = max(0, idx - 500)
+                end = min(len(full_text), idx + 1000)
+                context_snippets.append(f"--- CONTEXT FOR ID {mid} ---\n{full_text[start:end]}")
+        
+        if not context_snippets:
+            continue
+            
+        combined_context = "\n\n".join(context_snippets)
+        prompt = f"TARGET RECOVERY: Extract full member data for these missing IDs: {', '.join(batch)}\n\nCONTEXT:\n{combined_context}"
+        
+        # This uses the main extraction function with a specialized prompt injected via 'text'
+        # We wrap it in the expected prompt format
+        try:
+            recovery_data = extract_fields_with_llm(prompt, client, "Recovery_Pass")
+            if recovery_data and "LINE_ITEMS" in recovery_data:
+                batch_items = recovery_data["LINE_ITEMS"]
+                # Only keep items that match the target IDs to avoid duplicates
+                filtered_batch = [item for item in batch_items if any(mid in str(item.get("MEMBERID", "")) for mid in batch)]
+                recovered_items.extend(filtered_batch)
+                print(f"      ✓ Recovered {len(filtered_batch)} items.")
+        except Exception as e:
+            print(f"      ⚠️ Recovery batch error: {e}")
+            
+    return recovered_items
 
 
 def extract_text_from_pdf_pymupdf(pdf_path: str, mode: str = "standard") -> str:
@@ -871,6 +1092,24 @@ def parse_unum_detail_mirrored(full_raw_text: str, inv_date: str = None, inv_num
     return header
 
 
+def infer_plan_type(plan_name: str) -> str:
+    """Helper to infer PLAN_TYPE for GIS from product name."""
+    p = (plan_name or "").upper()
+    if "DENTAL" in p: return "DENTAL"
+    if "VISION" in p: return "VISION"
+    if "LIFE" in p or "AD&D" in p: return "LIFE"
+    if "STD" in p or "SHORT TERM" in p: return "STD"
+    if "LTD" in p or "LONG TERM" in p: return "LTD"
+    return "MEDICAL"
+
+def infer_coverage_from_plan(plan_name: str) -> str:
+    """Helper to infer COVERAGE for GIS from product name strings (e.g. 'Voluntary Life - Spouse')"""
+    p = (plan_name or "").upper()
+    if "SPOUSE" in p: return "ES"
+    if "CHILD" in p: return "EC"
+    if "FAMILY" in p: return "FAM"
+    return "EE"
+
 def parse_gis_detail_direct(full_raw_text: str, inv_date: str = None, inv_number: str = None, billing_period: str = None, source_filename: str = "") -> list:
     """
     Enhanced Direct parser for GIS Benefits detail pages (Wide Table format).
@@ -881,65 +1120,54 @@ def parse_gis_detail_direct(full_raw_text: str, inv_date: str = None, inv_number
     """
     items = []
     lines = full_raw_text.splitlines()
-    
-    # Plans identified in wide header (ordered as they typically appear)
-    # This is a heuristic - a better way is to dynamically sense columns, 
-    # but for now we'll match by looking for common GIS benefits.
-    GIS_PLANS = ["VOLUNTARY DENTAL", "DENTAL HMO", "VOLUNTARY VISION", "VOLUNTARY STD", "VOLUNTARY LTD", "VOLUNTARY LIFE", "VOLUNTARY AD&D"]
-    
+    is_vertical = "Payroll File Number" in full_raw_text or "Product Name" in full_raw_text
+    print(f"  [V3][GIS] Parser mode: {'VERTICAL' if is_vertical else 'WIDE'}")
+
     # Regex 1: Original ID-first pattern
-    # (\d+) \s+ ([A-Z\s,]+) \s+ (\d{2}/\d{2}/\d{4})
     id_pattern = re.compile(r'^\s*(\d+)\s+([A-Z\-\s,]+?)\s+(\d{1,2}/\d{1,2}/\d{4})')
     
-    # Regex 2: SSN pattern
-    # XXX-XX-1234  LASTNAME  FIRSTNAME  01/01/2026
-    # Or just SSN LASTNAME FIRSTNAME (date might be missing on some lines)
-    ssn_pattern = re.compile(r'^\s*(?:[X\d\-]{11})\s+([A-Z\-\s,]+?)\s+(?:([A-Z\-\s,]+?)\s+)?(\d{1,2}/\d{1,2}/\d{4})?')
+    # Regex 2: SSN pattern (Improved to handle text between name and date in vertical format)
+    # Starts with SSN (e.g. XXX-XX-1234)
+    ssn_start_pattern = re.compile(r'^\s*(?:[X\d\-]{11})\s+([A-Z\-\s,]+)')
+    date_pattern = re.compile(r'(\d{1,2}/\d{1,2}/\d{4})')
 
-    # We also need to find the plan headers to know which $ belongs to what
-    # For now, we'll implement a simpler approach: extract ALL items from the line
-    # If a line has multiple $ values, we'll try to guess based on common GIS structures.
-    
     for line in lines:
         line = line.strip()
         if not line or "Totals:" in line or "Billing Period" in line:
             continue
             
-        m_id = id_pattern.match(line)
-        m_ssn = ssn_pattern.match(line)
-        
         member_id = None
         lastname = ""
         firstname = ""
         eff_date = ""
         rest = ""
 
+        m_id = id_pattern.match(line)
+        m_ssn_start = ssn_start_pattern.match(line)
+        
         if m_id:
             member_id = m_id.group(1).strip()
             fullname = m_id.group(2).strip()
             eff_date = m_id.group(3).strip()
             rest = line[m_id.end():].strip()
-            # Split names
-            if ',' in fullname:
-                parts = fullname.split(',', 1)
-                lastname, firstname = parts[0].strip(), parts[1].strip()
+        elif m_ssn_start:
+            fullname = m_ssn_start.group(1).strip()
+            # Find the date later in the line
+            m_date = date_pattern.search(line, m_ssn_start.end())
+            if m_date:
+                eff_date = m_date.group(1)
+                rest = line[m_date.end():].strip()
             else:
-                parts = fullname.split()
-                if len(parts) >= 2:
-                    lastname, firstname = parts[0], " ".join(parts[1:])
-                else:
-                    lastname = fullname
-        elif m_ssn:
-            fullname = m_ssn.group(1).strip()
-            firstname_part = m_ssn.group(2).strip() if m_ssn.group(2) else ""
-            eff_date = m_ssn.group(3).strip() if m_ssn.group(3) else ""
-            rest = line[m_ssn.end():].strip()
-            
+                # Summary lines sometimes have name and $ but no date
+                rest = line[m_ssn_start.end():].strip()
+        else:
+            continue
+
+        # Split names
+        if fullname:
             if ',' in fullname:
                 parts = fullname.split(',', 1)
                 lastname, firstname = parts[0].strip(), parts[1].strip()
-            elif firstname_part:
-                lastname, firstname = fullname, firstname_part
             else:
                 parts = fullname.split()
                 if len(parts) >= 2:
@@ -951,32 +1179,35 @@ def parse_gis_detail_direct(full_raw_text: str, inv_date: str = None, inv_number
             continue
 
         # Extract all premiums from the rest of the line
-        # Use regex to find $ amounts or decimals
-        # GIS often has $12.34 or just 12.34 in some columns
-        premiums = re.findall(r'\$?(\d{1,4}\.\d{2})', rest)
-        if not premiums:
+        # Handle regular $1.23, negative ($1.23), and 1.23
+        # Match -? and \(\) for potential negative values
+        premium_matches = re.findall(r'(\(?-?\d{1,5}\.\d{2}\)?)', rest)
+        if not premium_matches:
             continue
 
-        # In a wide table, we don't always know which $ is which plan without the header mapping.
-        # But we can create multiple items if we have multiple premiums.
-        for i, p_val in enumerate(premiums):
-            p_float = to_float(p_val)
-            if p_float == 0: continue
+        if is_vertical:
+            # Vertical mode: The LAST premium is the "Premium Amount"
+            # The text between the date and the premiums is the PLAN_NAME
+            p_val_raw = premium_matches[-1]
+            # Convert (1.23) to -1.23
+            is_negative = "(" in p_val_raw or "-" in p_val_raw
+            p_val_clean = p_val_raw.replace("(", "").replace(")", "").replace("$", "").replace("-", "").replace(",", "")
+            p_float = to_float(p_val_clean)
+            if is_negative: p_float = -p_float
             
-            # Heuristic for plan name if not found
-            p_name = "GIS BENEFIT"
-            p_type = "MEDICAL"
-            
-            # Use index as a hint if we find plan names in column headers (needs better logic)
-            # For now, let's just emit them as generic GIS items so they are captured.
+            p_name_raw = rest
+            for m in premium_matches:
+                p_name_raw = p_name_raw.replace(m, "")
+            p_name = " ".join(p_name_raw.replace("$", "").replace(",", "").split())
+            if not p_name: p_name = "GIS BENEFIT"
             
             item = {
                 "LASTNAME": lastname,
                 "FIRSTNAME": firstname,
                 "MEMBERID": member_id,
                 "PLAN_NAME": p_name,
-                "PLAN_TYPE": p_type,
-                "COVERAGE": "EE",
+                "PLAN_TYPE": infer_plan_type(p_name),
+                "COVERAGE": infer_coverage_from_plan(p_name),
                 "CURRENT_PREMIUM": p_float,
                 "ADJUSTMENT_PREMIUM": 0.0,
                 "INV_DATE": inv_date,
@@ -985,6 +1216,31 @@ def parse_gis_detail_direct(full_raw_text: str, inv_date: str = None, inv_number
                 "SOURCE_FILE": source_filename
             }
             items.append(item)
+        else:
+            # Wide mode (legacy/summary pages if not skipped)
+            for i, p_val_raw in enumerate(premium_matches):
+                p_val_clean = p_val_raw.replace("(", "").replace(")", "").replace("$", "").replace("-", "").replace(",", "")
+                p_float = to_float(p_val_clean)
+                if p_float == 0: continue
+                
+                p_name = "GIS BENEFIT"
+                p_type = "MEDICAL"
+                
+                item = {
+                    "LASTNAME": lastname,
+                    "FIRSTNAME": firstname,
+                    "MEMBERID": member_id,
+                    "PLAN_NAME": p_name,
+                    "PLAN_TYPE": p_type,
+                    "COVERAGE": "EE",
+                    "CURRENT_PREMIUM": p_float,
+                    "ADJUSTMENT_PREMIUM": 0.0,
+                    "INV_DATE": inv_date,
+                    "INV_NUMBER": inv_number,
+                    "BILLING_PERIOD": billing_period or eff_date,
+                    "SOURCE_FILE": source_filename
+                }
+                items.append(item)
             
     return items
 
@@ -1880,6 +2136,9 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
     print(f"[V3] Processing: {pdf_path}")
     print(f"[V3] {'='*70}")
     
+    # Initialize Chunker
+    chunker = InvoicePolicyChunker(client)
+    
     # Extract text from PDF
     # [V4][UHC/KCL] Certain carriers suffer from horizontal mashing with pdfplumber.
     # We force PyMuPDF (structured text) for these carriers with appropriate sorting modes.
@@ -1929,6 +2188,10 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
         print(f"  [V3][VERIFY] Raw extracted text saved to: {raw_txt_path}")
     except Exception as e:
         print(f"  [V3][ERROR] Failed to save raw text: {e}")
+
+    # --- STEP 1: Global Identity Audit ---
+    # Build a master list of Member IDs to ensure 100% extraction later.
+    master_list = _detect_member_ids_ai(text, client)
 
     # Split text into pages
     # Regex allows for potential OCR whitespace/symbol variance around markers
@@ -1981,6 +2244,35 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
     final_header = {field: None for field in ["INV_DATE", "INV_NUMBER", "BILLING_PERIOD", "TOTAL_BILLED", "TOTAL_ADJUSTMENTS", "AMOUNT_DUE", "GROUP_NUMBER", "PRICING_ADJUSTMENT"]}
     
     print(f"  [V3] Splitting large document into {len(pages)} pages for reliable extraction...")
+    
+    # --- STEP 2: Logical Chunking Decision ---
+    # If the document is extremely large or page-based splitting is known to be risky,
+    # we detect logical boundaries (sub-groups/policies) for high-precision chunking.
+    is_extra_large = len(pages) > 50 or len(text) > 200000
+    logical_boundaries = []
+    if is_extra_large:
+        logical_boundaries = chunker.detect_logical_boundaries(text)
+    
+    # Use logical chunks if detected, otherwise fall back to pages
+    use_logical_chunking = len(logical_boundaries) > 1
+    if use_logical_chunking:
+        print(f"  [V3][CHUNKING] High-precision LOGICAL chunking enabled (~1000 char overlap).")
+        logical_chunks = chunker.split_into_overlapping_chunks(text, logical_boundaries)
+        # For the parallel engine, we'll treat logical chunks like 'pages'
+        working_chunks = [c["text"] for c in logical_chunks]
+        chunk_identifiers = [c["identifier"] for c in logical_chunks]
+        
+        # Save chunking report for debugging
+        try:
+            report_path = Path(pdf_path).parent / f"{os.path.basename(pdf_path)}_chunking_report.json"
+            with open(report_path, "w", encoding="utf-8") as f:
+                json.dump({"boundaries": logical_boundaries, "chunks": chunk_identifiers}, f, indent=2)
+            print(f"  [V3][CHUNKING] Chunking report saved to: {report_path}")
+        except Exception as e:
+            print(f"  [V3][WARNING] Failed to save chunking report: {e}")
+    else:
+        working_chunks = pages
+        chunk_identifiers = [f"Page {i+1}" for i in range(len(pages))]
     
     # GIS Benefits Detection: The detail table starts on Page 2+ with "Payroll File Number" header.
     # Page 1 is a summary that has the SAME premiums, which causes double-counting.
@@ -2042,7 +2334,23 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
         if is_already_chunk and not is_first_chunk:
             detail_pages_text = "\n".join(pages) # All pages are detail
         else:
-            detail_pages_text = "\n".join(pages[1:]) # Skip summary page 1
+            # DYNAMIC SUMMARY SKIP: Find the first page with the actual detail table header
+            # Summary pages can be 1 to 24+ pages. Detail table starts with "Payroll File Number".
+            first_detail_idx = 0
+            found_detail = False
+            for i, p_text in enumerate(pages):
+                if "Payroll File Number" in p_text:
+                    first_detail_idx = i
+                    found_detail = True
+                    break
+            
+            if found_detail:
+                print(f"  [V3][GIS] Found detail table starting on Page {first_detail_idx + 1}. Skipping {first_detail_idx} summary pages.")
+                detail_pages_text = "\n".join(pages[first_detail_idx:])
+            else:
+                # Fallback to skipping just Page 1 if no header found but it's GIS
+                print(f"  [V3][GIS] Detail header 'Payroll File Number' not found. Falling back to skipping Page 1.")
+                detail_pages_text = "\n".join(pages[1:]) if len(pages) > 1 else "\n".join(pages)
             
         gis_items = parse_gis_detail_direct(
             detail_pages_text,
@@ -2093,7 +2401,8 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
 
     def process_page_parallel(i, page_text):
         """Worker function for parallel page processing"""
-        print(f"  [V3][THREAD] Starting chunk {i+1}...")
+        chunk_id_str = chunk_identifiers[i]
+        print(f"  [V3][THREAD] Starting {chunk_id_str}...")
         
         # Skip specific pages for member line items (GIS, Humana, etc.)
         is_already_chunk = "_chunk_" in str(pdf_path)
@@ -2110,37 +2419,42 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
         
         if is_skip_page:
             reason = "GIS" if is_gis_invoice else ("Humana" if is_humana_invoice else "UHC Summary")
-            print(f"  [V3][THREAD] Chunk {i+1} is a {reason} page. Extracting header only.")
-            header_only_data = extract_fields_with_llm(page_text, client, f"{os.path.basename(pdf_path)}_page_{i+1}_header", mode="standard", detected_carrier=global_carrier) or {}
+            print(f"  [V3][THREAD] {chunk_id_str} is a {reason} page. Extracting header only.")
+            header_only_data = extract_fields_with_llm(page_text, client, f"{os.path.basename(pdf_path)}_{chunk_id_str}_header", mode="standard", detected_carrier=global_carrier) or {}
             return {"index": i, "header": header_only_data.get("HEADER", {}), "items": [], "refinement_info": None}
         
         # Pass 1: Standard Mode (Horizontal Parser)
-        page_data = extract_fields_with_llm(page_text, client, f"{os.path.basename(pdf_path)}_page_{i+1}", mode="standard", detected_carrier=global_carrier) or {}
+        page_data = extract_fields_with_llm(page_text, client, f"{os.path.basename(pdf_path)}_{chunk_id_str}", mode="standard", detected_carrier=global_carrier) or {}
         
         # Pass 2: Vertical Fallback
         if not page_data.get("LINE_ITEMS"):
             if len(page_text) > 200 or any(k in page_text.upper() for k in ["NAME", "CODE", "LIFE", "DENTAL", "VISION"]):
-                print(f"    -> [FALLBACK] Chunk {i+1}: Retrying in VERTICAL mode...")
+                print(f"    -> [FALLBACK] {chunk_id_str}: Retrying in VERTICAL mode...")
                 try:
                     with _cache_lock:
                         if "text" not in _vertical_cache:
                             _vertical_cache["text"] = extract_text_from_pdf_pymupdf(pdf_path, mode="vertical")
                     
                     full_vertical_text = _vertical_cache["text"]
+                    # If we used logical chunking, we need to re-chunk the vertical text or just use the page-based split
+                    # For simplicity, if logical chunking is used, we fallback by re-scanning the same text block in vertical mode if possible.
+                    # PyMuPDF doesn't give us synthetic markers easily for custom chunks, so this part is tricky.
+                    # For now, we assume the vertical fallback is primarily for page-based extraction.
                     v_pages = re.split(r'\[\s*\[\s*PAGE_\d+\s*\]\s*\]', full_vertical_text)
                     if v_pages and not v_pages[0].strip(): v_pages.pop(0)
-                    if i < len(v_pages):
+                    
+                    if not use_logical_chunking and i < len(v_pages):
                         v_chunk_text = v_pages[i].strip()
-                        page_data = extract_fields_with_llm(v_chunk_text, client, f"{os.path.basename(pdf_path)}_page_{i+1}", mode="vertical", detected_carrier=global_carrier) or {}
+                        page_data = extract_fields_with_llm(v_chunk_text, client, f"{os.path.basename(pdf_path)}_{chunk_id_str}", mode="vertical", detected_carrier=global_carrier) or {}
                 except Exception as e:
                     print(f"    -> [ERROR] Vertical fallback failed: {e}")
 
         # Refinement Pass
         should_refine, target_total, current_sum = learning_engine.should_trigger_refinement(page_data, page_text)
         if should_refine:
-            print(f"    -> [LEARNING] Refinement triggered for chunk {i+1}...")
+            print(f"    -> [LEARNING] Refinement triggered for {chunk_id_str}...")
             refinement_prompt = learning_engine.generate_refinement_prompt(page_data, page_text, target_total, current_sum)
-            page_data = extract_fields_with_llm(refinement_prompt, client, f"{os.path.basename(pdf_path)}_page_{i+1}_refinement", mode="standard", detected_carrier=global_carrier) or {}
+            page_data = extract_fields_with_llm(refinement_prompt, client, f"{os.path.basename(pdf_path)}_{chunk_id_str}_refinement", mode="standard", detected_carrier=global_carrier) or {}
             
         return {
             "index": i, 
@@ -2150,11 +2464,11 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
         }
 
     # Execute threads
-    max_workers = min(len(pages), 10) 
-    print(f"  [V3][PARALLEL] Dispatching {len(pages)} pages across {max_workers} threads...")
+    max_workers = min(len(working_chunks), 10) 
+    print(f"  [V3][PARALLEL] Dispatching {len(working_chunks)} chunks across {max_workers} threads...")
     
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = {executor.submit(process_page_parallel, i, p): i for i, p in enumerate(pages)}
+        futures = {executor.submit(process_page_parallel, i, p): i for i, p in enumerate(working_chunks)}
         results = []
         for future in concurrent.futures.as_completed(futures):
             try:
@@ -2182,6 +2496,13 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
         items = res["items"]
         if items:
             all_line_items.extend(items)
+
+    # --- STEP 3: Recovery Pass (Identity Audit Check) ---
+    # Verify if any IDs from our master list were missed.
+    recovered_items = _extract_missing_members(text, all_line_items, master_list, client)
+    if recovered_items:
+        print(f"  [V3][RECOVERY] Merging {len(recovered_items)} recovered items into results.")
+        all_line_items.extend(recovered_items)
 
 
     # Final combined data
