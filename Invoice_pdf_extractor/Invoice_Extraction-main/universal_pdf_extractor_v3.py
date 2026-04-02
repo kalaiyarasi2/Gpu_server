@@ -469,7 +469,7 @@ class InvoicePolicyChunker:
         Use AI to detect logical boundaries (sub-groups, accounts, major headers).
         Returns a list of dicts: {"identifier": "...", "start_index": int}
         """
-        print(f"\n🔍 Detecting logical boundaries in invoice text ({len(text)} chars)...")
+        print(f"\n[INFO] Detecting logical boundaries in invoice text ({len(text)} chars)...")
         
         # Sample for AI analysis to avoid token limits on detection
         text_preview = text if len(text) < 100000 else text[:60000] + "\n...\n" + text[-40000:]
@@ -612,10 +612,10 @@ DOCUMENT TEXT:
             ids = data.get("member_ids", [])
             all_detected_ids.update([str(i).strip() for i in ids])
         except Exception as e:
-            print(f"   ⚠️ ID detection error in block {idx+1}: {e}")
+            print(f"   [ERROR] ID detection error in block {idx+1}: {e}")
 
     master_list = sorted(list(all_detected_ids))
-    print(f"   ✅ Global master list: {len(master_list)} unique IDs found.")
+    print(f"   [OK] Global master list: {len(master_list)} unique IDs found.")
     return master_list
 
 def _extract_missing_members(full_text: str, current_items: List[Dict], master_list: List[str], client: OpenAI) -> List[Dict]:
@@ -635,10 +635,10 @@ def _extract_missing_members(full_text: str, current_items: List[Dict], master_l
     ]
     
     if not missing_ids:
-        print("   ✅ All global Member IDs accounted for.")
+        print("   [OK] All global Member IDs accounted for.")
         return []
         
-    print(f"\n   🔁 RECOVERY PASS: {len(missing_ids)} IDs missing after initial extraction.")
+    print(f"\n   [RECOVERY] RECOVERY PASS: {len(missing_ids)} IDs missing after initial extraction.")
     print(f"   Missing: {', '.join(missing_ids[:20])}{'...' if len(missing_ids) > 20 else ''}")
     
     recovered_items = []
@@ -672,9 +672,9 @@ def _extract_missing_members(full_text: str, current_items: List[Dict], master_l
                 # Only keep items that match the target IDs to avoid duplicates
                 filtered_batch = [item for item in batch_items if any(mid in str(item.get("MEMBERID", "")) for mid in batch)]
                 recovered_items.extend(filtered_batch)
-                print(f"      ✓ Recovered {len(filtered_batch)} items.")
+                print(f"      [OK] Recovered {len(filtered_batch)} items.")
         except Exception as e:
-            print(f"      ⚠️ Recovery batch error: {e}")
+            print(f"      [ERROR] Recovery batch error: {e}")
             
     return recovered_items
 
@@ -1204,7 +1204,7 @@ def extract_gis_header_direct(raw_text: str) -> dict:
     return header
 
 
-def extract_fields_with_llm(text: str, client: OpenAI, pdf_filename: str = "", mode: str = "standard", detected_carrier: Optional[str] = None) -> Dict:
+def extract_fields_with_llm(text: str, client: OpenAI, pdf_filename: str = "", mode: str = "standard", detected_carrier: Optional[str] = None, continuity_context: Optional[Dict] = None) -> Dict:
 
     """
     Extract fields using OpenAI with enhanced 'Discovery' logic and mirrored text awareness
@@ -1242,6 +1242,7 @@ Extract data from the document text provided below.
 {mode_instructions}
 
 {f'### CARRIER DETECTED: {detected_carrier.upper()} (PRIORITY)' if detected_carrier else ""}
+{f'### CONTINUATION INFO (CRITICAL): The previous page ended with member {continuity_context.get("LASTNAME")}, {continuity_context.get("FIRSTNAME")} (ID: {continuity_context.get("MEMBERID")}). If this page starts with rows starting with "Participant", "Ppt", "Spouse" or "Dependent" that have NO name/ID, they MUST be extracted as belonging to this member. Apply this identity to those orphan rows.' if continuity_context and continuity_context.get("LASTNAME") else ""}
 
 
 
@@ -1430,10 +1431,12 @@ Extract data from the document text provided below.
         - **Retroactive Changes**: These are ADJUSTMENTS. Inherit Name, ID, and Plan Name from the row immediately above. Map amount to `ADJUSTMENT_PREMIUM`.
         - **Handling Page Breaks (ORPHAN ROWS - ABSOLUTE MANDATE)**:
         Mutual of Omaha invoices frequently split a member's benefits across pages. 
-        - **SCENARIO**: If a page starts with benefit rows (e.g., those starting with "Participant", "Ppt", "Spouse", "Dependent") immediately under the header, but **WITHOUT** a name or ID appearing on that row or previous rows of the page.
-        - **ACTION**: **YOU MUST EXTRACT THESE ROWS.** Do not skip them.
-        - **PLACEHOLDER**: Set `LASTNAME` to "MISSING" and `FIRSTNAME` to "FROM_PREVIOUS_PAGE".
-        - This ensures the programmatic repair logic can stitch these benefits to the correct member from the previous page.
+        - **CONTINUATION INFO (PRIORITY)**: You may receive a `### CONTINUATION INFO` block at the top of your prompt. This tells you which member was being processed at the end of the PREVIOUS page.
+        - **SCENARIO**: If the page starts with benefit rows (starting with "Participant", "Ppt", "Spouse", "Dependent") but **WITHOUT** a name or ID on that row.
+        - **ACTION**: Use the name and ID from the `### CONTINUATION INFO` block to extract these rows. 
+        - **NO INFO CASE**: If no continuation info is provided and a name is truly missing, set `LASTNAME` to "MISSING" and `FIRSTNAME` to "FROM_PREVIOUS_PAGE".
+        - **STICKY CONTEXT**: Continue extracting every row in the sequence until a NEW member name or ID is encountered. Attribute all intermediate rows to the current member.
+        - **VIRTUAL MERGING**: You may see `[PAGE_FOOTER_STRIPPED]` or `[PAGE_HEADER_STRIPPED]` markers; these signify a page boundary but the member context stays active.
     - **Authoritative Total (MANDATORY)**: ONLY extract the absolute "TOTAL AMOUNT DUE" (e.g., `$9,379.56`) if it is explicitly present in the text. Map it as a standalone LINE_ITEM with `PLAN_NAME`: "REPORTED INVOICE TOTAL (FOR AUDIT)" and `FIRSTNAME`: "INVOICE TOTAL".
 - **Legal Shield**:
     - **ADJUSTMENT LOGIC (CRITICAL)**: If a member row contains a date (e.g., `01/15/2026`), the amount in that row MUST be placed in `ADJUSTMENT_PREMIUM` and `CURRENT_PREMIUM` MUST be NULL. 
@@ -1915,18 +1918,71 @@ def process_verified_text_file(txt_path: str, client: OpenAI, source_filename: O
         return {field: None for field in REQUIRED_FIELDS}
     
     # [V5] MOO Context Preservation: 
-    # Page-by-page processing destroys member context inheritance.
-    # If the document is MOO, we bypass the page splitter and process the chunk as a whole.
+    # Page-by-page processing with overlap to handle member context inheritance.
     is_moo = "MUTUAL OF OMAHA" in text.upper() or "MUTUALOFOMAHA" in text.upper() or "MOO" in str(txt_path).upper()
     
-    if page_markers and not is_moo:
-        print(f"  [V4] Detected {len(page_markers)} page markers. Processing page-by-page...")
-        # Split by markers, preserving the split content
+    parts = []
+    if page_markers:
         parts = re.split(r'\[\[PAGE_\d+\]\]', text)
-        # Usually the first part is empty if it starts with a marker
         if parts and not parts[0].strip():
             parts.pop(0)
+
+    if is_moo and len(parts) > 1:
+        print(f"  [V5][MOO] Using 2-Page Overlapping Chunks for verified text file.")
+        final_header = {}
+        all_line_items = []
+        
+        # Implement Macro-Batching (5-page chunks) with Table Healing
+        # Larger chunks reduce 'boundary' risks, and no-overlap prevents deduplication confusion.
+        last_member_info = {}
+        
+        for i in range(0, len(parts), 5):
+            chunk_end = min(i + 5, len(parts))
+            chunk_text = "\n".join(parts[i:chunk_end])
             
+            # [V5][MOO] Apply aggressive virtual merging to the chunk
+            # This strips interior boundaries and replaces them with a valid 'PARTICIPANT DETAIL' header
+            chunk_text = clean_moo_text_noise(chunk_text)
+            
+            # [V6][MOO] Apply Identity Injection (Table Healer)
+            # This ensures every orphan row has a name/id before it reaches the LLM
+            chunk_text = heal_moo_text_row_identity(chunk_text)
+            
+            chunk_id = f"Pages {i+1}-{chunk_end}"
+            print(f"  [AI][MOO] Extracting Batch {chunk_id} (Macro-Batch)...")
+            
+            page_data = extract_fields_with_llm(
+                chunk_text, 
+                client, 
+                f"{os.path.basename(txt_path)}_{chunk_id}", 
+                mode="standard", 
+                continuity_context=last_member_info
+            ) or {}
+            
+            if "HEADER" in page_data:
+                for k, v in page_data["HEADER"].items():
+                    if v and str(v).lower() not in ["n/a", "none", ""]:
+                        if not final_header.get(k): final_header[k] = v
+            
+            if "LINE_ITEMS" in page_data:
+                items = page_data["LINE_ITEMS"]
+                all_line_items.extend(items)
+                
+                # Update context for the NEXT chunk: find the last valid member
+                for item in reversed(items):
+                    ln = str(item.get("LASTNAME") or "").upper()
+                    fn = str(item.get("FIRSTNAME") or "").upper()
+                    if ln and ln not in ["MISSING", "UNKNOWN", "N/A", "PARTICIPANT"]:
+                        last_member_info = {
+                            "LASTNAME": item.get("LASTNAME"),
+                            "FIRSTNAME": item.get("FIRSTNAME"),
+                            "MEMBERID": item.get("MEMBERID")
+                        }
+                        break
+            
+        extracted_data = {"HEADER": final_header, "LINE_ITEMS": all_line_items}
+    elif page_markers:
+        print(f"  [V4] Detected {len(parts)} page markers. Processing page-by-page...")
         final_header = {}
         all_line_items = []
         is_uhc = "UNITEDHEALTH" in text.upper() or "UHC" in text.upper()
@@ -1941,7 +1997,7 @@ def process_verified_text_file(txt_path: str, client: OpenAI, source_filename: O
             if "Members effective prior month(s)" in page_text:
                 current_section = "ADJUSTMENT"
             
-            page_num = page_markers[i] if i < len(page_markers) else i + 1
+            page_num = i + 1
             print(f"  [AI] Extracting from Page {page_num} (Section: {current_section})...")
             
             # Inject section context for LLM
@@ -1972,12 +2028,10 @@ def process_verified_text_file(txt_path: str, client: OpenAI, source_filename: O
                         itm["CURRENT_PREMIUM"] = None
             
             # Merge Header
-            # Merge Header - Keep first non-null encounter (Page 1 priority)
             if "HEADER" in page_data:
                 for k, v in page_data["HEADER"].items():
                     if v and str(v).lower() not in ["n/a", "none", ""]:
-                        if not final_header.get(k):
-                            final_header[k] = v
+                        if not final_header.get(k): final_header[k] = v
             
             # Collect Line Items
             if "LINE_ITEMS" in page_data:
@@ -1985,10 +2039,11 @@ def process_verified_text_file(txt_path: str, client: OpenAI, source_filename: O
 
         extracted_data = {"HEADER": final_header, "LINE_ITEMS": all_line_items}
     else:
-        # Fallback to single block processing for legacy/custom files
+        # Fallback to single block processing
         print(f"  [V4] No page markers found. Processing as single block.")
         extracted_data = extract_fields_with_llm(text, client, os.path.basename(txt_path))
         is_uhc = "UNITEDHEALTH" in text.upper() or "UHC" in text.upper()
+        is_legal_shield = "LEGAL SHIELD" in text.upper() or "LEGALSHIELD" in text.upper()
 
     # [V4][UHC POST-PROCESS] Apply normalization
     if "LINE_ITEMS" in extracted_data and extracted_data["LINE_ITEMS"]:
@@ -2030,6 +2085,8 @@ def merge_carrier_rows(items, carrier):
         # Remove all non-alphanumeric characters and whitespace
         return re.sub(r'[^A-Z0-9]', '', str(s).upper())
 
+    initial_sum = sum(to_float(i.get("CURRENT_PREMIUM", 0)) + to_float(i.get("ADJUSTMENT_PREMIUM", 0)) for i in items)
+    
     for item in items:
         # Standard fields
         fname = str(item.get("FIRSTNAME") or "").strip()
@@ -2050,21 +2107,31 @@ def merge_carrier_rows(items, carrier):
             continue
             
         # Composite Key: Match on Name components (order-independent) and the Plan Type (anchor)
-        # We sort the first/last parts to handle "FLAST" vs "LASTF" variance
+        # We sort the first/last parts to handle "FLAST" vs "LASTF" variance.
+        # [V5][FIX] Include MEMBERID or SSN in key if available to prevent merging different people with same name.
         name_key = "".join(sorted([norm_first, norm_last]))
+        
+        # Priority 1: Name + Member ID
+        # Priority 2: Name + SSN
+        # Priority 3: Name (only if no IDs available)
+        norm_id = normalize_str(item.get("MEMBERID"))
+        norm_ssn = normalize_str(item.get("SSN"))
+        
+        id_part = norm_id if norm_id else (norm_ssn if norm_ssn else "NO_ID")
         plan_key = norm_type if norm_type else norm_plan
         
-        key = (name_key, plan_key)
+        key = (name_key, id_part, plan_key)
         
         if key not in merged:
             merged[key] = item.copy()
         else:
             existing = merged[key]
-            print(f"    [V5][MERGE] Matching found for {fname} {lname} [{ptype}] -> Consolidating rows.")
+            # [V5][MERGE] Print matching info with IDs for traceability
+            print(f"    [V5][MERGE] Matching found for {fname} {lname} [ID:{id_part}][Plan:{plan_key}] -> Consolidating rows.")
             
             # Merge Premiums (Sum them)
-            existing["CURRENT_PREMIUM"] = to_float(existing.get("CURRENT_PREMIUM", 0)) + to_float(item.get("CURRENT_PREMIUM", 0))
-            existing["ADJUSTMENT_PREMIUM"] = to_float(existing.get("ADJUSTMENT_PREMIUM", 0)) + to_float(item.get("ADJUSTMENT_PREMIUM", 0))
+            existing["CURRENT_PREMIUM"] = round(to_float(existing.get("CURRENT_PREMIUM", 0)) + to_float(item.get("CURRENT_PREMIUM", 0)), 2)
+            existing["ADJUSTMENT_PREMIUM"] = round(to_float(existing.get("ADJUSTMENT_PREMIUM", 0)) + to_float(item.get("ADJUSTMENT_PREMIUM", 0)), 2)
             
             # Carry over identifying info if missing in existing
             for field in ["SSN", "MEMBERID", "POLICYID", "COVERAGE", "PLAN_TYPE", "PLAN_NAME"]:
@@ -2072,7 +2139,14 @@ def merge_carrier_rows(items, carrier):
                     existing[field] = item.get(field)
     
     final_items = list(merged.values()) + other_items
+    final_sum = sum(to_float(i.get("CURRENT_PREMIUM", 0)) + to_float(i.get("ADJUSTMENT_PREMIUM", 0)) for i in final_items)
+    
     print(f"  [V5][{carrier}] Robust merge complete: {len(items)} -> {len(final_items)} rows.")
+    if abs(initial_sum - final_sum) > 0.1:
+        print(f"  [V5][WARNING] Premium Mismatch after merge: {initial_sum:.2f} vs {final_sum:.2f}")
+    else:
+        print(f"  [V5][OK] Integrity check passed ($ {final_sum:.2f} preserved).")
+    
     return final_items
 
 
@@ -2264,16 +2338,15 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
             print(f"  [V3][WARNING] Failed to save chunking report: {e}")
             
     # [V5] MOO Context Preservation:
-    # For Mutual of Omaha, we MUST process the whole chunk text at once 
-    # to ensure the LLM sees the member name at the top of a group's first page 
-    # when benefits continue onto the next page. page-by-page processing is too risky.
+    # For Mutual of Omaha, we use smaller chunks to avoid LLM response truncation 
+    # in dense documents, while maintaining 1-page overlap for context.
     if is_moo_invoice:
-        print(f"  [V5][MOO] Using High-Precision 5-Page Overlapping Chunks (Context Preservation).")
-        # Split into 5-page segments with 1-page overlap to ensure continuity
+        print(f"  [V5][MOO] Using High-Precision 2-Page Overlapping Chunks (Context Preservation).")
+        # Split into 2-page segments with 1-page overlap to ensure continuity
         moo_chunks = []
         moo_chunk_ids = []
-        for i in range(0, len(pages), 4): # Step of 4 with block of 5 = 1 page overlap
-            chunk_end = min(i + 5, len(pages))
+        for i in range(0, len(pages)):
+            chunk_end = min(i + 2, len(pages))
             chunk_text = "\n".join(pages[i:chunk_end])
             moo_chunks.append(chunk_text)
             moo_chunk_ids.append(f"Pages {i+1}-{chunk_end}")
@@ -2551,6 +2624,8 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
         data["LINE_ITEMS"] = all_line_items
 
     # [V5][KCL MERGE] Consolidate multiple rows for the same person/plan (e.g. Current + Adjustment)
+    is_kcl_carrier = is_kcl or "KCL" in str(global_carrier).upper() or "KANSAS" in str(global_carrier).upper()
+    if is_kcl_carrier:
         all_line_items = merge_carrier_rows(all_line_items, "KCL")
         data["LINE_ITEMS"] = all_line_items
 
@@ -2776,32 +2851,62 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
             last_processed_member = None # For cross-page continuity
             for item in line_items:
                 # [V4][MOO] Cross-Page Continuity Repair
-                is_moo_doc = "Mutual of Omaha" in source_filename or "MOO" in source_filename.upper()
-                is_placeholder = str(item.get("LASTNAME")).upper() == "MISSING" and \
-                                 str(item.get("FIRSTNAME")).upper() == "FROM_PREVIOUS_PAGE"
-                if is_placeholder and is_moo_doc:
-                    # Check if this is a bill-branch aggregate/summary row — skip it entirely
-                    _pn = str(item.get("PLAN_NAME") or "").upper()
-                    _agg_keywords = ["PARTICIPANT PREMIUM", "PARTICIPANT ADJUSTMENT", "CURRENT PREMIUM",
-                                     "AMOUNT DUE", "BILL BRANCH", "NET AMOUNT", "TOTAL BILLED",
-                                     "REPORTED INVOICE", "LIFE INSURANCE BENEFITS"]
+                is_moo_doc = "MUTUAL OF OMAHA" in source_filename.upper() or "MOO" in source_filename.upper()
+                
+                # [V5] MOO Noise Filtering: Detect headers that are not actually data rows
+                _ln_upper = str(item.get("LASTNAME") or "").upper()
+                _fn_upper = str(item.get("FIRSTNAME") or "").upper()
+                _moo_noise = ["PARTICIPANT DETAIL", "NAME/ID", "RELATIONSHIP", "EFF DATE", "TOTAL INSURANCE", "TOTAL PREMIUM"]
+                is_moo_noise = is_moo_doc and (any(kw in _ln_upper for kw in _moo_noise) or any(kw in _fn_upper for kw in _moo_noise))
+                
+                if is_moo_noise:
+                    print(f"    [V5][MOO] Skipping header/noise row: {_ln_upper} {_fn_upper}")
+                    continue
+
+                # [V5][MOO] Aggressive Orphan Row Repair
+                is_moo_doc = any(kw in source_filename.upper() for kw in ["MUTUAL OF OMAHA", "MOO"])
+                
+                # Identify if this is a "placeholder" or "weak" name record that needs contextual repair
+                _pn = str(item.get("PLAN_NAME") or "").upper()
+                _fn = str(item.get("FIRSTNAME") or "").upper()
+                _ln = str(item.get("LASTNAME") or "").upper()
+                
+                is_weak_name = not _fn or not _ln or _ln in ["UNKNOWN", "NONE", "N/A", "PARTICIPANT", "MISSING"]
+                
+                # Identify common placeholders used by LLM or found in raw text for orphan rows
+                is_placeholder = (_ln in ["MISSING", "UNKNOWN", "N/A", "PARTICIPANT", "PPT", "PPT/DEP", "DEPENDENT", "SPOUSE"] and \
+                                 _fn in ["FROM_PREVIOUS_PAGE", "UNKNOWN", "N/A", "PARTICIPANT"]) or \
+                                (_ln == "MISSING") or (_fn == "FROM_PREVIOUS_PAGE") or \
+                                (_ln in ["PARTICIPANT", "PPT", "SPOUSE", "DEPENDENT"] and not _fn)
+                
+                # Case where LLM didn't use placeholder but just left name empty except for "Participant" keyword
+                if is_moo_doc and is_weak_name and not is_placeholder:
+                    if to_float(item.get("CURRENT_PREMIUM")) != 0 or to_float(item.get("ADJUSTMENT_PREMIUM")) != 0:
+                        is_placeholder = True
+                
+                if is_moo_doc and is_placeholder:
+                    print(f"    [V5][MOO] Found orphan row placeholder: {_pn}")
+                    
+                    # 1. Skip summary/aggregate labels that are NOT member rows
+                    _agg_keywords = ["TOTAL", "AMOUNT DUE", "BILL BRANCH", "NET AMOUNT", "TOTAL BILLED",
+                                      "REPORTED INVOICE", "LIFE INSURANCE BENEFITS"]
                     if any(kw in _pn for kw in _agg_keywords):
-                        print(f"    [V4][MOO] Skipping aggregate placeholder row: {_pn}")
+                        print(f"    [V5][MOO] Skipping aggregate placeholder row: {_pn}")
                         continue
-                    # Skip rows with no premium data at all (section headers)
-                    if to_float(item.get("CURRENT_PREMIUM")) == 0 and to_float(item.get("ADJUSTMENT_PREMIUM")) == 0:
-                        print(f"    [V4][MOO] Skipping empty placeholder row (no premiums): {_pn}")
-                        continue
-                    # Legitimate orphan — repair with last member context
+
+                    # 2. Repair with last member context
                     if last_processed_member:
-                        print(f"    [V4][MOO] Repairing continuous member data for {last_processed_member.get('LASTNAME')}")
+                        print(f"    [V5][MOO] Repairing continuous member data for {last_processed_member.get('FIRSTNAME')} {last_processed_member.get('LASTNAME')}")
                         item["LASTNAME"] = last_processed_member.get("LASTNAME")
                         item["FIRSTNAME"] = last_processed_member.get("FIRSTNAME")
                         item["MEMBERID"] = last_processed_member.get("MEMBERID")
+                        item["SSN"] = last_processed_member.get("SSN")
                         item["COVERAGE"] = last_processed_member.get("COVERAGE")
+                        item["_IS_REPAIRED"] = True
+                        # No longer a weak name after repair
+                        is_weak_name = False
                     else:
-                        # No context yet — skip
-                        print(f"    [V4][MOO] Skipping unresolvable placeholder (no prior member context)")
+                        print(f"    [V5][MOO] Skipping unresolvable placeholder (no prior member context): {_pn}")
                         continue
 
                 # DUMMY ID FILTER: Discard clearly hallucinated rows
@@ -2981,13 +3086,13 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                                 has_cur_val1 = to_float(item.get("CURRENT_PREMIUM")) != 0
                                 has_cur_val2 = to_float(merged_items[matched_by_name_idx].get("CURRENT_PREMIUM")) != 0
 
-                                if (is_bcbs_doc or is_kcl_doc):
+                                if is_bcbs_doc:
                                     # STRICT SEPARATION for KCL/BCBS: 
                                     # Don't merge if one is CURRENT and other is ADJUSTMENT
                                     if (has_cur_val1 and has_adj_val2 and not has_adj_val1) or \
                                        (has_adj_val1 and has_cur_val2 and not has_cur_val1) or \
                                        (is_adj1 != is_adj2):
-                                        msg = "BCBS" if is_bcbs_doc else "KCL"
+                                        msg = "BCBS"
                                         print(f"      [V4][{msg}] Ledger Mode: Keeping CURRENT and ADJUSTMENT separate for {pn1}")
                                         match_index = None
                                     else:
@@ -2998,7 +3103,7 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                                         if pn1 == pn2:
                                             match_index = matched_by_name_idx
                                         else:
-                                            msg = "BCBS" if is_bcbs_doc else "KCL" # This msg is for the print below
+                                            msg = "BCBS"
                                             print(f"      [V4][{msg}] Ledger Mode: Keeping detail adjustment separate: {pn1} vs {pn2}")
                                             match_index = None
                                     else:
@@ -3040,6 +3145,16 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                                 elif incoming_total and existing_total and not (existing.get("MEMBERID") or existing.get("SSN")):
                                     existing[k] = v2
                                 # 3. Otherwise (Member detail rows, adjustments, etc.): Always sum
+                                # [V5][MOO][DEDUPLICATION] Special Handling for Overlapping Chunks
+                                # If this is a Mutual of Omaha doc and they are identical amounts for the same plan/person,
+                                # treat it as a duplicate (do not sum). 
+                                # This prevents doubling premiums from 1-page overlapping chunks.
+                                # Use a more robust check for MOO detection here.
+                                _is_moo = "MUTUAL OF OMAHA" in source_filename.upper() or "MOO" in source_filename.upper()
+                                if _is_moo and v1 == v2:
+                                    print(f"      [V5][MOO][DUP] Skipping sum for identical overlapping row ({fname} {lname} {k}={v2})")
+                                    # Already have the value, skip summing
+                                    pass
                                 else:
                                     print(f"      [V3][SUM] Adding {v2} to {v1} for {k} ({fname} {lname})")
                                     existing[k] = round(v1 + v2, 2)
@@ -3121,12 +3236,13 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                     if key_id_strict: index_by_id[key_id_strict] = current_idx
                     if key_ssn_strict: index_by_ssn[key_ssn_strict] = current_idx
                     if key_id_loose: index_by_id[key_id_loose] = current_idx
-                    if key_id_loose: index_by_id[key_id_loose] = current_idx
                     if key_ssn_loose: index_by_ssn[key_ssn_loose] = current_idx
                 
                 # Update continuity context for next iteration
                 # Ensure we only track REAL members (non-totals, non-placeholders)
-                if not check_total(item) and item.get("LASTNAME") and str(item.get("LASTNAME")).upper() != "MISSING":
+                # [V5] MOO "Sticky" Context: Ignore noise rows with generic headers as LASTNAME
+                is_noise_lastname = is_moo_doc and is_keyword_match(item.get("LASTNAME"), ["PARTICIPANT", "DETAIL", "NAME", "ID", "RELATIONSHIP", "EFF", "PLAN"])
+                if not check_total(item) and item.get("LASTNAME") and str(item.get("LASTNAME")).upper() != "MISSING" and not is_noise_lastname:
                     last_processed_member = item
             
             # PHASE 1: Separate member rows from total rows
@@ -3652,6 +3768,123 @@ def batch_process_step(txt_directory: str, output_excel: str = "extracted_data.x
     print(f"\n[SUMMARY] Summary:")
     print(df.to_string(index=False))
     print(f"{'='*70}\n")
+
+
+def heal_moo_text_row_identity(text: str) -> str:
+    """
+    Mutual of Omaha (MOO) specific pre-processor.
+    Physically injects the current member's name and ID onto any 'orphan' benefit rows.
+    This prevents data loss across page breaks by ensuring every row is complete.
+    """
+    import re
+    lines = text.split("\n")
+    processed_lines = []
+    
+    current_name = None
+    current_id = None
+    
+    # Pattern to find a full MOO member start line (Name AND ID)
+    # Example: '*Lamacchia, Louis  4742 Participant 04/01/25 Life...'
+    member_start_pattern = re.compile(
+        r'^\s*\*?(?P<name>[A-Z][a-zA-Z\s,]+)\s+(?P<id>\d{4,9})\s+(Participant|Ppt|Spouse|Dependent|Sps|Dep|Ppt\s*&\s*Sps|Ppt\s*&\s*Dep|Family)\s+',
+        re.IGNORECASE
+    )
+    
+    # Pattern to find an orphan row (Starts with Participant tier label but NO name/id before it)
+    # Example: '                            Participant 04/01/25 Life Vol EE...'
+    orphan_row_pattern = re.compile(
+        r'^\s+(?P<tier>Participant|Ppt|Spouse|Dependent|Sps|Dep|Ppt\s*&\s*Sps|Ppt\s*&\s*Dep|Family)\s+(?P<date>\d{1,2}/\d{1,2}/\d{2,4})\s+',
+        re.IGNORECASE
+    )
+    
+    # Pattern to find a Retroactive Change row (inherits everything from above)
+    retro_row_pattern = re.compile(r'^\s*Retroactive\s+Change\s+', re.IGNORECASE)
+
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            processed_lines.append(line)
+            continue
+            
+        # 1. Check if this is a NEW member row
+        start_match = member_start_pattern.search(line)
+        if start_match:
+            current_name = start_match.group("name").strip()
+            current_id = start_match.group("id").strip()
+            processed_lines.append(line) # Keep as is
+            continue
+            
+        # 2. Check if this is an ORPHAN row that needs identity injection
+        orphan_match = orphan_row_pattern.search(line)
+        if orphan_match and current_name and current_id:
+            # Inject the name and id into the leading whitespace
+            # We preserve the original spacing to avoid column shifts
+            new_prefix = f" {current_name}  {current_id} "
+            # Replace the leading spaces with our injected identity, keeping some padding
+            # This makes the line look like a standard member row to the LLM.
+            injected_line = re.sub(r'^\s+', new_prefix, line, count=1)
+            processed_lines.append(injected_line)
+            continue
+            
+        # 3. Check for Retroactive rows - we can also inject here for safety
+        retro_match = retro_row_pattern.search(line)
+        if retro_match and current_name and current_id:
+            new_prefix = f" {current_name}  {current_id} "
+            injected_line = re.sub(r'^\s+', new_prefix, line, count=1)
+            processed_lines.append(injected_line)
+            continue
+            
+        # 4. If line contains a NEW name but NO ID (rare fragment)
+        # Update current_name but try to keep ID if it looks like a continuation
+        # For now, just pass through
+        processed_lines.append(line)
+        
+    return "\n".join(processed_lines)
+    """
+    Mutual of Omaha (MOO) specific cleaner. 
+    Aggressively removes repeating page headers and footers that disrupt table continuity.
+    This creates a 'Virtual Merged Page' for the LLM.
+    """
+    import re
+    
+    # 1. Broadly identify and strip the MOO Footer block
+    footer_block_pattern = re.compile(
+        r'^\s*DO\s+NOT\s+RETURN\s+THIS\s+PAGE\s*$.*?^\s*Page\s*\d+\s*$.*?^\s*\d{6,8}\s+\d{4,8}\s*$', 
+        re.MULTILINE | re.DOTALL | re.IGNORECASE
+    )
+    # Replace footer with nothing to keep rows together
+    text = footer_block_pattern.sub("\n", text)
+    
+    # 2. Broadly identify and strip the MOO Header block
+    # We replace it with the actual label 'PARTICIPANT DETAIL' to satisfy LLM extraction rules
+    header_block_pattern = re.compile(
+        r'^\s*Group\s+ID:.*?PARTICIPANT\s+DETAIL.*?PARTICIPANT.*?TOTAL\s*$', 
+        re.MULTILINE | re.DOTALL | re.IGNORECASE
+    )
+    text = header_block_pattern.sub("\n### PARTICIPANT DETAIL (CONTINUED) ###\n", text)
+    
+    # 3. Aggressive residual cleaning for fragments that escaped the block patterns
+    # These match common fixed phrases in MOO headers/footers
+    residual_patterns = [
+        r'^\s*DO\s+NOT\s+RETURN\s+THIS\s+PAGE\s*$',
+        r'^\s*Page\s*\d+\s*$',
+        r'^\s*PARTICIPANT\s+DETAIL\s*$',
+        r'^\s*Bill\s+Group\s+ID:.*$',
+        r'^\s*Invoice\s+Number:.*$',
+        r'^\s*Tampa\s+Bay\s+Group\s+Office\s*$',
+        r'^\s*PARTICIPANT\s+ID\s+FAMILY\s+EFF.*$',
+        r'^\s*INDICATOR\s+DATE\s+PLAN\s+VOLUME\s+AMOUNT\s+ADJ\s+TOTAL.*$',
+        r'^\s*693399\s+7605\s*$',
+        r'\[\[PAGE_\d+\]\]'
+    ]
+    
+    for pattern in residual_patterns:
+        text = re.sub(pattern, '', text, flags=re.MULTILINE | re.IGNORECASE)
+    
+    # 4. Clean up excessive whitespace/newlines created by stripping
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    
+    return text
 
 
 if __name__ == "__main__":
