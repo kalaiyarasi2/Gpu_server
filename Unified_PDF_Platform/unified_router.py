@@ -1524,6 +1524,8 @@ Return ONLY the company name or UNKNOWN:"""
                     try:
                         df = pd.read_excel(f_path)
                         if not df.empty:
+                            # Add an internal index to track the physical position within this chunk
+                            df['_CHUNK_ROW_INDEX'] = range(len(df))
                             # Look for reported total in this chunk
                             if 'PLAN_NAME' in df.columns and 'CURRENT_PREMIUM' in df.columns:
                                 t_rows = df[df['PLAN_NAME'].str.contains("REPORTED INVOICE TOTAL", case=False, na=False)]
@@ -1542,13 +1544,122 @@ Return ONLY the company name or UNKNOWN:"""
                 
             combined_df = pd.concat(all_dfs, ignore_index=True)
             print(f"  [Merge] Combined rows before filtering: {len(combined_df)}")
-            
-            # Filter out intermediate TOTAL rows to prevent double-counting
+
+            # [V4][MOO] Cross-Chunk Continuity Repair
+            # Handles page breaks occurring at physical PDF chunk boundaries by stitching
+            # placeholders (from start of a chunk) to the last member of the previous chunk.
+            is_moo_doc = any("MUTUAL" in str(f).upper() or "OMAHA" in str(f).upper() for f in processed_files)
+
+            # Aggregate/summary row patterns that should be DROPPED, not repaired
+            _AGGREGATE_PLAN_KEYWORDS = [
+                "PARTICIPANT PREMIUM", "PARTICIPANT ADJUSTMENT", "CURRENT PREMIUM",
+                "AMOUNT DUE", "BILL BRANCH", "NET AMOUNT", "TOTAL BILLED",
+                "REPORTED INVOICE", "LIFE INSURANCE BENEFITS", "TOTAL FOR BILL BRANCH",
+                "TOTAL FOR ALL BRANCHES", "INVOICE SUMMARY"
+            ]
+
+            def _is_aggregate_row(plan_name_str):
+                """Return True if the PLAN_NAME indicates a branch subtotal / section header."""
+                pn = str(plan_name_str or "").upper()
+                return any(kw in pn for kw in _AGGREGATE_PLAN_KEYWORDS)
+
+            if is_moo_doc and 'LASTNAME' in combined_df.columns and 'FIRSTNAME' in combined_df.columns:
+                print(f"  [Merge][MOO] Running Cross-Chunk Continuity Repair...")
+                last_member_ctx = None
+                member_seen_plans = set() # Track plans already processed for the current member to avoid duplicate-plan summaries
+                repair_count = 0
+                drop_indices = []  # indices to drop (aggregate rows that were placeholders)
+                for idx, row in combined_df.iterrows():
+                    ln = str(row.get('LASTNAME', '')).upper()
+                    fn = str(row.get('FIRSTNAME', '')).upper()
+                    plan_n = str(row.get('PLAN_NAME', '')).upper()
+                    
+                    # If this is a placeholder row, check whether it's a real member row or an aggregate
+                    if ln == "MISSING" and fn == "FROM_PREVIOUS_PAGE":
+                        if _is_aggregate_row(plan_n):
+                            # This is a bill-branch subtotal or section header — DROP it
+                            print(f"  [Merge][MOO] Dropping aggregate placeholder row: {plan_n}")
+                            drop_indices.append(idx)
+                            continue
+                        
+                        # [TOP-OF-CHUNK RULE]
+                        # Synthetic cross-chunk placeholders (FROM_PREVIOUS_PAGE) should ONLY appear at 
+                        # the very beginning of a chunk file. If they appear later (e.g. after index 50),
+                        # they are almost certainly noisy summary table rows, not missing member detail.
+                        chunk_idx = row.get('_CHUNK_ROW_INDEX', 999)
+                        if chunk_idx >= 50:
+                            print(f"  [Merge][MOO] Dropping late-chunk placeholder (index {chunk_idx}): {plan_n}")
+                            drop_indices.append(idx)
+                            continue
+                        
+                        # [DUPLICATE PLAN SAFEGUARD] 
+                        # In MOO, members generally have only one row per plan. If we see a placeholder 
+                        # for a plan name we've already seen for this member, it's likely a summary total row.
+                        if plan_n in member_seen_plans and plan_n != "":
+                            print(f"  [Merge][MOO] Dropping duplicate-plan placeholder: {plan_n}")
+                            drop_indices.append(idx)
+                            continue
+
+                        # Check for rows with no premium data at all (section headers like "LIFE INSURANCE BENEFITS")
+                        curr = pd.to_numeric(row.get('CURRENT_PREMIUM'), errors='coerce')
+                        adj = pd.to_numeric(row.get('ADJUSTMENT_PREMIUM'), errors='coerce')
+                        if pd.isna(curr) and pd.isna(adj):
+                            print(f"  [Merge][MOO] Dropping empty placeholder row (no premiums): {plan_n}")
+                            drop_indices.append(idx)
+                            continue
+                        
+                        # Legitimate orphaned member plan row — repair it
+                        if last_member_ctx:
+                            combined_df.at[idx, 'LASTNAME'] = last_member_ctx['LASTNAME']
+                            combined_df.at[idx, 'FIRSTNAME'] = last_member_ctx['FIRSTNAME']
+                            if 'MEMBERID' in combined_df.columns: combined_df.at[idx, 'MEMBERID'] = last_member_ctx['MEMBERID']
+                            if 'COVERAGE' in combined_df.columns: combined_df.at[idx, 'COVERAGE'] = last_member_ctx['COVERAGE']
+                            repair_count += 1
+                        else:
+                            # No context yet (placeholder at very start) — drop
+                            drop_indices.append(idx)
+                            continue
+                    
+                    # Update context if this is a real member (non-total, non-placeholder, non-aggregate)
+                    is_total = "TOTAL" in ln or "TOTAL" in fn or "TOTAL" in plan_n or "GRAND TOTAL" in plan_n
+                    is_agg = _is_aggregate_row(plan_n)
+                    
+                    if not is_total and not is_agg and ln != "MISSING" and ln != "NAN" and ln != "" and ln != "NONE":
+                         # Check if this is a NEW member compared to context
+                         curr_ctx_key = f"{fn}|{ln}"
+                         last_ctx_key = f"{str(last_member_ctx.get('FIRSTNAME','')).upper()}|{str(last_member_ctx.get('LASTNAME','')).upper()}" if last_member_ctx else ""
+                         
+                         if curr_ctx_key != last_ctx_key:
+                             # New member - reset seen plans
+                             member_seen_plans = set()
+                             
+                         last_member_ctx = {
+                             'LASTNAME': row.get('LASTNAME'),
+                             'FIRSTNAME': row.get('FIRSTNAME'),
+                             'MEMBERID': row.get('MEMBERID'),
+                             'COVERAGE': row.get('COVERAGE')
+                         }
+                         member_seen_plans.add(plan_n)
+
+                # Drop the aggregate rows
+                if drop_indices:
+                    combined_df = combined_df.drop(drop_indices)
+                    print(f"  [Merge][MOO] Dropped {len(drop_indices)} aggregate/summary placeholder rows.")
+                if repair_count > 0:
+                    print(f"  [Merge][MOO] Successfully repaired {repair_count} orphaned member rows across chunk boundaries.")
+
+            # Filter out intermediate TOTAL and aggregate rows to prevent double-counting
             if 'PLAN_NAME' in combined_df.columns:
-                combined_df = combined_df[~combined_df['PLAN_NAME'].str.contains("TOTAL", case=False, na=False)]
+                _total_filter = combined_df['PLAN_NAME'].str.contains("TOTAL", case=False, na=False)
+                _agg_filter = combined_df['PLAN_NAME'].apply(lambda x: _is_aggregate_row(x) if is_moo_doc else False)
+                combined_df = combined_df[~(_total_filter | _agg_filter)]
             if 'FIRSTNAME' in combined_df.columns:
                 combined_df = combined_df[~combined_df['FIRSTNAME'].str.contains("TOTAL", case=False, na=False)]
-            
+            # Drop any remaining FROM_PREVIOUS_PAGE rows that weren't repaired
+            # Final cleanup: drop temporary columns
+            if '_CHUNK_ROW_INDEX' in combined_df.columns:
+                combined_df = combined_df.drop(columns=['_CHUNK_ROW_INDEX'])
+                
             print(f"  [Merge] Combined rows after filtering: {len(combined_df)}")
             
             # Sort members alphabetically

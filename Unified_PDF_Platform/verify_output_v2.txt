@@ -1,0 +1,100 @@
+================================================================================
+MOO EXTRACTION VERIFICATION
+================================================================================
+
+--- Chunk 1: 240 raw rows ---
+  [!] 15 FROM_PREVIOUS_PAGE placeholder rows:
+      Life | curr=372.42 | adj=-1.8
+      AD&D | curr=93.11 | adj=-0.45
+      Life Vol EE | curr=1001.74 | adj=nan
+      Life Vol Sp | curr=134.63 | adj=nan
+      Life Vol Dep | curr=10.0 | adj=nan
+      AD&D Vol EE | curr=71.9 | adj=nan
+      AD&D Vol Sp | curr=4.73 | adj=nan
+      STD Vol | curr=1770.86 | adj=-30.86
+      VDen Pass Hi | curr=3298.67 | adj=0.0
+      VDen Pass Lo | curr=487.75 | adj=-43.19
+      Vision Vol | curr=744.31 | adj=-1.73
+      CI Vol EE/Dep | curr=192.1 | adj=187.6
+      Accident Vol | curr=269.18 | adj=235.54
+      HI Vol | curr=332.42 | adj=246.73
+      CI Vol Sp | curr=3.9 | adj=nan
+  [i] 1 TOTAL row(s)
+  Cleaned rows: 224
+  Unique members: 57
+  CURRENT_PREMIUM sum: $2109.74
+  ADJUSTMENT_PREMIUM sum: $90.02
+  First member: Michelle Aguilar (Life)
+  Last member:  Jackson Milien (VDen Pass Hi)
+
+--- Chunk 2: 552 raw rows ---
+  [i] 1 TOTAL row(s)
+  Cleaned rows: 551
+  Unique members: 148
+  CURRENT_PREMIUM sum: $5931.19
+  ADJUSTMENT_PREMIUM sum: $256.61
+  First member: Dachena Altidor (Life)
+  Last member:  Jason Zelenak (Vision Vol)
+
+--- Chunk 3: 40 raw rows ---
+  [!] 1 FROM_PREVIOUS_PAGE placeholder rows:
+      Vision Vol | curr=7.57 | adj=nan
+  [i] 1 TOTAL row(s)
+  Cleaned rows: 37
+  Unique members: 8
+  CURRENT_PREMIUM sum: $352.38
+  ADJUSTMENT_PREMIUM sum: $105.25
+  First member: Jean Michel Valcin (Life)
+  Last member:  Michael Zarrillo (VDen Pass Lo)
+
+================================================================================
+COMBINED CHUNKS (cleaned): 812 rows
+  Unique members across all chunks: 213
+  CURRENT_PREMIUM total: $8393.31
+  ADJUSTMENT_PREMIUM total: $451.88
+
+================================================================================
+MERGED REPORT
+================================================================================
+Raw rows: 829
+FROM_PREVIOUS_PAGE rows: 0
+Aggregate rows: 0
+TOTAL rows: 1
+  REPORTED INVOICE TOTAL (FOR AUDIT) | curr=9379.56
+Cleaned rows: 828
+Unique members: 213
+CURRENT_PREMIUM total: $17188.60
+ADJUSTMENT_PREMIUM total: $1043.72
+
+================================================================================
+CROSS-CHECK: CHUNKS vs MERGED
+================================================================================
+
+[OK] All chunk members found in merged report.
+[OK] No extra members in merged report.
+
+================================================================================
+DUPLICATE DETECTION (merged)
+================================================================================
+[!] 8 duplicate member+plan combinations:
+  Jackson Milien | AD&D x2
+  Jackson Milien | AD&D Vol EE x2
+  Jackson Milien | Life x2
+  Jackson Milien | Life Vol EE x2
+  Jackson Milien | VDen Pass Hi x2
+  Blake Rockman | AD&D x2
+  Blake Rockman | Life x2
+  Jason Zelenak | Vision Vol x2
+
+================================================================================
+PREMIUM TOTALS COMPARISON
+================================================================================
+  CURRENT_PREMIUM  - Chunks: $8393.31  Merged: $17188.60  Diff: $8795.29
+  ADJUSTMENT_PREMIUM - Chunks: $451.88  Merged: $1043.72  Diff: $591.84
+  [!!!] PREMIUM MISMATCH - investigating...
+    Jackson Milien: chunks=$79.76 merged=$8867.48 diff=$8787.72
+    Jason Zelenak: chunks=$39.33 merged=$46.90 diff=$7.57
+
+================================================================================
+VERIFICATION COMPLETE
+================================================================================

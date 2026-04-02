@@ -1056,8 +1056,11 @@ def parse_gis_detail_direct(full_raw_text: str, inv_date: str = None, inv_number
     """
     items = []
     lines = full_raw_text.splitlines()
-    is_vertical = "Payroll File Number" in full_raw_text or "Product Name" in full_raw_text
-    print(f"  [V3][GIS] Parser mode: {'VERTICAL' if is_vertical else 'WIDE'}")
+    
+    # Plans identified in wide header (ordered as they typically appear)
+    # This is a heuristic - a better way is to dynamically sense columns, 
+    # but for now we'll match by looking for common GIS benefits.
+    GIS_PLANS = ["VOLUNTARY DENTAL", "DENTAL HMO", "VOLUNTARY VISION", "VOLUNTARY STD", "VOLUNTARY LTD", "VOLUNTARY LIFE", "VOLUNTARY AD&D"]
 
     # Regex 1: Original ID-first pattern
     id_pattern = re.compile(r'^\s*(\d+)\s+([A-Z\-\s,]+?)\s+(\d{1,2}/\d{1,2}/\d{4})')
@@ -1425,12 +1428,18 @@ Extract data from the document text provided below.
         - **Source**: Extract ONLY from tables explicitly labeled "**PARTICIPANT DETAIL**".
         - **Member Context Inheritance**: For Mutual of Omaha, member names and IDs only appear on the first line of their group. Subsequent rows within the group MUST inherit the last seen `LASTNAME`, `FIRSTNAME`, `MEMBERID`, and `COVERAGE`.
         - **Retroactive Changes**: These are ADJUSTMENTS. Inherit Name, ID, and Plan Name from the row immediately above. Map amount to `ADJUSTMENT_PREMIUM`.
+        - **Handling Page Breaks (ORPHAN ROWS - ABSOLUTE MANDATE)**:
+        Mutual of Omaha invoices frequently split a member's benefits across pages. 
+        - **SCENARIO**: If a page starts with benefit rows (e.g., those starting with "Participant", "Ppt", "Spouse", "Dependent") immediately under the header, but **WITHOUT** a name or ID appearing on that row or previous rows of the page.
+        - **ACTION**: **YOU MUST EXTRACT THESE ROWS.** Do not skip them.
+        - **PLACEHOLDER**: Set `LASTNAME` to "MISSING" and `FIRSTNAME` to "FROM_PREVIOUS_PAGE".
+        - This ensures the programmatic repair logic can stitch these benefits to the correct member from the previous page.
     - **Authoritative Total (MANDATORY)**: ONLY extract the absolute "TOTAL AMOUNT DUE" (e.g., `$9,379.56`) if it is explicitly present in the text. Map it as a standalone LINE_ITEM with `PLAN_NAME`: "REPORTED INVOICE TOTAL (FOR AUDIT)" and `FIRSTNAME`: "INVOICE TOTAL".
 - **Legal Shield**:
     - **ADJUSTMENT LOGIC (CRITICAL)**: If a member row contains a date (e.g., `01/15/2026`), the amount in that row MUST be placed in `ADJUSTMENT_PREMIUM` and `CURRENT_PREMIUM` MUST be NULL. 
     - **CURRENT PREMIUM LOGIC**: If a member row has NO date, the amount MUST be placed in `CURRENT_PREMIUM`.
     - **MEMBERID prefix mapping**:
-        - Member IDs starting with **101** -> PLAN_NAME: "Legal Plan", PLAN_TYPE: "VOLUNTARY"
+        - Member IDs starting with **101** -> PLAN_N AME: "Legal Plan", PLAN_TYPE: "VOLUNTARY"
         - Member IDs starting with **700** -> PLAN_NAME: "Identity Theft Plan", PLAN_TYPE: "VOLUNTARY"
     - Preserve the row-level date in the `INV_DATE` field for that line item.
 - **Adjustment Table (GUARDIAN)**:
@@ -1905,9 +1914,12 @@ def process_verified_text_file(txt_path: str, client: OpenAI, source_filename: O
         print(f"  [ERROR] Error reading text file {txt_path}: {e}")
         return {field: None for field in REQUIRED_FIELDS}
     
-    # Check for page delimiters
-    page_markers = re.findall(r'\[\[PAGE_(\d+)\]\]', text)
-    if page_markers:
+    # [V5] MOO Context Preservation: 
+    # Page-by-page processing destroys member context inheritance.
+    # If the document is MOO, we bypass the page splitter and process the chunk as a whole.
+    is_moo = "MUTUAL OF OMAHA" in text.upper() or "MUTUALOFOMAHA" in text.upper() or "MOO" in str(txt_path).upper()
+    
+    if page_markers and not is_moo:
         print(f"  [V4] Detected {len(page_markers)} page markers. Processing page-by-page...")
         # Split by markers, preserving the split content
         parts = re.split(r'\[\[PAGE_\d+\]\]', text)
@@ -2179,9 +2191,50 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
     else:
         print(f"    - Result: WARNING (Length mismatch: {combined_pages_len + markers_len} vs {original_len})")
 
+    # [V5][AUDIT] Build a global master list of Member IDs to ensure 100% capture during the Recovery Pass.
+    # This acts as an "Identity Audit" for large or high-precision carrier documents.
+    master_list = []
+    if len(text) > 50000 or "Mutual of Omaha" in text or "Legal Shield" in text:
+        master_list = _detect_member_ids_ai(text, client)
     all_line_items = []
     final_header = {field: None for field in ["INV_DATE", "INV_NUMBER", "BILLING_PERIOD", "TOTAL_BILLED", "TOTAL_ADJUSTMENTS", "AMOUNT_DUE", "GROUP_NUMBER", "PRICING_ADJUSTMENT"]}
+
+    # --- STEP 2: CARRIER DETECTION & MODE TUNING ---
+    # GIS Benefits Detection
+    is_gis_invoice = any("Payroll File Number" in p for p in pages) or \
+                     any("Product Name" in p and "Employee Portion" in p for p in pages) or \
+                     any("service@gisadmin.net" in p.lower() for p in pages) or \
+                     any("GIS Benefits" in p for p in pages)
     
+    # Humana Detection
+    is_humana_invoice = any("403638-001" in p for p in pages) or any("LOST BOY AND COMPANY LLC" in p for p in pages)
+
+    # UHC Detection
+    is_uhc_invoice = any("uhceservices.com" in p.lower() for p in pages) or \
+                     any("Consolidated Customer No:" in p for p in pages) or \
+                     any("United HealthCare Services" in p for p in pages)
+    
+    # [V4][MOO] Mutual of Omaha Detection
+    is_moo_invoice = any("OMAHA" in p.upper() for p in pages) or \
+                     "OMAHA" in str(pdf_path).upper() or \
+                     "MOO" in str(pdf_path).upper()
+    global_carrier = None
+    if is_moo_invoice:
+        global_carrier = "Mutual of Omaha"
+        print(f"  [V4][MOO] Mutual of Omaha detected document-wide.")
+
+    # Unum Detection
+    _unum_mirrored_signature = "ACIREMA FO YNAPMOC ECNARUSNI EFIL MUNU"
+    _unum_normal_signature = "UNUM LIFE INSURANCE COMPANY OF AMERICA"
+    is_unum_invoice = any(_unum_mirrored_signature in p for p in pages) or \
+                      any(_unum_normal_signature in p.upper() for p in pages)
+    
+    # Legal Shield Detection
+    is_legal_shield = any("LEGAL SHIELD" in p.upper() or "LEGALSHIELD" in p.upper() for p in pages)
+    if is_legal_shield:
+        global_carrier = "Legal Shield"
+        print(f"  [V4][LEGALSHIELD] Legal Shield invoice detected.")
+
     print(f"  [V3] Splitting large document into {len(pages)} pages for reliable extraction...")
     
     # --- STEP 2: Logical Chunking Decision ---
@@ -2209,22 +2262,33 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
             print(f"  [V3][CHUNKING] Chunking report saved to: {report_path}")
         except Exception as e:
             print(f"  [V3][WARNING] Failed to save chunking report: {e}")
-    else:
+            
+    # [V5] MOO Context Preservation:
+    # For Mutual of Omaha, we MUST process the whole chunk text at once 
+    # to ensure the LLM sees the member name at the top of a group's first page 
+    # when benefits continue onto the next page. page-by-page processing is too risky.
+    if is_moo_invoice:
+        print(f"  [V5][MOO] Using High-Precision 5-Page Overlapping Chunks (Context Preservation).")
+        # Split into 5-page segments with 1-page overlap to ensure continuity
+        moo_chunks = []
+        moo_chunk_ids = []
+        for i in range(0, len(pages), 4): # Step of 4 with block of 5 = 1 page overlap
+            chunk_end = min(i + 5, len(pages))
+            chunk_text = "\n".join(pages[i:chunk_end])
+            moo_chunks.append(chunk_text)
+            moo_chunk_ids.append(f"Pages {i+1}-{chunk_end}")
+            if chunk_end == len(pages):
+                break
+        working_chunks = moo_chunks
+        chunk_identifiers = moo_chunk_ids
+    elif not use_logical_chunking:
         working_chunks = pages
         chunk_identifiers = [f"Page {i+1}" for i in range(len(pages))]
     
-    # GIS Benefits Detection: The detail table starts on Page 2+ with "Payroll File Number" header.
-    # Page 1 is a summary that has the SAME premiums, which causes double-counting.
-    # SOLUTION: If this is a GIS document, skip Page 1 for line-item extraction.
-    is_gis_invoice = any("Payroll File Number" in p for p in pages) or \
-                     any("Product Name" in p and "Employee Portion" in p for p in pages) or \
-                     any("service@gisadmin.net" in p.lower() for p in pages) or \
-                     any("GIS Benefits" in p for p in pages)
+    # GIS Section Logic
     if is_gis_invoice:
-        print(f"  [V3][GIS] GIS Benefits invoice detected. Page 1 summary will be skipped for line items to prevent double-counting.")
+        print(f"  [V3][GIS] GIS Benefits invoice detected. Page 1 summary will be skipped for line items.")
     
-    # Humana Detection: Skip summary pages (1, 2, 3, 5)
-    is_humana_invoice = any("403638-001" in p for p in pages) or any("LOST BOY AND COMPANY LLC" in p for p in pages)
     if is_humana_invoice:
         print(f"  [V3][HUMANA] Humana invoice detected. Pages 1, 2, 3, 5 will be skipped for line items.")
 
@@ -2709,7 +2773,37 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                 # Check for exact matches of total keywords as standalone words
                 return any(re.search(fr'\b{kw}\b', t) for kw in keywords)
 
+            last_processed_member = None # For cross-page continuity
             for item in line_items:
+                # [V4][MOO] Cross-Page Continuity Repair
+                is_moo_doc = "Mutual of Omaha" in source_filename or "MOO" in source_filename.upper()
+                is_placeholder = str(item.get("LASTNAME")).upper() == "MISSING" and \
+                                 str(item.get("FIRSTNAME")).upper() == "FROM_PREVIOUS_PAGE"
+                if is_placeholder and is_moo_doc:
+                    # Check if this is a bill-branch aggregate/summary row — skip it entirely
+                    _pn = str(item.get("PLAN_NAME") or "").upper()
+                    _agg_keywords = ["PARTICIPANT PREMIUM", "PARTICIPANT ADJUSTMENT", "CURRENT PREMIUM",
+                                     "AMOUNT DUE", "BILL BRANCH", "NET AMOUNT", "TOTAL BILLED",
+                                     "REPORTED INVOICE", "LIFE INSURANCE BENEFITS"]
+                    if any(kw in _pn for kw in _agg_keywords):
+                        print(f"    [V4][MOO] Skipping aggregate placeholder row: {_pn}")
+                        continue
+                    # Skip rows with no premium data at all (section headers)
+                    if to_float(item.get("CURRENT_PREMIUM")) == 0 and to_float(item.get("ADJUSTMENT_PREMIUM")) == 0:
+                        print(f"    [V4][MOO] Skipping empty placeholder row (no premiums): {_pn}")
+                        continue
+                    # Legitimate orphan — repair with last member context
+                    if last_processed_member:
+                        print(f"    [V4][MOO] Repairing continuous member data for {last_processed_member.get('LASTNAME')}")
+                        item["LASTNAME"] = last_processed_member.get("LASTNAME")
+                        item["FIRSTNAME"] = last_processed_member.get("FIRSTNAME")
+                        item["MEMBERID"] = last_processed_member.get("MEMBERID")
+                        item["COVERAGE"] = last_processed_member.get("COVERAGE")
+                    else:
+                        # No context yet — skip
+                        print(f"    [V4][MOO] Skipping unresolvable placeholder (no prior member context)")
+                        continue
+
                 # DUMMY ID FILTER: Discard clearly hallucinated rows
                 member_id = str(item.get("MEMBERID") or "").strip()
                 ssn = str(item.get("SSN") or "").strip()
@@ -3027,7 +3121,13 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                     if key_id_strict: index_by_id[key_id_strict] = current_idx
                     if key_ssn_strict: index_by_ssn[key_ssn_strict] = current_idx
                     if key_id_loose: index_by_id[key_id_loose] = current_idx
+                    if key_id_loose: index_by_id[key_id_loose] = current_idx
                     if key_ssn_loose: index_by_ssn[key_ssn_loose] = current_idx
+                
+                # Update continuity context for next iteration
+                # Ensure we only track REAL members (non-totals, non-placeholders)
+                if not check_total(item) and item.get("LASTNAME") and str(item.get("LASTNAME")).upper() != "MISSING":
+                    last_processed_member = item
             
             # PHASE 1: Separate member rows from total rows
             member_rows = []
