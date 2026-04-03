@@ -1366,16 +1366,14 @@ Extract data from the document text provided below.
     - **MULTIPLE PLAN ROWS (CRITICAL)**: A member may have MULTIPLE rows (e.g., one for **LTD** and one for **STD**). You MUST extract EACH row as a separate line item. DO NOT consolidate them into one row; the system will handle it.
 - **KCL (Kansas City Life) (STRICT RULES)**:
     - **SECTION PRIORITY (CRITICAL)**: Look for the injected markers `### SECTION: ... ###`.
-        1. **`### SECTION: CURRENT_CHARGES ###`**: Find member names and capture their **CURRENT_PREMIUM** (e.g., `$2.90`).
-        2. **`### SECTION: ADJUSTMENTS ###`**: Find member names and capture their **ADJUSTMENT_PREMIUM** (e.g., `$5.80`).
-        3. **`### SECTION: ADJUSTMENT_TOTALS ###`**: DO NOT assign rows from this table to the previous member. Map them to a dummy user named "COMPANY SUMMARY" or skip if you already have member-level adjustments.
-    - **TOTALS EXCLUSION**: YOU MUST IGNORE any row where the "Name" or "Product" contains the word "Total" (e.g., "Total for VALDES RITA", "Adjustment Totals"). Extraction should focus ONLY on individual benefit lines.
-    - **NO-NAME ATTRIBUTION**: Never attribute a premium to a member if their name is not explicitly on that line or clearly associated via row grouping. Do not guess or use the last seen member for summary tables.
-    - **HEURISTIC MAPPING**:
-        - In the "CURRENT_CHARGES" section, set **ADJUSTMENT_PREMIUM** to 0.
-        - In the "ADJUSTMENTS" section, set **CURRENT_PREMIUM** to 0.
-        - If you see a member having both current charges and adjustments across different pages, create separate rows for each; the system will join them.
-    - **PLAN_TYPE**: Map "TG Life" to **LIFE**, "TG AD&D" to **AD&D**, "Vision" to **VISION**, "Dental" to **DENTAL**, "Ltd" to **LTD**, "Std" to **STD**.
+        1. **`### SECTION: SUMMARY_TOTALS ###`**: IGNORE this page for member extraction. DO NOT extract "Adjustments/Fees", "EAP Fee", or "Balance Due" from here. Only extract these if they appear in DETAIL sections for specific people.
+        2. **`### SECTION: CURRENT_CHARGES ###`**: Find member names and capture their **CURRENT_PREMIUM**.
+        3. **`### SECTION: ADJUSTMENTS ###`**: Find member names and capture their **ADJUSTMENT_PREMIUM**.
+    - **3-COLUMN PARALLEL LAYOUT (UNIVERSAL APPROACH)**: KCL detail tables often have THREE members listed SIDE-BY-SIDE on the same lines. You MUST parse each line horizontally:
+        - Position 1 (Left): Member A, Position 2 (Middle): Member B, Position 3 (Right): Member C.
+        - Map each benefit row (e.g. TG Life EE $2.99) to the member name directly above it in the same column.
+    - **TOTALS EXCLUSION**: YOU MUST IGNORE any row where the "Name" or "Product" contains the word "Total", "Totals", or is a summary label (e.g., "Grand Total", "Total for VALDES RITA", "Adjustment Totals").
+    - **NO-NAME ATTRIBUTION**: Never attribute a premium to a member if their name is not explicitly on that line or clearly associated via the column-based grouping.
     - **FRAGMENTED HEADERS**: Sections markers like `### SECTION: ... ###` are final. Trust them over fragmented text.
 - **APL (American Public Life)**:
     - **Header Identifiers**: Extract "Group Number" as **INV_NUMBER**.
@@ -2270,12 +2268,17 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
         print(f"  [V5][KCL] Injecting section markers...")
         current_kcl_section = "UNKNOWN"
         for i in range(len(pages)):
+            page_content = pages[i]
             # Detect section shifts
-            if "Detail of Current Charges" in pages[i] or "Premium Statement" in pages[i]:
+            if "Monthly Premium Statement Summary" in page_content or "Payments" in page_content:
+                # Page 3: The high-level summary that often causes triple-counting
+                current_kcl_section = "SUMMARY_TOTALS"
+            elif "Detail of Current Charges" in page_content or "Name Code Premium Volume" in page_content:
+                # Page 4+: The actual member-level detail table
                 current_kcl_section = "CURRENT_CHARGES"
-            elif "ADJUSTMENT DETAIL" in pages[i]:
+            elif "ADJUSTMENT DETAIL" in page_content:
                 current_kcl_section = "ADJUSTMENTS"
-            elif "Adjustment Totals" in pages[i]:
+            elif "Adjustment Totals" in page_content:
                 current_kcl_section = "ADJUSTMENT_TOTALS"
             
             # Prepend marker to the page text
@@ -3439,7 +3442,7 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                 idx_f = str(row.get("FIRSTNAME", "") or "").upper()
                 idx_l = str(row.get("LASTNAME", "") or "").upper()
                 
-                total_keywords = ["TOTAL", "GRAND TOTAL", "SUBTOTAL", "SUB TOTAL", "INVOICE TOTAL"]
+                total_keywords = ["TOTAL", "GRAND TOTAL", "SUBTOTAL", "SUB TOTAL", "INVOICE TOTAL", "BALANCE DUE", "AMOUNT DUE", "EAP FEE", "MONTHLY PREMIUM STATEMENT SUMMARY", "ADJUSTMENTS/FEES"]
                 adj_keywords = ["FEE", "ADJUSTMENT", "CREDIT", "CHARGE"]
                 
                 # ID-based protection: if has real MemberID or SSN, it's rarely a grand total
@@ -3453,6 +3456,12 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                 is_total = is_keyword_match(idx_p, total_keywords) or \
                            is_keyword_match(idx_f, total_keywords) or \
                            is_keyword_match(idx_l, total_keywords)
+                
+                # [V5] KCL-Specific Summary Check
+                if "KCL" in source_filename.upper() or "KANSAS" in source_filename.upper():
+                    if any(kw in idx_p for kw in ["EAP FEE", "BALANCE DUE", "ADJUSTMENTS/FEES", "MONTHLY PREMIUM STATEMENT"]):
+                        if not has_names and not has_mid:
+                            is_total = True
                 
                 # If "TOTAL" is part of a plan name like "TOTAL PET", it's NOT a total row
                 # Also do NOT treat subscriber-level totals as grand totals that need clearing
