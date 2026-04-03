@@ -1288,14 +1288,15 @@ Extract data from the document text provided below.
         - **DYNAMIC COLUMN DETECTION**: UHC invoices have two distinct detail sections: "Current Detail" and "Adjustment Detail".
           - Value under "Charge Amount" (3rd column from right in Current section) MUST map to `CURRENT_PREMIUM`.
           - Value under "Adjustment Detail Amount" or "Amount" (2nd column from right in Adjustment section) MUST map to `ADJUSTMENT_PREMIUM`.
-          - **CRITICAL**: If a single row has values in BOTH columns, you MUST populate both fields for that record.
+          - **UHC TOTAL COLUMN MANDATE**: The final column on the right is ALWAYS the "Total" subtotal column. **NEVER** extract the "Total" amount into `ADJUSTMENT_PREMIUM` or `CURRENT_PREMIUM`. Ignore the "Total" column entirely for member rows. If a row only has a `Charge Amount` and a `Total`, map the `Charge Amount` to `CURRENT_PREMIUM` and leave `ADJUSTMENT_PREMIUM` as null.
+          - **CRITICAL**: If a single row has values in BOTH columns (Charge Amount and Adjustment Detail Amount), you MUST populate both fields for that record.
           - **NO CONSOLIDATION / NO MASHING**: YOU MUST extract EVERY physical row in the PDF as a separate object.
           - **FORBIDDEN**: NEVER combine multiple plans (e.g. Medical and Life) into a single `PLAN_NAME` string.
           - **MANDATORY SPLITTING**: If the text shows `Sarah Sarah Sarah ... $1095.61 $2.75 $0.75`, you MUST output THREE separate objects: 
             1. Plan: Medical, Current: 1095.61
             2. Plan: Life, Current: 2.75
             3. Plan: AD&D, Current: 0.75
-          - **EXTRACT ALL ROWS (100% CAPTURE & LEDGER DETAIL)**: If a member has multiple adjustments for the same plan (e.g. Gale Alana having two '-$2.75' rows or Samuel Smith having multiple TRM rows for different periods like 1/01-1/31 and 2/01-2/28), YOU MUST output EACH as a separate JSON object. Do NOT sum or consolidate them. Even if a row has no name (floating adjustment), extract it as a distinct item based on its position, preserving any unique labels or periods.
+          - **EXTRACT ALL ROWS (100% CAPTURE & LEDGER DETAIL)**: If a member has multiple adjustments for the same plan (e.g. Gale Alana having two '-$2.75' rows or Samuel Smith having multiple TRM rows for different periods like 1/01-1/31 and 2/01-2/28), YOU MUST output EACH as a separate JSON object. Do NOT sum or consolidate them. For adjustment rows, ALWAYS extract the specific 'Period' (e.g. 1/01-1/31/2026) and map it to the BILLING_PERIOD field for that item. Even if a row has no name (floating adjustment), extract it as a distinct item based on its position, preserving any unique labels or periods.
     - **BCBS (BlueCross BlueShield)**: 
     - **Subscriber ID** or **Member ID** -> maps to `MEMBERID`.
     - **Coverage Mapping**: 
@@ -1928,59 +1929,80 @@ def process_verified_text_file(txt_path: str, client: OpenAI, source_filename: O
             parts.pop(0)
 
     if is_moo and len(parts) > 1:
-        print(f"  [V5][MOO] Using 2-Page Overlapping Chunks for verified text file.")
+        print(f"  [V7][MOO] Using Direct Parser (LLM-free) for member rows.")
         final_header = {}
         all_line_items = []
-        
-        # Implement Macro-Batching (5-page chunks) with Table Healing
-        # Larger chunks reduce 'boundary' risks, and no-overlap prevents deduplication confusion.
-        last_member_info = {}
-        
-        for i in range(0, len(parts), 5):
-            chunk_end = min(i + 5, len(parts))
-            chunk_text = "\n".join(parts[i:chunk_end])
-            
-            # [V5][MOO] Apply aggressive virtual merging to the chunk
-            # This strips interior boundaries and replaces them with a valid 'PARTICIPANT DETAIL' header
-            chunk_text = clean_moo_text_noise(chunk_text)
-            
-            # [V6][MOO] Apply Identity Injection (Table Healer)
-            # This ensures every orphan row has a name/id before it reaches the LLM
-            chunk_text = heal_moo_text_row_identity(chunk_text)
-            
-            chunk_id = f"Pages {i+1}-{chunk_end}"
-            print(f"  [AI][MOO] Extracting Batch {chunk_id} (Macro-Batch)...")
-            
-            page_data = extract_fields_with_llm(
-                chunk_text, 
-                client, 
-                f"{os.path.basename(txt_path)}_{chunk_id}", 
-                mode="standard", 
-                continuity_context=last_member_info
+
+        # ── Step 1: Extract header from first page via LLM (cheap, no member rows) ──
+        first_page_text = parts[0] if parts else ""
+        if first_page_text.strip():
+            print(f"  [V7][MOO] Extracting header from first page via LLM...")
+            header_data = extract_fields_with_llm(
+                first_page_text, client,
+                f"{os.path.basename(txt_path)}_header",
+                mode="standard",
+                detected_carrier="Mutual of Omaha"
             ) or {}
-            
-            if "HEADER" in page_data:
-                for k, v in page_data["HEADER"].items():
-                    if v and str(v).lower() not in ["n/a", "none", ""]:
-                        if not final_header.get(k): final_header[k] = v
-            
-            if "LINE_ITEMS" in page_data:
-                items = page_data["LINE_ITEMS"]
-                all_line_items.extend(items)
-                
-                # Update context for the NEXT chunk: find the last valid member
-                for item in reversed(items):
-                    ln = str(item.get("LASTNAME") or "").upper()
-                    fn = str(item.get("FIRSTNAME") or "").upper()
-                    if ln and ln not in ["MISSING", "UNKNOWN", "N/A", "PARTICIPANT"]:
-                        last_member_info = {
-                            "LASTNAME": item.get("LASTNAME"),
-                            "FIRSTNAME": item.get("FIRSTNAME"),
-                            "MEMBERID": item.get("MEMBERID")
-                        }
-                        break
-            
-        extracted_data = {"HEADER": final_header, "LINE_ITEMS": all_line_items}
+            if "HEADER" in header_data:
+                final_header = {k: v for k, v in header_data["HEADER"].items()
+                                if v and str(v).lower() not in ["n/a", "none", ""]}
+
+        # ── Step 2: Run deterministic direct parser on full raw text ──────────
+        # Clean the text first (strip page headers/footers) but keep ALL member rows
+        cleaned_full_text = clean_moo_text_noise(text)
+        moo_items = parse_moo_detail_direct(
+            cleaned_full_text,
+            inv_date=final_header.get("INV_DATE"),
+            inv_number=final_header.get("INV_NUMBER"),
+            billing_period=final_header.get("BILLING_PERIOD"),
+            source_filename=os.path.basename(txt_path)
+        )
+
+        if moo_items:
+            total_premium = sum(
+                (i.get("CURRENT_PREMIUM") or 0) + (i.get("ADJUSTMENT_PREMIUM") or 0)
+                for i in moo_items
+            )
+            print(f"  [V7][MOO] Direct parser extracted {len(moo_items)} rows | Total: ${total_premium:.2f}")
+            extracted_data = {"HEADER": final_header, "LINE_ITEMS": moo_items}
+        else:
+            # Fallback: if direct parser found nothing, use LLM page-by-page
+            print(f"  [V7][MOO] Direct parser found 0 rows – falling back to LLM page-by-page.")
+            last_member_info = {}
+            for i in range(0, len(parts), 1):
+                chunk_end = min(i + 1, len(parts))
+                chunk_text = "\n".join(parts[i:chunk_end])
+                chunk_text = clean_moo_text_noise(chunk_text)
+                initial_name = f"{last_member_info.get('LASTNAME')}, {last_member_info.get('FIRSTNAME')}" if last_member_info.get('LASTNAME') else None
+                initial_id = last_member_info.get('MEMBERID')
+                chunk_text = heal_moo_text_row_identity(chunk_text, initial_name=initial_name, initial_id=initial_id)
+                chunk_id = f"Pages {i+1}-{chunk_end}"
+                print(f"  [AI][MOO] Extracting Batch {chunk_id} (Fallback LLM)...")
+                page_data = extract_fields_with_llm(
+                    chunk_text, client,
+                    f"{os.path.basename(txt_path)}_{chunk_id}",
+                    mode="standard",
+                    detected_carrier="Mutual of Omaha",
+                    continuity_context=last_member_info
+                ) or {}
+                if "HEADER" in page_data:
+                    for k, v in page_data["HEADER"].items():
+                        if v and str(v).lower() not in ["n/a", "none", ""]:
+                            if not final_header.get(k): final_header[k] = v
+                if "LINE_ITEMS" in page_data:
+                    items = page_data["LINE_ITEMS"]
+                    all_line_items.extend(items)
+                    for item in reversed(items):
+                        ln = str(item.get("LASTNAME") or "").upper()
+                        if ln and ln not in ["MISSING", "UNKNOWN", "N/A", "PARTICIPANT"]:
+                            last_member_info = {
+                                "LASTNAME": item.get("LASTNAME"),
+                                "FIRSTNAME": item.get("FIRSTNAME"),
+                                "MEMBERID": item.get("MEMBERID")
+                            }
+                            break
+            extracted_data = {"HEADER": final_header, "LINE_ITEMS": all_line_items}
+
     elif page_markers:
         print(f"  [V4] Detected {len(parts)} page markers. Processing page-by-page...")
         final_header = {}
@@ -2117,17 +2139,27 @@ def merge_carrier_rows(items, carrier):
         norm_id = normalize_str(item.get("MEMBERID"))
         norm_ssn = normalize_str(item.get("SSN"))
         
+        # [V5][DATE KEY] Include date and billing period in key to prevent merging of different-month adjustments (ledger-level detail)
+        row_date = str(item.get("INV_DATE") or "").strip()
+        row_period = str(item.get("BILLING_PERIOD") or "").strip()
+        
+        # Normalize both to create a composite date key
+        date_part = format_date_clean(row_date) if row_date else "NO_DATE"
+        period_part = clean_billing_period(row_period) if row_period else "NO_PERIOD"
+        date_key = f"{date_part}|{period_part}"
+        
         id_part = norm_id if norm_id else (norm_ssn if norm_ssn else "NO_ID")
         plan_key = norm_type if norm_type else norm_plan
         
-        key = (name_key, id_part, plan_key)
+        # Extended Key with Date to support ledger-level adjustment detail
+        key = (name_key, id_part, plan_key, date_key)
         
         if key not in merged:
             merged[key] = item.copy()
         else:
             existing = merged[key]
             # [V5][MERGE] Print matching info with IDs for traceability
-            print(f"    [V5][MERGE] Matching found for {fname} {lname} [ID:{id_part}][Plan:{plan_key}] -> Consolidating rows.")
+            print(f"    [V5][MERGE] Matching found for {fname} {lname} [ID:{id_part}][Plan:{plan_key}][Date:{date_key}] -> Consolidating rows.")
             
             # Merge Premiums (Sum them)
             existing["CURRENT_PREMIUM"] = round(to_float(existing.get("CURRENT_PREMIUM", 0)) + to_float(item.get("CURRENT_PREMIUM", 0)), 2)
@@ -2955,16 +2987,39 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                         continue
                 
                 # Possible match keys
-                # PRIMARY KEY: Name + ID + Plan (Strict match for multi-plan differentiation)
-                plan_name = str(item.get("PLAN_NAME") or "").strip().lower()
-                clean_plan = plan_name if plan_name not in ["n/a", "none", ""] else None
+                # Normalize date and period for key to prevent merging different-month adjustments (ledger-level detail)
+                row_date = str(item.get("INV_DATE") or "").strip()
+                row_period = str(item.get("BILLING_PERIOD") or "").strip()
                 
-                key_id_strict = f"{fname}|{lname}|{member_id}|{clean_plan}" if not is_weak_id and clean_plan else None
-                key_ssn_strict = f"{fname}|{lname}|{ssn}|{clean_plan}" if not is_weak_ssn and clean_plan else None
+                norm_date = format_date_clean(row_date).lower() if row_date else "no_date"
+                norm_period = clean_billing_period(row_period).lower() if row_period else "no_period"
+                date_key = f"{norm_date}|{norm_period}"
                 
-                # SECONDARY KEY: Name + ID (Relaxed for merging adjustments without plan name)
-                key_id_loose = f"{fname}|{lname}|{member_id}" if not is_weak_id else None
-                key_ssn_loose = f"{fname}|{lname}|{ssn}" if not is_weak_ssn else None
+                # [V5] LEDGER MODE: For UHC and BCBS, do NOT generate matching keys for adjustment rows.
+                # This ensures they are never merged by the key-matching logic.
+                fn_upper = source_filename.upper()
+                is_uhc_carrier = "UHC" in fn_upper or "CHILL" in fn_upper
+                is_bcbs_carrier = "BCBS" in fn_upper or "BLUE" in fn_upper
+                is_adj_row = to_float(item.get("ADJUSTMENT_PREMIUM")) != 0 or any(kw in str(item.get("PLAN_NAME")).upper() for kw in ["ADJ", "RETRO", "ADD", "TRM"])
+                
+                if (is_uhc_carrier or is_bcbs_carrier) and is_adj_row:
+                    print(f"    [V5][LEDGER] Skipping merge keys for adjustment: {fname} {lname}")
+                    key_id_strict = None
+                    key_ssn_strict = None
+                    key_id_loose = None
+                    key_ssn_loose = None
+                    clean_plan = None
+                else:
+                    # PRIMARY KEY: Name + ID + Plan + Date Key (Strict match for multi-plan/multi-date differentiation)
+                    plan_name = str(item.get("PLAN_NAME") or "").strip().lower()
+                    clean_plan = plan_name if plan_name not in ["n/a", "none", ""] else None
+                    
+                    key_id_strict = f"{fname}|{lname}|{member_id}|{clean_plan}|{date_key}" if not is_weak_id and clean_plan else None
+                    key_ssn_strict = f"{fname}|{lname}|{ssn}|{clean_plan}|{date_key}" if not is_weak_ssn and clean_plan else None
+                    
+                    # SECONDARY KEY: Name + ID + Date Key (Relaxed for merging adjustments without plan name but with date)
+                    key_id_loose = f"{fname}|{lname}|{member_id}|{date_key}" if not is_weak_id else None
+                    key_ssn_loose = f"{fname}|{lname}|{ssn}|{date_key}" if not is_weak_ssn else None
                 
                 match_index = None
                 
@@ -3066,10 +3121,10 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                                 # One has ID, other doesn't. Likely different context (Summary vs Detail).
                                 match_index = None
                             else:
-                                # [V4][BCBS][LEDGER] Prevent merging for BCBS adjustments to preserve ledger detail
-                                # If one side is a "detail" adjustment, do not merge.
+                                # [V5][LEDGER MODE] Prevent merging for BCBS/UHC adjustments to preserve ledger detail
                                 fn_upper = source_filename.upper()
                                 is_bcbs_doc = "BLUE" in fn_upper or "BCBS" in fn_upper
+                                is_uhc_doc = "UHC" in fn_upper or "CHILL" in fn_upper
                                 is_kcl_doc = "KCL" in fn_upper or "KANSAS" in fn_upper
                                 
                                 pn1 = str(item.get("PLAN_NAME") or "").upper()
@@ -3079,32 +3134,33 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                                 is_adj1 = any(kw in pn1 for kw in detail_keywords)
                                 is_adj2 = any(kw in pn2 for kw in detail_keywords)
                                 
-                                # [V4][KCL] Also consider a row an adjustment if ADJUSTMENT_PREMIUM is filled 
+                                # [V5] Also consider a row an adjustment if ADJUSTMENT_PREMIUM is filled 
                                 # and CURRENT_PREMIUM is NOT (or vice-versa)
                                 has_adj_val1 = to_float(item.get("ADJUSTMENT_PREMIUM")) != 0
                                 has_adj_val2 = to_float(merged_items[matched_by_name_idx].get("ADJUSTMENT_PREMIUM")) != 0
                                 has_cur_val1 = to_float(item.get("CURRENT_PREMIUM")) != 0
                                 has_cur_val2 = to_float(merged_items[matched_by_name_idx].get("CURRENT_PREMIUM")) != 0
 
-                                if is_bcbs_doc:
-                                    # STRICT SEPARATION for KCL/BCBS: 
-                                    # Don't merge if one is CURRENT and other is ADJUSTMENT
+                                # [V5] LEDGER MODE: STRICT SEPARATION for UHC/BCBS/KCL
+                                if is_bcbs_doc or is_uhc_doc:
+                                    # 1. Never merge a CURRENT row with an ADJUSTMENT row
                                     if (has_cur_val1 and has_adj_val2 and not has_adj_val1) or \
-                                       (has_adj_val1 and has_cur_val2 and not has_cur_val1) or \
-                                       (is_adj1 != is_adj2):
-                                        msg = "BCBS"
-                                        print(f"      [V4][{msg}] Ledger Mode: Keeping CURRENT and ADJUSTMENT separate for {pn1}")
+                                       (has_adj_val1 and has_cur_val2 and not has_cur_val1):
+                                        print(f"      [V5][LEDGER] Separating CURRENT/ADJUSTMENT for {pn1}")
+                                        match_index = None
+                                    # 2. Never merge two different ADJUSTMENT rows (preserve granularity)
+                                    elif (has_adj_val1 and has_adj_val2) or (is_adj1 and is_adj2):
+                                        print(f"      [V5][LEDGER] Separating multiple adjustments for {pn1}")
                                         match_index = None
                                     else:
                                         match_index = matched_by_name_idx
                                 else:
                                     # Standard logic for other carriers
-                                    if (is_adj1 or is_adj2): # Redundant but safe
+                                    if (is_adj1 or is_adj2):
                                         if pn1 == pn2:
                                             match_index = matched_by_name_idx
                                         else:
-                                            msg = "BCBS"
-                                            print(f"      [V4][{msg}] Ledger Mode: Keeping detail adjustment separate: {pn1} vs {pn2}")
+                                            print(f"      [V5][LEDGER] Detail Separation: {pn1} vs {pn2}")
                                             match_index = None
                                     else:
                                         match_index = matched_by_name_idx
@@ -3235,8 +3291,13 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                     
                     if key_id_strict: index_by_id[key_id_strict] = current_idx
                     if key_ssn_strict: index_by_ssn[key_ssn_strict] = current_idx
-                    if key_id_loose: index_by_id[key_id_loose] = current_idx
-                    if key_ssn_loose: index_by_ssn[key_ssn_loose] = current_idx
+                    
+                    # Store loose keys if they don't overwrite a strict key for a DIFFERENT record
+                    # This is just a safeguard; usually keys are unique enough
+                    if key_id_loose and key_id_loose not in index_by_id: 
+                        index_by_id[key_id_loose] = current_idx
+                    if key_ssn_loose and key_ssn_loose not in index_by_ssn:
+                        index_by_ssn[key_ssn_loose] = current_idx
                 
                 # Update continuity context for next iteration
                 # Ensure we only track REAL members (non-totals, non-placeholders)
@@ -3770,7 +3831,176 @@ def batch_process_step(txt_directory: str, output_excel: str = "extracted_data.x
     print(f"{'='*70}\n")
 
 
-def heal_moo_text_row_identity(text: str) -> str:
+def parse_moo_detail_direct(full_raw_text: str, inv_date: str = None, inv_number: str = None,
+                             billing_period: str = None, source_filename: str = "") -> list:
+    """
+    Deterministic, LLM-free direct parser for Mutual of Omaha (MOO) invoices.
+    Reads lines top-to-bottom, tracks current member identity, and extracts
+    every benefit row including orphan rows that continue across page breaks.
+
+    Format understood:
+      Member start : '   *Lastname, Firstname  ID  Tier  Date  Plan  [Volume]  Amount'
+      Orphan row   : '           Tier  Date  Plan  [Volume]  Amount'
+      Retro row    : '           Retroactive Change  Date  Amount'
+      Skip lines   : page headers / footers / sub-total lines
+    """
+    TIER_RE = (r'(?:Participant|Ppt\s*&\s*Dep\s*\(?s?\)?|Ppt\s*&\s*Sps|'
+               r'Ppt\s*&\s*Fam|Ppt|Spouse|Dependent|Sps|Dep|Family)')
+
+    MEMBER_START = re.compile(
+        r'^\s*\*?(?P<name>[A-Za-z][A-Za-z\s,/\.]+?)\s{2,}'
+        r'(?P<id>\d{4,9})\s+'
+        r'(?P<tier>' + TIER_RE + r')\s+'
+        r'(?P<date>\d{1,2}/\d{1,2}/\d{2,4})\s+',
+        re.IGNORECASE
+    )
+    ORPHAN_ROW = re.compile(
+        r'^\s{5,}(?P<tier>' + TIER_RE + r')\s+'
+        r'(?P<date>\d{1,2}/\d{1,2}/\d{2,4})\s+',
+        re.IGNORECASE
+    )
+    RETRO_ROW = re.compile(
+        r'^\s*Retroactive\s+Change\s+(?P<date>\d{1,2}/\d{1,2}/\d{4})\s+',
+        re.IGNORECASE
+    )
+    SKIP_RE = re.compile(
+        r'DO\s+NOT\s+RETURN|Group\s+ID:|Bill\s+Group\s+ID:|'
+        r'Tampa\s+Bay\s+Group|PARTICIPANT\s+DETAIL|'
+        r'PARTICIPANT\s+ID\s+FAMILY|693399|Invoice\s+Number|'
+        r'Coverage\s+Period|Due\s+Date|Billing\s+Date|'
+        r'\[\[PAGE_\d+\]\]|^\s*Page\s*\d+\s*$|'
+        r'FAMILY\s+INDICATOR|EFF\s+DATE\s+PLAN|VOLUME\s+AMOUNT',
+        re.IGNORECASE
+    )
+
+    TIER_MAP = {
+        'participant': 'EE', 'ppt': 'EE',
+        'spouse': 'ES', 'sps': 'ES',
+        'dependent': 'EC', 'dep': 'EC',
+        'family': 'FAM',
+    }
+
+    def get_coverage(tier_str):
+        t = re.sub(r'[\s&()\[\]]', '', (tier_str or '').lower())
+        for k, v in TIER_MAP.items():
+            if t.startswith(k[:3]):
+                return v
+        return 'EE'
+
+    def infer_plan_type_moo(plan_name):
+        p = (plan_name or '').upper()
+        if 'AD&D' in p: return 'AD&D'
+        if 'LIFE' in p: return 'LIFE'
+        if 'STD' in p: return 'STD'
+        if 'LTD' in p: return 'LTD'
+        if 'DEN' in p or 'VDEN' in p: return 'DENTAL'
+        if 'VIS' in p: return 'VISION'
+        return 'VOLUNTARY'
+
+    def parse_plan_and_amount(rest: str):
+        """
+        Given the text after the date (e.g. 'Life Vol EE 20,000 30.40'),
+        return (plan_name, amount).
+        Strategy: last decimal number = amount; second-to-last (if large) = volume (discarded).
+        Everything before the first number token = plan name.
+        """
+        rest = rest.strip()
+        # Find all number-like tokens (with possible commas)
+        num_tokens = re.findall(r'[\d,]+\.?\d*', rest)
+        if not num_tokens:
+            return rest, 0.0
+
+        # Amount = last token that is a decimal (has a dot)
+        amount = 0.0
+        for tok in reversed(num_tokens):
+            if '.' in tok:
+                try:
+                    amount = float(tok.replace(',', ''))
+                    break
+                except:
+                    continue
+
+        # Plan name = everything before the first numeric token
+        plan = re.split(r'\s+[\d,]+\.?\d*', rest)[0].strip()
+        return plan, amount
+
+    def make_row(ln, fn, mid, tier, plan, amount, is_adj=False):
+        row = {
+            'LASTNAME': ln, 'FIRSTNAME': fn, 'MEMBERID': mid,
+            'PLAN_NAME': plan, 'PLAN_TYPE': infer_plan_type_moo(plan),
+            'COVERAGE': get_coverage(tier),
+            'CURRENT_PREMIUM': None if is_adj else round(amount, 2),
+            'ADJUSTMENT_PREMIUM': round(amount, 2) if is_adj else None,
+            'SSN': None, 'POLICYID': None, 'MIDDLENAME': None,
+        }
+        if inv_date:       row['INV_DATE'] = inv_date
+        if inv_number:     row['INV_NUMBER'] = inv_number
+        if billing_period: row['BILLING_PERIOD'] = billing_period
+        if source_filename: row['SOURCE_FILE'] = source_filename
+        return row
+
+    items = []
+    current_ln = current_fn = current_mid = None
+
+    for line in full_raw_text.splitlines():
+        if not line.strip():
+            continue
+        if SKIP_RE.search(line):
+            continue
+
+        # ── 1. Member start row ──────────────────────────────────────────────
+        m = MEMBER_START.match(line)
+        if m:
+            raw_name = m.group('name').strip().lstrip('*').strip()
+            if ',' in raw_name:
+                parts = raw_name.split(',', 1)
+                current_ln, current_fn = parts[0].strip(), parts[1].strip()
+            else:
+                parts = raw_name.split()
+                current_ln = parts[0]
+                current_fn = ' '.join(parts[1:])
+            current_mid = m.group('id')
+            tier = m.group('tier')
+            rest = line[m.end():]
+            plan, amount = parse_plan_and_amount(rest)
+            if amount > 0 and current_ln:
+                items.append(make_row(current_ln, current_fn, current_mid, tier, plan, amount))
+                print(f"  [MOO-DIRECT] {current_ln},{current_fn} | {plan} | ${amount:.2f}")
+            continue
+
+        # ── 2. Orphan benefit row ────────────────────────────────────────────
+        o = ORPHAN_ROW.match(line)
+        if o and current_ln:
+            tier = o.group('tier')
+            rest = line[o.end():]
+            plan, amount = parse_plan_and_amount(rest)
+            if amount > 0:
+                items.append(make_row(current_ln, current_fn, current_mid, tier, plan, amount))
+                print(f"  [MOO-DIRECT] {current_ln},{current_fn} | {plan} | ${amount:.2f} [ORPHAN]")
+            continue
+
+        # ── 3. Retroactive Change row ────────────────────────────────────────
+        r = RETRO_ROW.match(line)
+        if r and current_ln:
+            rest = line[r.end():]
+            nums = re.findall(r'[\d,]+\.\d+', rest)
+            if nums:
+                amount_str = nums[-1].replace(',', '')
+                try:
+                    amount = float(amount_str)
+                except:
+                    amount = 0.0
+                prev_plan = items[-1]['PLAN_NAME'] if items else 'Adjustment'
+                if amount > 0:
+                    items.append(make_row(current_ln, current_fn, current_mid,
+                                          'Participant', prev_plan, amount, is_adj=True))
+                    print(f"  [MOO-DIRECT] {current_ln},{current_fn} | Retro {prev_plan} | ${amount:.2f} [ADJ]")
+
+    print(f"  [MOO-DIRECT] Total rows extracted: {len(items)}")
+    return items
+
+
+def heal_moo_text_row_identity(text: str, initial_name: Optional[str] = None, initial_id: Optional[str] = None) -> str:
     """
     Mutual of Omaha (MOO) specific pre-processor.
     Physically injects the current member's name and ID onto any 'orphan' benefit rows.
@@ -3780,20 +4010,23 @@ def heal_moo_text_row_identity(text: str) -> str:
     lines = text.split("\n")
     processed_lines = []
     
-    current_name = None
-    current_id = None
+    current_name = initial_name
+    current_id = initial_id
     
     # Pattern to find a full MOO member start line (Name AND ID)
     # Example: '*Lamacchia, Louis  4742 Participant 04/01/25 Life...'
+    # Tiers can include slashes like Ppt/Dep
+    tier_pattern = r'(Participant|Ppt|Spouse|Dependent|Sps|Dep|Family|Ppt/Dep|Ppt/Sps|Sps/Dep|Ppt/Fam)'
+    
     member_start_pattern = re.compile(
-        r'^\s*\*?(?P<name>[A-Z][a-zA-Z\s,]+)\s+(?P<id>\d{4,9})\s+(Participant|Ppt|Spouse|Dependent|Sps|Dep|Ppt\s*&\s*Sps|Ppt\s*&\s*Dep|Family)\s+',
+        r'^\s*\*?(?P<name>[A-Z][a-zA-Z\s,]+)\s+(?P<id>\d{4,9})\s+' + tier_pattern + r'\s+',
         re.IGNORECASE
     )
     
     # Pattern to find an orphan row (Starts with Participant tier label but NO name/id before it)
     # Example: '                            Participant 04/01/25 Life Vol EE...'
     orphan_row_pattern = re.compile(
-        r'^\s+(?P<tier>Participant|Ppt|Spouse|Dependent|Sps|Dep|Ppt\s*&\s*Sps|Ppt\s*&\s*Dep|Family)\s+(?P<date>\d{1,2}/\d{1,2}/\d{2,4})\s+',
+        r'^\s+' + tier_pattern + r'\s+(?P<date>\d{1,2}/\d{1,2}/\d{2,4})\s+',
         re.IGNORECASE
     )
     
@@ -3840,6 +4073,9 @@ def heal_moo_text_row_identity(text: str) -> str:
         processed_lines.append(line)
         
     return "\n".join(processed_lines)
+
+
+def clean_moo_text_noise(text: str) -> str:
     """
     Mutual of Omaha (MOO) specific cleaner. 
     Aggressively removes repeating page headers and footers that disrupt table continuity.
