@@ -1289,14 +1289,16 @@ Extract data from the document text provided below.
           - Value under "Charge Amount" (3rd column from right in Current section) MUST map to `CURRENT_PREMIUM`.
           - Value under "Adjustment Detail Amount" or "Amount" (2nd column from right in Adjustment section) MUST map to `ADJUSTMENT_PREMIUM`.
           - **UHC TOTAL COLUMN MANDATE**: The final column on the right is ALWAYS the "Total" subtotal column. **NEVER** extract the "Total" amount into `ADJUSTMENT_PREMIUM` or `CURRENT_PREMIUM`. Ignore the "Total" column entirely for member rows. If a row only has a `Charge Amount` and a `Total`, map the `Charge Amount` to `CURRENT_PREMIUM` and leave `ADJUSTMENT_PREMIUM` as null.
-          - **CRITICAL**: If a single row has values in BOTH columns (Charge Amount and Adjustment Detail Amount), you MUST populate both fields for that record.
+          - **CRITICAL**: If a single row has values in BOTH columns (Charge Amount and Adjustment Detail Amount), you MUST output AT LEAST TWO separate records:
+            1. One record with `CURRENT_PREMIUM` set to the Charge Amount, `ADJUSTMENT_PREMIUM` null, and `BILLING_PERIOD` set to the Current Detail period at the top of the column.
+            2. One record for the adjustment with `ADJUSTMENT_PREMIUM` set to the Adjustment Amount, `CURRENT_PREMIUM` null, and `BILLING_PERIOD` set to the Period listed in the adjustment detail section.
           - **NO CONSOLIDATION / NO MASHING**: YOU MUST extract EVERY physical row in the PDF as a separate object.
           - **FORBIDDEN**: NEVER combine multiple plans (e.g. Medical and Life) into a single `PLAN_NAME` string.
           - **MANDATORY SPLITTING**: If the text shows `Sarah Sarah Sarah ... $1095.61 $2.75 $0.75`, you MUST output THREE separate objects: 
             1. Plan: Medical, Current: 1095.61
             2. Plan: Life, Current: 2.75
             3. Plan: AD&D, Current: 0.75
-          - **EXTRACT ALL ROWS (100% CAPTURE & LEDGER DETAIL)**: If a member has multiple adjustments for the same plan (e.g. Gale Alana having two '-$2.75' rows or Samuel Smith having multiple TRM rows for different periods like 1/01-1/31 and 2/01-2/28), YOU MUST output EACH as a separate JSON object. Do NOT sum or consolidate them. For adjustment rows, ALWAYS extract the specific 'Period' (e.g. 1/01-1/31/2026) and map it to the BILLING_PERIOD field for that item. Even if a row has no name (floating adjustment), extract it as a distinct item based on its position, preserving any unique labels or periods.
+          - **EXTRACT ALL ROWS (100% CAPTURE & LEDGER DETAIL)**: If a member has multiple adjustments for the same plan (e.g. Gale Alana having two '-$2.75' rows or Rios Caleb having multiple ADD rows for different periods like 2/01-2/28 and 3/01-3/31), YOU MUST output EACH as a separate JSON object. Do NOT sum or consolidate them. For ALL member rows (both Current and Adjustment), ALWAYS extract the specific 'Period' (e.g. 1/01-1/31/2026 or 4/01-4/30/2026) and map it to the BILLING_PERIOD field for that line item. Even if a row has no name (floating adjustment), extract it as a distinct item based on its position, preserving any unique labels or periods.
     - **BCBS (BlueCross BlueShield)**: 
     - **Subscriber ID** or **Member ID** -> maps to `MEMBERID`.
     - **Coverage Mapping**: 
@@ -1691,7 +1693,8 @@ Output: `{{"LASTNAME": "ANAND", "FIRSTNAME": "ARJUN", "MEMBERID": "2543915", "SS
       "COVERAGE": null,
       "CURRENT_PREMIUM": null,
       "ADJUSTMENT_PREMIUM": null,
-      "PRICING_ADJUSTMENT": null
+      "PRICING_ADJUSTMENT": null,
+      "BILLING_PERIOD": null
     }}
   ]
 }}
@@ -3186,49 +3189,63 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                                 # One has ID, other doesn't. Likely different context (Summary vs Detail).
                                 match_index = None
                             else:
-                                # [V5][LEDGER MODE] Prevent merging for BCBS/UHC adjustments to preserve ledger detail
-                                fn_upper = source_filename.upper()
-                                is_bcbs_doc = "BLUE" in fn_upper or "BCBS" in fn_upper
-                                is_uhc_doc = "UHC" in fn_upper or "CHILL" in fn_upper
-                                is_kcl_doc = "KCL" in fn_upper or "KANSAS" in fn_upper
-                                
-                                pn1 = str(item.get("PLAN_NAME") or "").upper()
-                                pn2 = str(merged_items[matched_by_name_idx].get("PLAN_NAME") or "").upper()
-                                
-                                detail_keywords = ["ADD", "TRM", "CHANGE", "CHG", "RETRO", "ADJUSTMENT", "ADJ"]
-                                is_adj1 = any(kw in pn1 for kw in detail_keywords)
-                                is_adj2 = any(kw in pn2 for kw in detail_keywords)
-                                
-                                # [V5] Also consider a row an adjustment if ADJUSTMENT_PREMIUM is filled 
-                                # and CURRENT_PREMIUM is NOT (or vice-versa)
-                                has_adj_val1 = to_float(item.get("ADJUSTMENT_PREMIUM")) != 0
-                                has_adj_val2 = to_float(merged_items[matched_by_name_idx].get("ADJUSTMENT_PREMIUM")) != 0
-                                has_cur_val1 = to_float(item.get("CURRENT_PREMIUM")) != 0
-                                has_cur_val2 = to_float(merged_items[matched_by_name_idx].get("CURRENT_PREMIUM")) != 0
+                                # Pre-approve match, will be vetted by the Universal Ledger Check below
+                                match_index = matched_by_name_idx
+                
+                # --- UNIVERSAL LEDGER MODE CHECK (UHC/BCBS/KCL) ---
+                if match_index is not None:
+                    existing = merged_items[match_index]
+                    
+                    fn_upper = source_filename.upper()
+                    is_bcbs_doc = "BLUE" in fn_upper or "BCBS" in fn_upper
+                    is_uhc_doc = "UHC" in fn_upper or "CHILL" in fn_upper
+                    is_kcl_doc = "KCL" in fn_upper or "KANSAS" in fn_upper
+                    
+                    pn1 = str(item.get("PLAN_NAME") or "").upper()
+                    pn2 = str(existing.get("PLAN_NAME") or "").upper()
+                    
+                    # Also consider periods
+                    per1 = str(item.get("BILLING_PERIOD") or "").strip().lower()
+                    per2 = str(existing.get("BILLING_PERIOD") or "").strip().lower()
+                    
+                    detail_keywords = ["ADD", "TRM", "CHANGE", "CHG", "RETRO", "ADJUSTMENT", "ADJ"]
+                    is_adj1 = any(kw in pn1 for kw in detail_keywords)
+                    is_adj2 = any(kw in pn2 for kw in detail_keywords)
+                    
+                    # Also consider a row an adjustment if ADJUSTMENT_PREMIUM is filled 
+                    # and CURRENT_PREMIUM is NOT (or vice-versa)
+                    has_adj_val1 = to_float(item.get("ADJUSTMENT_PREMIUM")) != 0
+                    has_adj_val2 = to_float(existing.get("ADJUSTMENT_PREMIUM")) != 0
+                    has_cur_val1 = to_float(item.get("CURRENT_PREMIUM")) != 0
+                    has_cur_val2 = to_float(existing.get("CURRENT_PREMIUM")) != 0
 
-                                # [V5] LEDGER MODE: STRICT SEPARATION for UHC/BCBS/KCL
-                                if is_bcbs_doc or is_uhc_doc:
-                                    # 1. Never merge a CURRENT row with an ADJUSTMENT row
-                                    if (has_cur_val1 and has_adj_val2 and not has_adj_val1) or \
-                                       (has_adj_val1 and has_cur_val2 and not has_cur_val1):
-                                        print(f"      [V5][LEDGER] Separating CURRENT/ADJUSTMENT for {pn1}")
-                                        match_index = None
-                                    # 2. Never merge two different ADJUSTMENT rows (preserve granularity)
-                                    elif (has_adj_val1 and has_adj_val2) or (is_adj1 and is_adj2):
-                                        print(f"      [V5][LEDGER] Separating multiple adjustments for {pn1}")
-                                        match_index = None
-                                    else:
-                                        match_index = matched_by_name_idx
-                                else:
-                                    # Standard logic for other carriers
-                                    if (is_adj1 or is_adj2):
-                                        if pn1 == pn2:
-                                            match_index = matched_by_name_idx
-                                        else:
-                                            print(f"      [V5][LEDGER] Detail Separation: {pn1} vs {pn2}")
-                                            match_index = None
-                                    else:
-                                        match_index = matched_by_name_idx
+                    # LEDGER MODE: STRICT SEPARATION for UHC/BCBS/KCL
+                    if is_bcbs_doc or is_uhc_doc or is_kcl_doc:
+                        # 1. Never merge a CURRENT row with an ADJUSTMENT row
+                        if (has_cur_val1 and has_adj_val2 and not has_adj_val1) or \
+                           (has_adj_val1 and has_cur_val2 and not has_cur_val1):
+                            print(f"      [V5][LEDGER] Separating CURRENT/ADJUSTMENT for {pn1}")
+                            match_index = None
+                        # 2. Never merge two DIFFERENT ADJUSTMENT rows (preserve granularity)
+                        elif (has_adj_val1 and has_adj_val2) or (is_adj1 and is_adj2):
+                            # Ensure periods are different
+                            if per1 != per2 and per1 != "no_period" and per2 != "no_period":
+                                print(f"      [V5][LEDGER] Separating adjustments with different periods: {per1} vs {per2}")
+                                match_index = None
+                            elif pn1 != pn2:
+                                print(f"      [V5][LEDGER] Separating adjustments with different plans/labels: {pn1} vs {pn2}")
+                                match_index = None
+                            else:
+                                print(f"      [V5][LEDGER] Separating multiple adjustments to prevent summing: {pn1}")
+                                match_index = None
+                    else:
+                        # Standard logic for other carriers
+                        if (is_adj1 or is_adj2):
+                            if pn1 == pn2:
+                                pass # Keep match
+                            else:
+                                print(f"      [V5][LEDGER] Detail Separation: {pn1} vs {pn2}")
+                                match_index = None
                 
                 # [V3][DEBUG] Trace match result
                 if match_index is not None:
