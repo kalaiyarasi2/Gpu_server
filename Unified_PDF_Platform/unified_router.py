@@ -1770,12 +1770,12 @@ Return ONLY the company name or UNKNOWN:"""
         # ──────────────────────────────────────────────────────────────────
 
         try:
-            # For structural extractor, output file is auto-named
+            # For structural extractor, pass the output file explicitly
             if use_structural and script_to_use == STRUCTURAL_INVOICE_SCRIPT:
                 import asyncio
-                result = self._run_with_logging([sys.executable, str(script_to_use), str(pdf_path)], 3600)
-                # Structural extractor creates its own output file
-                output_xlsx = Path(pdf_path).parent / "extracted_data_structural.xlsx"
+                if output_xlsx.exists():
+                    output_xlsx.unlink(missing_ok=True)
+                result = self._run_with_logging([sys.executable, str(script_to_use), str(pdf_path), str(output_xlsx)], 3600)
             else:
                 import asyncio
                 result = self._run_with_logging([sys.executable, str(script_to_use), str(pdf_path), str(output_xlsx)], 3600)

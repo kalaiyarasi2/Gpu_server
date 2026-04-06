@@ -147,17 +147,24 @@ CRITICAL RULES:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _sum_line_items(line_items: List[Dict]) -> float:
-    """Sum CURRENT_PREMIUM across all line items, safely."""
+    """Sum CURRENT_PREMIUM and ADJUSTMENT_PREMIUM across all line items, safely."""
     total = 0.0
     for item in line_items:
-        raw = item.get("CURRENT_PREMIUM")
-        if raw is None:
-            continue
-        try:
-            val = float(str(raw).replace(",", "").replace("$", "").strip())
-            total += val
-        except (ValueError, TypeError):
-            pass
+        # Sum both Current and Adjustment premiums to reflect true invoice balance
+        for field in ["CURRENT_PREMIUM", "ADJUSTMENT_PREMIUM"]:
+            raw = item.get(field)
+            if raw is None:
+                continue
+            try:
+                # Handle potential string formatting (commas, dollar signs)
+                s_val = str(raw).replace(",", "").replace("$", "").strip()
+                # Handle accounting parentheses for negative numbers
+                if s_val.startswith("(") and s_val.endswith(")"):
+                    s_val = "-" + s_val[1:-1]
+                val = float(s_val)
+                total += val
+            except (ValueError, TypeError):
+                pass
     return total
 
 
@@ -240,11 +247,15 @@ def should_trigger_refinement(extracted_data: Dict, raw_text: str) -> Validation
         target_total = max(combined_targets)
         result.target_total = target_total
 
-        # If extracted sum already exceeds the target by more than 1 %,
-        # the "total" we found is probably a sub-total — do not refine.
+        # If extracted sum already exceeds the target by more than 1%,
+        # the "total" we found is probably a sub-total — do not refine unless it's a known UHC/BCBS ledger.
         if result.extracted_sum > target_total:
             buffer = max(1.0, result.extracted_sum * 0.01)
-            if result.extracted_sum - target_total > buffer:
+            # DYNAMIC RELAXATION: For UHC, we don't skip refinement as easily because "subtotals" 
+            # often look like grand totals but missing adjustments can flip the sign.
+            is_uhc_check = "UHC" in raw_text.upper() or "UNITEDHEALTH" in raw_text.upper()
+            
+            if result.extracted_sum - target_total > buffer and not is_uhc_check:
                 print(
                     f"  [LEARNING][SAFEGUARD] Extracted ${result.extracted_sum:.2f} > "
                     f"target ${target_total:.2f} — target is likely a sub-total. Skipping."

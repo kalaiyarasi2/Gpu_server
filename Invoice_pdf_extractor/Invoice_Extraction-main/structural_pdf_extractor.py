@@ -140,6 +140,16 @@ def map_and_segment_text(text):
                 
     return refined_chunks
 
+def is_empty_line_items(items):
+    if not items: 
+        return True
+    for item in items:
+        has_val = any(item.get(k) is not None and str(item.get(k)).strip().lower() not in ['', 'none', 'null', 'nan'] 
+                      for k in ['FIRSTNAME', 'LASTNAME', 'MEMBERID', 'PLAN_NAME', 'CURRENT_PREMIUM'])
+        if has_val:
+            return False
+    return True
+
 def process_with_structural_layer(pdf_path, output_excel=None):
     """Process PDF with structural analysis layer.
     
@@ -252,13 +262,13 @@ def process_with_structural_layer(pdf_path, output_excel=None):
             page_data = v3.extract_fields_with_llm(chunk_text + prompt_hint, client, f"detail_page_{page_num}")
             
             # Vertical fallback for reports or details
-            if not page_data.get("LINE_ITEMS") and len(chunk_text) > 100:
+            if is_empty_line_items(page_data.get("LINE_ITEMS")) and len(chunk_text) > 100:
                  print(f"    -> [Layer] Vertical fallback triggered for {chunk_type} chunk...")
                  # (Implementation of vertical fallback would go here or call v3 logic)
             
             # [FIX] OCR Fallback for Structural Layer
             # If standard extraction failed or yielded low results, and the document is likely scanned
-            if not page_data.get("LINE_ITEMS") or v3.check_text_quality(chunk_text) < 0.2:
+            if is_empty_line_items(page_data.get("LINE_ITEMS")) or v3.check_text_quality(chunk_text) < 0.2:
                 print(f"    -> [Layer] Low quality text or no items. Attempting OCR fallback for chunk {i+1}...")
                 try:
                     # In structural mode, we might need to re-extract the specific pages covered by this chunk via OCR
