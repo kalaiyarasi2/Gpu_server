@@ -602,7 +602,7 @@ DOCUMENT TEXT:
 """
         try:
             response = client.chat.completions.create(
-                model="gpt-4o",
+                model="-gpt4o",
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
                 max_tokens=4000,
@@ -2534,8 +2534,12 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
             header_only_data = extract_fields_with_llm(page_text, client, f"{os.path.basename(pdf_path)}_{chunk_id_str}_header", mode="standard", detected_carrier=global_carrier) or {}
             return {"index": i, "header": header_only_data.get("HEADER", {}), "items": [], "refinement_info": None}
         
+        # [LEARNING] Inject few-shot examples from memory
+        examples_prompt = learning_engine.discover_examples(page_text)
+        augmented_text = page_text + ("\n\n" + examples_prompt if examples_prompt else "")
+
         # Pass 1: Standard Mode (Horizontal Parser)
-        page_data = extract_fields_with_llm(page_text, client, f"{os.path.basename(pdf_path)}_{chunk_id_str}", mode="standard", detected_carrier=global_carrier) or {}
+        page_data = extract_fields_with_llm(augmented_text, client, f"{os.path.basename(pdf_path)}_{chunk_id_str}", mode="standard", detected_carrier=global_carrier) or {}
         
         # Pass 2: Vertical Fallback
         if not page_data.get("LINE_ITEMS"):
@@ -2560,18 +2564,53 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
                 except Exception as e:
                     print(f"    -> [ERROR] Vertical fallback failed: {e}")
 
-        # Refinement Pass
-        should_refine, target_total, current_sum = learning_engine.should_trigger_refinement(page_data, page_text)
-        if should_refine:
-            print(f"    -> [LEARNING] Refinement triggered for {chunk_id_str}...")
-            refinement_prompt = learning_engine.generate_refinement_prompt(page_data, page_text, target_total, current_sum)
-            page_data = extract_fields_with_llm(refinement_prompt, client, f"{os.path.basename(pdf_path)}_{chunk_id_str}_refinement", mode="standard", detected_carrier=global_carrier) or {}
+        # [LEARNING] Refinement Loop (v2)
+        best_data = page_data
+        last_valid = learning_engine.ValidationResult()
+        passes = 1
+        
+        for pass_num in range(1, learning_engine.MAX_REFINEMENT_PASSES + 1):
+            validation = learning_engine.should_trigger_refinement(best_data, page_text)
+            last_valid = validation
+            
+            if not validation.needs_refinement:
+                break
+                
+            if pass_num >= learning_engine.MAX_REFINEMENT_PASSES:
+                print(f"    -> [LEARNING][WARN] Still failing after {learning_engine.MAX_REFINEMENT_PASSES} passes for {chunk_id_str}.")
+                break
+                
+            print(f"    -> [LEARNING] Refinement Pass {pass_num} triggered for {chunk_id_str}: {validation.reason}")
+            refinement_prompt = learning_engine.generate_refinement_prompt(
+                best_data, page_text, 
+                validation=validation, 
+                pass_number=pass_num
+            )
+            page_data = extract_fields_with_llm(refinement_prompt, client, f"{os.path.basename(pdf_path)}_{chunk_id_str}_refine_{pass_num}", mode="standard", detected_carrier=global_carrier) or {}
+            
+            # Compare and keep best
+            refined_sum = learning_engine._sum_line_items(page_data.get("LINE_ITEMS", []))
+            current_gap = abs(validation.target_total - validation.extracted_sum)
+            refined_gap = abs(validation.target_total - refined_sum)
+            
+            if refined_gap < current_gap:
+                print(f"    -> [LEARNING] Pass {pass_num+1} improved gap: ${current_gap:.2f} -> ${refined_gap:.2f}")
+                best_data = page_data
+            else:
+                print(f"    -> [LEARNING] Pass {pass_num+1} did NOT improve gap. Keeping previous.")
+            
+            passes += 1
+            
+        page_data = best_data
+        target_total = last_valid.target_total
+        should_refine = last_valid.needs_refinement
             
         return {
             "index": i, 
             "header": page_data.get("HEADER", {}), 
             "items": page_data.get("LINE_ITEMS", []),
-            "refinement_info": (target_total if should_refine else None)
+            "refinement_info": (target_total if should_refine else None),
+            "passes": passes
         }
 
     # Execute threads
@@ -2668,6 +2707,29 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
     if "Legal Shield" in str(global_carrier):
         all_line_items = normalize_legal_shield_data(all_line_items)
         data["LINE_ITEMS"] = all_line_items
+
+    # [LEARNING] Final Audit & Auto-Training
+    try:
+        final_valid = learning_engine.should_trigger_refinement(data, text)
+        final_sum = learning_engine._sum_line_items(all_line_items)
+        
+        # Write audit log
+        max_passes = max([res.get("passes", 1) for res in results]) if results else 1
+        learning_engine.write_audit_log(
+            source_file=pdf_path,
+            validation=final_valid,
+            passes=max_passes,
+            final_sum=final_sum,
+            target_total=final_valid.target_total,
+            line_item_count=len(all_line_items)
+        )
+        
+        # Auto-train if extraction is high quality
+        if not final_valid.needs_refinement and len(all_line_items) > 0:
+            learning_engine.save_successful_extraction(text, data, client)
+            
+    except Exception as e:
+        print(f"  [LEARNING][WARN] Failed to run final audit/training: {e}")
 
     return data
 
