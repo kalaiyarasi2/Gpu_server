@@ -41,6 +41,7 @@ class ValidationResult:
         self.extracted_sum:     float = 0.0
         self.discrepancy:       float = 0.0
         self.missing_ids_pct:   float = 0.0
+        self.missing_ssn_pct:   float = 0.0
         self.is_multi_column:   bool  = False
 
     def __repr__(self):
@@ -242,6 +243,22 @@ def should_trigger_refinement(extracted_data: Dict, raw_text: str) -> Validation
         combined_targets = generic
     else:
         combined_targets = []
+        
+    # FALLBACK: If raw_text yielding no totals (e.g. scanned image with Vision fallback),
+    # trust the LLM-extracted Header values for reconciliation target.
+    if not combined_targets:
+        header = extracted_data.get("HEADER", {})
+        for h_key in ["AMOUNT_DUE", "TOTAL_BILLED", "TOTAL_DUE", "INVOICE_TOTAL"]:
+            h_val = header.get(h_key)
+            if h_val:
+                try:
+                    target = float(str(h_val).replace(",", "").replace("$", ""))
+                    if target > 0:
+                        combined_targets.append(target)
+                except (ValueError, TypeError):
+                    pass
+        if combined_targets:
+            print(f"  [LEARNING] Header-fallback total found: {combined_targets}")
 
     if combined_targets:
         target_total = max(combined_targets)
@@ -274,18 +291,36 @@ def should_trigger_refinement(extracted_data: Dict, raw_text: str) -> Validation
             print(f"  [LEARNING] {result.reason}")
             return result
 
-    # ── Heuristic 3: missing member IDs ────────────────────────────────────
+    # ── Heuristic 3: missing member IDs / SSNs ─────────────────────────────
     if len(line_items) > 3:
         null_ids = sum(
             1 for item in line_items
             if not str(item.get("MEMBERID", "")).strip()
         )
-        pct = null_ids / len(line_items)
-        result.missing_ids_pct = pct
-        if pct > 0.5:
+        null_ssns = sum(
+            1 for item in line_items
+            if not str(item.get("SSN", "")).strip() or str(item.get("SSN", "")).strip() == "-"
+        )
+        
+        id_pct = null_ids / len(line_items)
+        ssn_pct = null_ssns / len(line_items)
+        result.missing_ids_pct = id_pct
+        result.missing_ssn_pct = ssn_pct
+        
+        if id_pct > 0.5:
             result.needs_refinement = True
             result.reason = (
                 f"High rate of missing Member IDs ({null_ids}/{len(line_items)} rows)."
+            )
+            print(f"  [LEARNING] {result.reason}")
+            return result
+            
+        # Check if SSNs are likely present in the text (4-digit snippets or 9-digit numbers)
+        has_ssn_patterns = bool(re.search(r'\b\d{9}\b|\b\d{3}-\d{2}-\d{4}\b|\b\d{4}\b', raw_text))
+        if ssn_pct > 0.5 and has_ssn_patterns:
+            result.needs_refinement = True
+            result.reason = (
+                f"High rate of missing SSNs ({null_ssns}/{len(line_items)} rows)."
             )
             print(f"  [LEARNING] {result.reason}")
             return result
@@ -309,12 +344,12 @@ def generate_refinement_prompt(
     raw_text: str,
     validation: Optional[ValidationResult] = None,
     pass_number: int = 1,
+    carrier_hint: str = "",
 ) -> str:
     """
     Generates a targeted refinement prompt based on the ValidationResult.
-
-    FIX: accepts a ValidationResult object so the prompt is tailored to the
-    SPECIFIC reason for failure, not a generic catch-all instruction.
+    Includes carrier_hint to ensure specific extraction rules (like BCBS split)
+    persist into the second pass.
     """
     # Back-compat: allow callers that still pass (target_total, current_sum) floats
     if validation is None:
@@ -322,6 +357,9 @@ def generate_refinement_prompt(
 
     target_total = validation.target_total
     current_sum  = validation.extracted_sum
+
+    # Prefix with the carrier-specific rules if provided
+    carrier_prefix = f"### CARRIER-SPECIFIC RULES (PRIORITY):\n{carrier_hint}\n" if carrier_hint else ""
 
     multi_col_msg = ""
     if validation.is_multi_column:
@@ -342,12 +380,27 @@ def generate_refinement_prompt(
 - Do NOT leave MEMBERID blank if a number appears near the name.
 """
 
+    missing_ssn_msg = ""
+    if validation.missing_ssn_pct > 0.5:
+        missing_ssn_msg = """
+### MISSING SSNs:
+- More than half of the extracted rows have no SSN.
+- Look for 9-digit numbers (XXX-XX-XXXX) or 4-digit snippets (Last 4 SSN).
+- For BCBS, YOU MUST prioritize capturing the FULL 9-digit SSN if it is visible.
+- These are often found near the Member Name or in a specific "SSN" column.
+- DO NOT confuse the SSN with the Member ID (Member IDs are often alphanumeric or longer).
+- Every member row should ideally have both if they are present on the page.
+    - If after re-scanning you cannot find 9 digits, capture the 4-digit mask.
+"""
+
     return f"""
+{carrier_prefix}
 [REFINEMENT PASS {pass_number}] The previous extraction has a quality issue:
   Reason:            {validation.reason}
   Document total:    ${target_total:.2f}
   Extracted sum:     ${current_sum:.2f}
   Gap:               ${abs(target_total - current_sum):.2f}
+  Missing IDs/SSNs:  {validation.missing_ids_pct*100:.0f}% / {validation.missing_ssn_pct*100:.0f}%
 
 ### ZERO-HALLUCINATION RULE (CRITICAL):
   Every number you output MUST appear verbatim in the raw text below.
@@ -356,11 +409,12 @@ def generate_refinement_prompt(
 ### RECONCILIATION TASK:
   1. Re-scan the ENTIRE detail table. Look for rows you missed the first time.
   2. Your extracted sum MUST equal the "Amount Due" / "Balance Due" in the text.
-  3. If the sum is too low  → you missed rows. Look harder.
-  4. If the sum is too high → you captured summary/total rows. Remove them.
-  5. Map the "Total" or "Current Premium" column → CURRENT_PREMIUM, not any
+  3. **NO AGGREGATION**: Do NOT sum premiums from different names. If 'Rbrekk' has $6.00 and 'Toczynski' has $652.74, they MUST be two separate JSON objects. Aggregating them is a CRITICAL FAILURE.
+  4. If the sum is too low  → you missed rows. Look harder.
+  5. If the sum is too high → you captured summary/total rows. Remove them.
+  6. Map the "Total" or "Current Premium" column → CURRENT_PREMIUM, not any
      sub-total or volume column.
-{multi_col_msg}{missing_id_msg}
+{multi_col_msg}{missing_id_msg}{missing_ssn_msg}
 ### COLUMN HINTS (re-check these):
   - BasicTermLife / Dental / Std / Vision → each is a SEPARATE line item row.
   - "Adjustment" rows → ADJUSTMENT_PREMIUM (set CURRENT_PREMIUM to null).

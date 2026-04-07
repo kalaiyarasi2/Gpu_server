@@ -79,16 +79,17 @@ class StructuredExcelExtractor:
         
         RULES:
         - Return ONLY JSON: {{"SourceColumn": "TargetField"}}
+        - Identify columns that contain premium amounts for specific benefits.
         - Mapping tips:
           'Member Name' -> 'MEMBER_NAME'
           'Member Id' -> 'MEMBERID'
           'Employee ID' -> 'EMPLOYEE_ID'
-          'Accident Premium' -> 'ACCIDENT_PREMIUM'
-          'Dental Premium' -> 'DENTAL_PREMIUM'
-          'Vision Premium' -> 'VISION_PREMIUM'
-          'STD Premium' -> 'STD_PREMIUM'
-          'LTD Premium' -> 'LTD_PREMIUM'
-          'Basic Term Life Premium' -> 'LIFE_PREMIUM'
+          'Accident' or 'Accident Premium' -> 'ACCIDENT_PREMIUM'
+          'Dental' or 'Dental Premium' -> 'DENTAL_PREMIUM'
+          'Vision' or 'Vision Premium' -> 'VISION_PREMIUM'
+          'STD' or 'STD Premium' -> 'STD_PREMIUM'
+          'LTD' or 'LTD Premium' -> 'LTD_PREMIUM'
+          'Basic Term Life' or 'Life Premium' -> 'LIFE_PREMIUM'
           'Total Premium' -> 'TOTAL_PREMIUM'
           '.* Indicator' -> 'COVERAGE'
         """
@@ -99,7 +100,7 @@ class StructuredExcelExtractor:
                 response_format={"type": "json_object"}
             )
             return json.loads(response.choices[0].message.content)
-        except Exception as e:
+        except Exception as e: 
             print(f"  [ERR] AI Mapping failed: {e}")
             return {}
 
@@ -224,10 +225,19 @@ class StructuredExcelExtractor:
         # 5. Flatten multi-plan columns
         # Identify premium columns from mapping
         premium_map = {c: t for c, t in mapping.items() if t.endswith("_PREMIUM") and t != "TOTAL_PREMIUM"}
-        # Fallback to keyword search if AI mapping is sparse
+        # Fallback to keyword search if AI mapping is sparse or missed specific benefit columns
+        benefit_keywords = ["ACCIDENT", "DENTAL", "VISION", "LIFE", "LTD", "STD", "MEDICAL", "CRITICAL", "HOSPITAL", "AD&D"]
         if not premium_map:
-            premium_map = {c: c.replace("Premium", "").strip().upper() + "_PREMIUM" 
-                          for c in df.columns if "premium" in c.lower() and "total" not in c.lower() and "type" not in c.lower()}
+            for col in df.columns:
+                col_upper = col.upper()
+                if "TOTAL" in col_upper or "TYPE" in col_upper:
+                    continue
+                
+                # Check for "Premium" in name OR if it matches a benefit keyword exactly (or with "Premium" suffix)
+                if "PREMIUM" in col_upper:
+                    premium_map[col] = col.replace("Premium", "").strip().upper() + "_PREMIUM"
+                elif any(re.search(rf"\b{re.escape(k)}\b", col_upper) for k in benefit_keywords):
+                    premium_map[col] = col.strip().upper() + "_PREMIUM"
 
         # Detect row-per-benefit format: a single generic "Premium" column with a "Benefit Description" column
         benefit_desc_col = next((c for c in df.columns if c.strip().lower() == "benefit description"), None)
