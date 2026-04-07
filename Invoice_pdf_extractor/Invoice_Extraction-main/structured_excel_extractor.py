@@ -229,16 +229,29 @@ class StructuredExcelExtractor:
             premium_map = {c: c.replace("Premium", "").strip().upper() + "_PREMIUM" 
                           for c in df.columns if "premium" in c.lower() and "total" not in c.lower() and "type" not in c.lower()}
 
+        # Detect row-per-benefit format: a single generic "Premium" column with a "Benefit Description" column
+        benefit_desc_col = next((c for c in df.columns if c.strip().lower() == "benefit description"), None)
+        is_row_per_benefit = benefit_desc_col is not None and any(
+            c.strip().lower() in ("premium", "current premium") for c in df.columns
+        )
+
         rows = []
         for _, row in df.iterrows():
             has_premium = False
             
             # Find Member Name and Id using mapping
-            name_col = next((c for c, t in mapping.items() if t == "MEMBER_NAME"), "Member Name")
-            id_col = next((c for c, t in mapping.items() if t == "MEMBERID"), "Member Id")
-            emp_id_col = next((c for c, t in mapping.items() if t == "EMPLOYEE_ID"), "Employee ID")
-            
-            fullname = str(row.get(name_col, ""))
+            # Try AI mapping first, then fall back to common column name variants
+            name_col = next((c for c, t in mapping.items() if t == "MEMBER_NAME"), None)
+            if name_col is None or name_col not in df.columns:
+                name_col = next((c for c in df.columns if c.strip().lower() in ("name", "member name", "employee name", "subscriber name", "participant name")), None)
+            id_col = next((c for c, t in mapping.items() if t == "MEMBERID"), None)
+            if id_col is None or id_col not in df.columns:
+                id_col = next((c for c in df.columns if c.strip().lower() in ("member id", "memberid", "member_id", "employee id", "subscriber id")), None)
+            emp_id_col = next((c for c, t in mapping.items() if t == "EMPLOYEE_ID"), None)
+            if emp_id_col is None or emp_id_col not in df.columns:
+                emp_id_col = next((c for c in df.columns if c.strip().lower() in ("employee id", "employeeid", "client policy")), None)
+
+            fullname = str(row.get(name_col, "")) if name_col else ""
             if not fullname or fullname.lower() == "nan":
                 continue # Skip truly empty rows
 
@@ -251,6 +264,50 @@ class StructuredExcelExtractor:
                 date_match = re.search(r'(\d{1,2}/\d{1,2}/\d{2,4})', bp)
                 if date_match:
                     from_date = date_match.group(1)
+
+            # --- Row-per-benefit path (e.g. Unum) ---
+            # When each row already contains a single benefit + premium, emit directly
+            if is_row_per_benefit:
+                prem_col = next((c for c in df.columns if c.strip().lower() in ("premium", "current premium")), None)
+                val = self.clean_currency(row.get(prem_col, 0)) if prem_col else 0.0
+                benefit_desc = str(row.get(benefit_desc_col, "")).strip()
+                # Skip header-like, total, or empty rows
+                if not benefit_desc or benefit_desc.lower() in ("nan", "benefit description", "total"):
+                    continue
+                # Derive plan type from description text
+                desc_upper = benefit_desc.upper()
+                if "ACCIDENT" in desc_upper:   plan_type = "ACCIDENT"
+                elif "DENTAL" in desc_upper:   plan_type = "DENTAL"
+                elif "VISION" in desc_upper:   plan_type = "VISION"
+                elif "LIFE" in desc_upper:     plan_type = "LIFE"
+                elif "LTD" in desc_upper or "LONG TERM" in desc_upper: plan_type = "LTD"
+                elif "STD" in desc_upper or "SHORT TERM" in desc_upper: plan_type = "STD"
+                elif "MEDICAL" in desc_upper or "HEALTH" in desc_upper: plan_type = "MEDICAL"
+                else:                          plan_type = "OTHER"
+                item = {
+                    "INV_DATE": global_inv_date,
+                    "INV_NUMBER": global_inv_number,
+                    "BILLING_PERIOD": from_date or bp,
+                    "LASTNAME": last,
+                    "FIRSTNAME": first,
+                    "MIDDLENAME": mid,
+                    "SSN": None,
+                    "POLICYID": row.get(emp_id_col, None) if emp_id_col else None,
+                    "MEMBERID": row.get(id_col, "") if id_col else "",
+                    "PLAN_NAME": benefit_desc,
+                    "PLAN_TYPE": plan_type,
+                    "COVERAGE": None,
+                    "CURRENT_PREMIUM": val,
+                    "ADJUSTMENT_PREMIUM": 0.0
+                }
+                # Total Adjustment Amount maps to adjustment
+                adj_col = next((c for c in df.columns if "adjustment" in c.lower()), None)
+                if adj_col:
+                    adj_val = self.clean_currency(row.get(adj_col, 0))
+                    if adj_val != 0:
+                        item["ADJUSTMENT_PREMIUM"] = adj_val
+                rows.append(item)
+                continue  # Skip the column-per-benefit loop below
 
             for p_col, p_type in premium_map.items():
                 val = self.clean_currency(row.get(p_col, 0))
@@ -268,8 +325,10 @@ class StructuredExcelExtractor:
                     
                     if not coverage or str(coverage).lower() == "nan":
                         # Fallback to AI mapping for coverage, but IGNORE Volumes
+                        # Guard: benefit_prefix may be empty if the column was named exactly "Premium"
+                        bp_word = benefit_prefix.split()[0] if benefit_prefix.strip() else None
                         coverage = next((row[c] for c, t in mapping.items() 
-                                       if t == "COVERAGE" and benefit_prefix.split()[0] in c 
+                                       if t == "COVERAGE" and (bp_word is None or bp_word in c) 
                                        and "volume" not in c.lower()), None)
 
                     # Normalize coverage
@@ -286,11 +345,21 @@ class StructuredExcelExtractor:
                         elif "SP" in cov_str: coverage = "ES"
 
                     # Fix Plan Type if it's too generic (like "CURRENT")
-                    if benefit_type == "CURRENT":
-                        # Use benefit_prefix to guess
-                        if "ACCIDENT" in benefit_prefix.upper(): benefit_type = "ACCIDENT"
-                        elif "DENTAL" in benefit_prefix.upper(): benefit_type = "DENTAL"
-                        elif "VISION" in benefit_prefix.upper(): benefit_type = "VISION"
+                    if benefit_type in ("CURRENT", "", "_"):
+                        # Try benefit_prefix first, then Benefit Description column
+                        search_str = benefit_prefix.upper()
+                        if not search_str and benefit_desc_col:
+                            search_str = str(row.get(benefit_desc_col, "")).upper()
+                        if "ACCIDENT" in search_str:   benefit_type = "ACCIDENT"
+                        elif "DENTAL" in search_str:   benefit_type = "DENTAL"
+                        elif "VISION" in search_str:   benefit_type = "VISION"
+                        elif "LIFE" in search_str:     benefit_type = "LIFE"
+                        elif "LTD" in search_str or "LONG TERM" in search_str: benefit_type = "LTD"
+                        elif "STD" in search_str or "SHORT TERM" in search_str: benefit_type = "STD"
+                        elif "MEDICAL" in search_str or "HEALTH" in search_str: benefit_type = "MEDICAL"
+                        # If still generic, use Benefit Description value directly
+                        elif benefit_desc_col:
+                            benefit_type = str(row.get(benefit_desc_col, "OTHER")).strip().upper() or "OTHER"
 
                     item = {
                         "INV_DATE": row.get("Billing Due Date", global_inv_date),
@@ -300,9 +369,9 @@ class StructuredExcelExtractor:
                         "FIRSTNAME": first,
                         "MIDDLENAME": mid,
                         "SSN": None,
-                        "POLICYID": row.get(emp_id_col, None),
-                        "MEMBERID": row.get(id_col, ""),
-                        "PLAN_NAME": p_col,
+                        "POLICYID": row.get(emp_id_col, None) if emp_id_col else None,
+                        "MEMBERID": row.get(id_col, "") if id_col else "",
+                        "PLAN_NAME": str(row.get(benefit_desc_col, p_col)).strip() if (benefit_desc_col and benefit_prefix == "") else p_col,
                         "PLAN_TYPE": benefit_type,
                         "COVERAGE": coverage,
                         "CURRENT_PREMIUM": val,
