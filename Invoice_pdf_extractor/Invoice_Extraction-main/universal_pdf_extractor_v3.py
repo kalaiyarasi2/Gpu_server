@@ -3424,7 +3424,10 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                     row[field] = item.get(field) # Will be None if missing
                 
                 row.update(clean_header)
-                row.update(item)
+                # Only update with item value if it's not None, so we don't overwrite header info
+                for k, v in item.items():
+                    if v is not None or k not in row:
+                        row[k] = v
                 
                 # --- V3.1 CLEANING LOGIC (User Requested Formatting) ---
                 # Clean names (normalize multiple spaces)
