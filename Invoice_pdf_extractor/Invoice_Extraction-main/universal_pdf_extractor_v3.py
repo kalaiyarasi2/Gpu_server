@@ -731,20 +731,17 @@ def extract_text_from_pdf_pymupdf(pdf_path: str, mode: str = "standard") -> str:
         return ""
 
 
-def extract_text_from_pdf_ocr(pdf_path: str) -> str:
+def extract_text_from_pdf_ocr(pdf_path: str) -> tuple:
     """
     Extract text content from a PDF file using OCR (Standardized v3 layered fallback)
     """
     try:
         extractor = OCRPDFExtractor(pdf_path)
-        text, _ = extractor.extract(verbose=True)
-        return text
+        text, metadata = extractor.extract(verbose=True)
+        return text, metadata
     except Exception as e:
         print(f"  [ERROR] OCR Error: {e}")
-        return ""
-    except Exception as e:
-        print(f"  [ERROR] OCR Error: {e}")
-        return ""
+        return "", []
 
 
 def extract_text_from_pdf_improved(pdf_path: str) -> str:
@@ -1298,24 +1295,22 @@ Extract data from the document text provided below.
             1. Plan: Medical, Current: 1095.61
             2. Plan: Life, Current: 2.75
             3. Plan: AD&D, Current: 0.75
-          - **EXTRACT ALL ROWS (100% CAPTURE & LEDGER DETAIL)**: If a member has multiple adjustments for the same plan (e.g. Gale Alana having two '-$2.75' rows or Rios Caleb having multiple ADD rows for different periods like 2/01-2/28 and 3/01-3/31), YOU MUST output EACH as a separate JSON object. Do NOT sum or consolidate them. For ALL member rows (both Current and Adjustment), ALWAYS extract the specific 'Period' (e.g. 1/01-1/31/2026 or 4/01-4/30/2026) and map it to the BILLING_PERIOD field for that line item. Even if a row has no name (floating adjustment), extract it as a distinct item based on its position, preserving any unique labels or periods.
+          - **EXTRACT ALL ROWS (100% CAPTURE & LEDGER DETAIL)**: If a member has multiple adjustments for the same plan (e.g. Gale Alana having two '-$2.75' rows or Rios Caleb having multiple ADD rows for different periods like 2/01-2/28 and 3/01-3/31), YOU MUST output EACH as a separate JSON object. Do NOT sum or consolidate them. For ALL member rows (both Current and Adjustment), ALWAYS extract the specific 'Period' (e.g. 1/01-1/31/2026 or 4/01-4/30/2026) and map it to the BILLING_PERIOD field for that line item. Even if a row has no name (floating adjustment), extract it as a distinct item.
     - **BCBS (BlueCross BlueShield)**: 
     - **Subscriber ID** or **Member ID** -> maps to `MEMBERID`.
+    - **SSN CAPTURE (100% MANDATE)**: You MUST capture an SSN for EVERY row. If it is masked (e.g., `*****2313`), extract the last 4 digits. If it is 9 digits, extract all 9. DO NOT leave the SSN field null if any digits are visible on the row. Look for SSNs near the Name/ID if no clear column header is visible.
     - **Coverage Mapping**: 
         - "SINGLE" -> **EE**
         - "EMPLOYEE/CHILDREN" -> **EC**
         - "EMPLOYEE/SPOUSE" -> **ES**
         - "FAMILY" -> **FAM**
         - Also check plan string (e.g., "IND AGE RATED" -> **EE**, "FAM AGE RATED" -> **FAM**).
-    - **PLAN_NAME (CRITICAL)**: Capture the FULL product or plan name from the **"Product"** or **"Plan"** column.
-    - **BCBS CA (MALIBU BREWING STYLE)**: If the document is from **Blue Shield of California** (Account starting with 'W') and has columns like **Health**, **Dental**, **Vision**, **Life**:
-        - Treat these categories (Health, Dental, etc.) as BOTH the `PLAN_NAME` AND `PLAN_TYPE` for the rows in those columns.
-    - **DYNAMIC EXTRACTION**: Capture every character including group numbers, variant codes, or suffixes (e.g., "ALL COPAY PLAN 14256-RB").
+    - **PLAN_NAME (CRITICAL)**: Capture the FULL product or plan name from the **"Product"** or **"Plan"** column. Use Multiline Aggregation to join fragments like "LG GRP" or suffixes like "RD", "RC".
     - **BLUECARE NORMALIZATION**: IF "BLUECARE" is present in the plan name:
         - It MUST be at the start.
-        - Strip location prefixes (SAND, MARV, BEAC, JAX).
+        - Strip location prefixes (SAND, MARV, BEAC, JAX, CAFE, BAKE).
         - Correct any reversal (e.g., "NFQ... BLUECARE" -> "BLUECARE NFQ...").
-    - **PLAN_TYPE (STRICT NULL)**: You MUST set `PLAN_TYPE` to **NULL** for BCBS. DO NOT infer "MEDICAL".
+    - **PLAN_TYPE (STRICT NULL)**: For BCBS, leave `PLAN_TYPE` as **NULL**. DO NOT infer "MEDICAL".
     - **MANDATORY DETAIL EXTRACTION**: Extract members ONLY from the subscriber detail tables (e.g., "SECTION 3" or "DETAIL OF SUBSCRIBERS").
     - **GREEDY EXTRACTION**: Capture every row in the detail table. Even if a name was seen in a summary header (e.g., Account Owner "SHARAD SAXTON"), extract it again as a member row if it appears with a Subscriber ID and Premium.
     - **FAM AGE RATED MANDATE**: "FAM AGE RATED" rows are INDIVIDUAL member enrollments (Family tier) and MUST be extracted as line items. Do NOT treat them as summary totals.
@@ -1497,8 +1492,8 @@ Extract data from the document text provided below.
     - If the document lacks a `PLAN_TYPE` column, infer it from the `PLAN_NAME`. (e.g., `TG Life` -> `PLAN_TYPE`: `LIFE`, `TG AD&D` -> `PLAN_TYPE`: `AD&D`).
 11. **SSN/Identifier Capture**: 
     - Extract any visible digits in the SSN column. 
-    - **CRITICAL**: If the SSN is masked (e.g., `*****9868`), extract ONLY the last 4 digits (`9868`). 
-    - **IGNORE OCR ARTIFACTS**: OCR often misreads the mask `*****` as digits (e.g., `884`). If you see a 7 or 8-digit SSN starting with repetitive or suspicious numbers (like `884`), ignore the prefix and capture ONLY the trailing digits that match the pattern in the rest of the document.
+    - **CRITICAL**: If the SSN is masked (e.g., `*****9868` or `XXX-XX-1234`), extract ONLY the visible digits (e.g., `9868` or `1234`). IF the SSN is NOT masked and 9-digits are visible, YOU MUST CAPTURE ALL NINE DIGITS. Do not truncate full numbers.
+    - **IGNORE OCR ARTIFACTS**: OCR often misreads the mask `*****` as digits (e.g., `884`). If you see a 7 or 8-digit SSN starting with repetitive or suspicious numbers (like `884`), ignore the character mask and capture ONLY the trailing digits that match the pattern in the rest of the document.
     - **DIGIT RECOVERY**: If an SSN field contains garbled text (e.g. 'EET BZ', 'eT TAG'), try to find the 4-digit numeric intent using these common OCR mappings:
         - **E / B** -> 8 or 3
         - **I / L** -> 1
@@ -1508,7 +1503,7 @@ Extract data from the document text provided below.
         - **O / Q** -> 0
         - **A** -> 4
         - **G** -> 9
-    - **STRICT SSN**: Extract EXACTLY 4 digits. Do not truncate to 1 or 2 digits unless there is absolute certainty. If only 3 digits are found (e.g. '399'), check if a leading zero '0' was likely dropped by OCR; if so, extract as '0399'.
+    - **SSN PATTERN**: Extract EXACTLY 9 digits if visible, otherwise extract EXACTLY 4 digits for masked SSNs. Do not truncate to 1 or 2 digits unless there is absolute certainty. If only 3 digits are found (e.g. '399'), check if a leading zero '0' was likely dropped by OCR; if so, extract as '0399'.
     - **ID vs SSN vs POLICYID (UHC Special Case)**: 
         - If the document is UHC, the value `1400021` is **ONLY** `POLICYID`.
         - The value `*****557900` is **ONLY** `MEMBERID`.
@@ -1579,7 +1574,7 @@ Extract data from the document text provided below.
    - **MEMBERID**: Map from the "ID" or "Member ID" column in the table. **EXAMPLE**: `*****557900` -> `557900`.
    - **POLICYID**: Map from "Policy No." at the top of the section. **EXAMPLE**: `1400021` -> `1400021`.
    - **NO CROSS-OVER**: Under NO circumstances should `1400021` be placed in the `MEMBERID`, `SSN`, or `FIRSTNAME` columns. 
-   - **SSN**: Extract ONLY from columns explicitly labeled "SSN". If no SSN column exists, return NULL. **DO NOT** use parts of the Member ID as a fallback for SSN.
+   - **SSN**: Extract from columns explicitly labeled "SSN", "Social Security", "Subscriber SSN", "Individual SSN", or "Employee SSN". If no SSN column exists, return NULL. **DO NOT** use parts of the Member ID as a fallback for SSN.
    - **UNIQUE ASSIGNMENT**: Each distinct numeric value from the text has a specific purpose. If `1400021` is the Policy ID, it is EXCLUDED from all other slots for that row.
    - **MANDATORY**: Preserve all visible characters and leading zeros for IDs.
 
@@ -3208,6 +3203,9 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                     per1 = str(item.get("BILLING_PERIOD") or "").strip().lower()
                     per2 = str(existing.get("BILLING_PERIOD") or "").strip().lower()
                     
+                    cov1 = str(item.get("COVERAGE") or "").strip().upper()
+                    cov2 = str(existing.get("COVERAGE") or "").strip().upper()
+                    
                     detail_keywords = ["ADD", "TRM", "CHANGE", "CHG", "RETRO", "ADJUSTMENT", "ADJ"]
                     is_adj1 = any(kw in pn1 for kw in detail_keywords)
                     is_adj2 = any(kw in pn2 for kw in detail_keywords)
@@ -3238,6 +3236,10 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                             else:
                                 print(f"      [V5][LEDGER] Separating multiple adjustments to prevent summing: {pn1}")
                                 match_index = None
+                        # 3. Never merge two CURRENT rows if their coverages are explicitly different
+                        elif cov1 and cov2 and cov1 != cov2 and has_cur_val1 and has_cur_val2:
+                            print(f"      [V5][LEDGER] Separating current lines due to different coverages: {cov1} vs {cov2}")
+                            match_index = None
                     else:
                         # Standard logic for other carriers
                         if (is_adj1 or is_adj2):

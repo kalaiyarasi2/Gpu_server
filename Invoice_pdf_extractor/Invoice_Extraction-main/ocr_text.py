@@ -10,7 +10,9 @@ import os
 import base64
 from io import BytesIO
 import pytesseract
-from pdf2image import convert_from_path
+import fitz  # PyMuPDF (no poppler dependency)
+import io
+from PIL import Image
 from openai import OpenAI
 from dotenv import load_dotenv
 
@@ -77,20 +79,24 @@ class OCRPDFExtractor:
             if verbose:
                 print("Converting PDF to images...")
             
-            # Initial high-DPI render (default 600)
-            images = convert_from_path(
-                str(self.pdf_path),
-                dpi=dpi,
-                fmt='jpeg'
-            )
+            # High-DPI render (default 600) via PyMuPDF (no poppler)
+            doc = fitz.open(str(self.pdf_path))
+            total_pages = len(doc)
             
-            total_pages = len(images)
+            # Helper to get PIL image for a page
+            def get_page_image(doc_obj, page_idx, dpi_val):
+                page = doc_obj.load_page(page_idx)
+                pix = page.get_pixmap(dpi=dpi_val)
+                img_bytes = pix.tobytes("jpeg")
+                return Image.open(io.BytesIO(img_bytes))
+            
             pages_metadata = []
             
             if verbose:
                 print(f"Processing {total_pages} pages with OCR (layered fallback)...\n")
             
-            for page_num, image in enumerate(images, 1):
+            for page_num in range(1, total_pages + 1):
+                image = get_page_image(doc, page_num - 1, dpi)
                 if verbose:
                     print(f"OCR processing page {page_num}/{total_pages} (DPI {dpi})...")
                 
@@ -118,19 +124,12 @@ class OCRPDFExtractor:
                 if rec_hi in ("dpi_fallback", "full_vision"):
                     if verbose:
                         print(
-                            f"   ↪ High-DPI OCR quality low (score {score_hi:.3f}, rec '{rec_hi}'). "
+                            f"   -> High-DPI OCR quality low (score {score_hi:.3f}, rec '{rec_hi}'). "
                             f"Retrying Tesseract at 300 DPI..."
                         )
                     try:
-                        low_images = convert_from_path(
-                            str(self.pdf_path),
-                            dpi=300,
-                            fmt='jpeg',
-                            first_page=page_num,
-                            last_page=page_num
-                        )
-                        if low_images:
-                            low_image = low_images[0]
+                        low_image = get_page_image(doc, page_num - 1, 300)
+                        if low_image:
                             text_lo = pytesseract.image_to_string(
                                 low_image,
                                 config=custom_config,
@@ -145,7 +144,7 @@ class OCRPDFExtractor:
                             if score_lo > final_score or rec_lo == "ok":
                                 if verbose:
                                     print(
-                                        f"   ✓ 300 DPI OCR improved quality "
+                                        f"   [OK] 300 DPI OCR improved quality "
                                         f"(score {score_lo:.3f}, rec '{rec_lo}')."
                                     )
                                 final_text = page_text_lo
@@ -160,20 +159,13 @@ class OCRPDFExtractor:
                 if rec_hi == "full_vision" and self.client is not None:
                     if verbose:
                         print(
-                            f"   ↪ OCR still low quality after retries "
+                            f"   -> OCR still low quality after retries "
                             f"(score {final_score:.3f}). Using Vision on page {page_num}..."
                         )
                     try:
                         # Render just this page for Vision at moderate DPI
-                        vis_images = convert_from_path(
-                            str(self.pdf_path),
-                            dpi=300,
-                            fmt='jpeg',
-                            first_page=page_num,
-                            last_page=page_num
-                        )
-                        if vis_images:
-                            vis_image = vis_images[0]
+                        vis_image = get_page_image(doc, page_num - 1, 300)
+                        if vis_image:
                             vis_text, vis_conf = self._extract_page_with_vision(vis_image)
                             if vis_text.strip():
                                 final_text = vis_text
@@ -251,13 +243,18 @@ class OCRPDFExtractor:
         Returns:
             list: List of dicts with text and confidence for each page
         """
-        print("Converting PDF to images for detailed OCR...")
-        
-        images = convert_from_path(str(self.pdf_path), dpi=dpi, fmt='jpeg')
+        doc = fitz.open(str(self.pdf_path))
+        def get_page_image(doc_obj, page_idx, dpi_val):
+            page = doc_obj.load_page(page_idx)
+            pix = page.get_pixmap(dpi=dpi_val)
+            img_bytes = pix.tobytes("jpeg")
+            return Image.open(io.BytesIO(img_bytes))
+            
         results = []
         
-        for page_num, image in enumerate(images, 1):
-            print(f"Processing page {page_num}/{len(images)}...")
+        for page_num in range(1, len(doc) + 1):
+            print(f"Processing page {page_num}/{len(doc)}...")
+            image = get_page_image(doc, page_num - 1, dpi)
             
             # Get detailed OCR data
             data = pytesseract.image_to_data(
@@ -291,14 +288,21 @@ class OCRPDFExtractor:
             raise ValueError("OpenAI API key is required for Vision OCR. Set OPENAI_API_KEY environment variable.")
             
         print("Converting PDF to images for Vision OCR...")
-        images = convert_from_path(str(self.pdf_path), dpi=dpi)
+        doc = fitz.open(str(self.pdf_path))
+        def get_page_image(doc_obj, page_idx, dpi_val):
+            page = doc_obj.load_page(page_idx)
+            pix = page.get_pixmap(dpi=dpi_val)
+            img_bytes = pix.tobytes("jpeg")
+            return Image.open(io.BytesIO(img_bytes))
         
         full_text = []
         metadata = []
         
-        for i, image in enumerate(images, 1):
+        for i in range(1, len(doc) + 1):
             if verbose:
-                print(f"Vision processing page {i}/{len(images)}...")
+                print(f"Vision processing page {i}/{len(doc)}...")
+            
+            image = get_page_image(doc, i - 1, dpi)
             
             page_text, conf = self._extract_page_with_vision(image)
             

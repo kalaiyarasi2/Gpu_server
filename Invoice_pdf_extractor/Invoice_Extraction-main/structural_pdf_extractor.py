@@ -202,10 +202,16 @@ def process_with_structural_layer(pdf_path, output_excel=None):
         # For 'summary', we ONLY want HEADER fields.
         
         mode = "standard"
+        carrier_name = None
         if chunk_type == "summary":
             # Just extract header fields from summary part
             # We use a smaller context for summary to avoid confusion
-            page_data = v3.extract_fields_with_llm(chunk_text, client, f"summary_page_{page_num}")
+            page_data = v3.extract_fields_with_llm(
+                chunk_text, 
+                client, 
+                f"summary_page_{page_num}",
+                detected_carrier=carrier_name
+            )
             # [FIX] Never extract line items from summary chunks (Page 1) to avoid mis-mapped wide-table values
             page_data["LINE_ITEMS"] = []
         else:
@@ -242,6 +248,9 @@ def process_with_structural_layer(pdf_path, output_excel=None):
                     "Use ADJUSTMENT_PREMIUM for those rows instead. "
                     "Check the section header - only rows under 'Current Membership' should have CURRENT_PREMIUM."
                 )
+                carrier_name = "unitedhealthcare"
+            elif "KCL" in pdf_path or "Kansas City Life" in chunk_text:
+                carrier_name = "kansas_city_life"
                 is_adj_chunk = "ADJUSTMENT DETAIL" in chunk_text or "Adjustment Totals" in chunk_text
                 section_label = "\n[SECTION: ADJUSTMENT DETAIL]" if is_adj_chunk else "\n[SECTION: CURRENT CHARGES]"
                 
@@ -257,32 +266,100 @@ def process_with_structural_layer(pdf_path, output_excel=None):
                     "\n4. **ACTUAL AMOUNT**: Ensure 'Actual Amount' or 'Volume' is captured if present. Map 'Actual Amount' to CURRENT_PREMIUM or total columns as appropriate."
                     "\n5. **ROSTAING_OCR (ROTATION)**: If text appears rotated or unreadable, apply rotation logic (rostaing_ocr) to normalize the view before extraction."
                 )
+            elif "BCBS" in pdf_path.upper() or "BlueCare" in chunk_text:
+                carrier_name = "bcbs"
+                prompt_hint = (
+                    "\n[CRITICAL INSTRUCTIONS FOR BCBS EXTRACTION]"
+                    "\n1. **STRICT FULL TABLE SCAN**: You MUST scan the entire page and extract EVERY member row. Do NOT skip or merge different member names."
+                    "\n2. **ZERO AGGREGATION (IRONCLAD)**: Never sum premiums from different names. If 'Rbrekk' has $6.00 and 'Toczynski' has $652.74, they MUST be two separate JSON objects. Aggregating them is a DESTRUCTIVE ERROR."
+                    "\n3. **ADJUSTMENTS**: Extract adjustments as completely SEPARATE JSON objects. NEVER combine adjustments with current premiums."
+                    "\n4. **MEMBER IDENTIFICATION (STRICT)**:"
+                    "\n   - MEMBERID: The alphanumeric ID starting with 'H' or 'W' (usually 9-10 chars, e.g., 'H44156017')."
+                    "\n   - SSN: **PRIORITY 9-DIGITS**. Look for XXX-XX-XXXX or 9-digit number. Capture ALL NINE digits. Also capture masked SSNs like '*****1234' or 'XXX-XX-1234'. Capture EVERY DIGIT visible. Search the entire row near the Name and MemberID for the SSN digits if no clear column exists. **DO NOT LEAVE SSN NULL IF ANY DIGITS ARE VISIBLE ON THE ROW.**"
+                    "\n   - Capture BOTH fields for every row. Do NOT swap them."
+                    "\n5. Set CURRENT_PREMIUM to null for adjustments, and ADJUSTMENT_PREMIUM to null for current premium rows. Amounts in parentheses (e.g. ($100.00)) are negative."
+                    "\n6. **MULTI-BLOCK LAYOUT**: If labels (Name, ID, SSN) are at the top and amounts are at the bottom, carefully match them by sequence. The first Name/ID corresponds to the first amount, the second to the second, etc."
+                    "\n7. Ensure FIRSTNAME and LASTNAME are captured on every single row."
+                )
+
+        
             
             # Extract line items
-            page_data = v3.extract_fields_with_llm(chunk_text + prompt_hint, client, f"detail_page_{page_num}")
+            page_data = v3.extract_fields_with_llm(
+                chunk_text + prompt_hint, 
+                client, 
+                f"detail_page_{page_num}",
+                detected_carrier=carrier_name
+            )
             
             # Vertical fallback for reports or details
             if is_empty_line_items(page_data.get("LINE_ITEMS")) and len(chunk_text) > 100:
                  print(f"    -> [Layer] Vertical fallback triggered for {chunk_type} chunk...")
                  # (Implementation of vertical fallback would go here or call v3 logic)
             
-            # [FIX] OCR Fallback for Structural Layer
+            # [V4][FIX] OCR Fallback for Structural Layer
             # If standard extraction failed or yielded low results, and the document is likely scanned
             if is_empty_line_items(page_data.get("LINE_ITEMS")) or v3.check_text_quality(chunk_text) < 0.2:
-                print(f"    -> [Layer] Low quality text or no items. Attempting OCR fallback for chunk {i+1}...")
+                print(f"    -> [Layer] Low quality text or no items on chunk {i+1}. Attempting optimized OCR fallback...")
                 try:
-                    # In structural mode, we might need to re-extract the specific pages covered by this chunk via OCR
-                    # For simplicity, if we already have the chunk text and it's bad, we can try to re-run v3's OCR on the whole PDF 
-                    # OR just notify that quality is too low. 
-                    # Since v3 already has extract_text_from_pdf_ocr, we use it.
-                    ocr_text = v3.extract_text_from_pdf_ocr(pdf_path)
-                    # We would need to re-segment or at least check if OCR helps.
-                    # As a targeted fix, we'll try to extract fields from the OCR version of this chunk if possible.
-                    # Since we don't have a clean way to OCR just one chunk without more complex logic, 
-                    # we let the user know we are attempting a full-doc OCR pass.
-                    page_data = v3.extract_fields_with_llm(ocr_text + prompt_hint, client, f"ocr_fallback_chunk_{i+1}")
+                    # 1. Run OCR once (using fitz/tesseract)
+                    print(f"    -> [Layer] Performance: Running primary-doc OCR pass...")
+                    ocr_text, _ = v3.extract_text_from_pdf_ocr(pdf_path) # Changed to return (text, metadata)
+                    
+                    # [V4][FIX] Check if OCR text needs Vision for better layout (BCBS Multi-Block)
+                    # If this is BCBS and the text looks fragmented, we might want to try Vision
+                    
+                    # 2. Save OCR text to the raw extracted file for transparency
+                    pdf_dir = os.path.dirname(pdf_path)
+                    pdf_base = os.path.basename(pdf_path).replace(".pdf", "_raw_extracted.txt")
+                    txt_path = os.path.join(pdf_dir, pdf_base)
+
+                    try:
+                        with open(txt_path, "w", encoding="utf-8") as f:
+                            f.write(ocr_text)
+                    except Exception as e:
+                        print(f"    -> [Layer][WARN] Could not save OCR text: {e}")
+
+                    # 3. RE-SEGMENT the OCR text to process it in manageable chunks
+                    ocr_chunks = map_and_segment_text(ocr_text)
+                    
+                    # 4. Process all OCR chunks
+                    all_line_items = []
+                    for j, ocr_chunk in enumerate(ocr_chunks):
+                        print(f"    -> [Layer] Processing OCR Chunk {j+1}/{len(ocr_chunks)}...")
+                        ocr_data = v3.extract_fields_with_llm(ocr_chunk["text"] + prompt_hint, client, f"ocr_chunk_{j+1}", detected_carrier=carrier_name)
+                        items = ocr_data.get("LINE_ITEMS", [])
+                        
+                        # [V5][FIX] VISION FALLBACK: If names are missing, use Vision OCR (near-perfect layout)
+                        # We trigger if more than 20% of items are missing names, or if we have > 1 missing name
+                        missing_count = sum(1 for item in items if not item.get("LASTNAME"))
+                        if (missing_count > 1 or (items and missing_count/len(items) > 0.2)) and carrier_name == "bcbs":
+                            print(f"    -> [Layer][ALERT] {missing_count} names missing in OCR chunk. Triggering Vision OCR fallback for layout integrity...")
+                            # Extract just this page with Vision
+                            vis_extractor = v3.OCRPDFExtractor(pdf_path)
+                            # We'd ideally only do the specific page, but for now we do the doc if small
+                            vis_text, _ = vis_extractor.extract(engine='vision')
+                            # Save vis text
+                            with open(txt_path, "w", encoding="utf-8") as f: f.write(vis_text)
+                            # Re-process with Vision text
+                            vis_chunks = map_and_segment_text(vis_text)
+                            all_line_items = [] # Reset for Vision
+                            for k, vis_chunk in enumerate(vis_chunks):
+                                print(f"    -> [Layer] Processing Vision Chunk {k+1}/{len(vis_chunks)}...")
+                                vis_data = v3.extract_fields_with_llm(vis_chunk["text"] + prompt_hint, client, f"vis_chunk_{k+1}", detected_carrier=carrier_name)
+                                if vis_data.get("LINE_ITEMS"):
+                                    all_line_items.extend(vis_data["LINE_ITEMS"])
+                            break # Out of OCR chunk loop, we have Vision items
+                        
+                        if items:
+                            all_line_items.extend(items)
+                    
+                    break
+
                 except Exception as e:
                     print(f"    -> [Layer][ERROR] OCR fallback failed: {e}")
+        
+        
         
         # Merge Header
         page_header = page_data.get("HEADER", {})
