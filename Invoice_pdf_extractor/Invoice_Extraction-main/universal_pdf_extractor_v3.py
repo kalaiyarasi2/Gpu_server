@@ -372,9 +372,9 @@ def deduplicate_uhc_fees(items: list) -> list:
 
 def format_date_clean(val: Optional[str]) -> Optional[str]:
     """
-    Standardize dates to D/M/YYYY format, stripping leading zeros.
-    Example: 19/02/2026 -> 19/2/2026 (User Request: February 19, 2026 -> 19/2/2026)
-    Also handles YYYYMM (202603 -> 1/3/2026) and MM/YYYY (03/2026 -> 1/3/2026).
+    Standardize dates to m/d/yyyy format, stripping leading zeros.
+    Example: 03/06/2026 -> 3/6/2026
+    Example: 4/01/2026 -> 4/1/2026
     """
     if not val or not str(val).strip() or str(val).lower() in ["n/a", "none"]:
         return val
@@ -405,37 +405,70 @@ def format_date_clean(val: Optional[str]) -> Optional[str]:
         if p1_int > 12:
              return f"{p2_int}/{p1_int}/{y_clean}"
         
-        # Ambiguous case (both <= 12): assume input was M/D/YYYY and keep it as M/D/YYYY
-        # This part is now idempotent for M/D/Y.
+        # Ambiguous case: assume M/D/YYYY
         return f"{p1_int}/{p2_int}/{y_clean}"
 
-    # 2. Month Name Try: "February 19, 2026" or "Feb 19 2026"
+    # 2. Month Name Try: "February 19, 2026"
     month_pattern = r'([A-Za-z]+)\s+(\d{1,2})[,\s]+(\d{4})'
     match_month = re.search(month_pattern, s)
     if match_month:
         month_name, d, y = match_month.groups()
         month_num = month_map.get(month_name.lower())
         if month_num:
-            d_clean = str(int(d))
-            return f"{month_num}/{d_clean}/{y}"
+            return f"{month_num}/{int(d)}/{y}"
     
-    # 3. Year/Month Only Try: YYYYMM (e.g. 202603)
+    # 3. YYYYMM
     match_yyyymm = re.search(r'^(\d{4})(\d{2})$', s)
     if match_yyyymm:
         y, m = match_yyyymm.groups()
-        m_int = int(m)
-        if 1 <= m_int <= 12:
-            return f"1/{m_int}/{y}"
+        return f"1/{int(m)}/{y}"
             
-    # 4. Month/Year Try: MM/YYYY or MM-YYYY
+    # 4. MM/YYYY
     match_mmyyyy = re.search(r'(\d{1,2})[/-](\d{4})', s)
     if match_mmyyyy:
         m, y = match_mmyyyy.groups()
-        m_int = int(m)
-        if 1 <= m_int <= 12:
-            return f"1/{m_int}/{y}"
+        return f"1/{int(m)}/{y}"
 
     return s
+
+def format_period_clean(val: Optional[str]) -> Optional[str]:
+    """
+    Standardize date ranges to m/d/yyyy - m/d/yyyy format.
+    Example: 04/01-04/30/2026 -> 4/1/2026 - 4/30/2026
+    """
+    if not val or not str(val).strip() or str(val).lower() in ["n/a", "none"]:
+        return val
+        
+    s = str(val).strip()
+    
+    # Check for range markers ( - or / or to )
+    # UHC style: 04/01-04/30/2026
+    # Try to split and identify year
+    parts = re.split(r'\s+-\s+|\s+to\s+|-(?=\d)', s)
+    if len(parts) == 2:
+        start_part = parts[0].strip()
+        end_part = parts[1].strip()
+        
+        # Extract year from end_part if missing from start_part
+        year_match = re.search(r'(\d{4})$', end_part)
+        if year_match:
+            year = year_match.group(1)
+            if not re.search(r'\d{4}$', start_part):
+                # If start part looks like MM/DD, append year
+                if re.match(r'^\d{1,2}/\d{1,2}$', start_part):
+                    start_part = f"{start_part}/{year}"
+                elif re.match(r'^\d{1,2}-\d{1,2}$', start_part):
+                    start_part = start_part.replace('-', '/') + f"/{year}"
+        
+        clean_start = format_date_clean(start_part)
+        clean_end = format_date_clean(end_part)
+        
+        if clean_start and clean_end and clean_start != start_part or clean_end != end_part:
+            return f"{clean_start} - {clean_end}"
+            
+    # If not a range, try single date clean
+    return format_date_clean(s)
+
 
 # Configuration
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -3511,10 +3544,13 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                         row["PLAN_TYPE"] = pn_raw
                 # ----------------------------------------------------------------------------
                 
-                # --- CLEANING REMOVED ---
-                # Redundant calls to format_date_clean here were flipping dates back to M/D/YYYY.
-                # Dates are already cleaned once when the header is prepared above (line 2045-2046).
-                # -----------------------
+                # --- V3.2 CLEANING LOGIC (Date Formatting) ---
+                # Apply strictly requested m/d/yyyy format to INV_DATE and BILLING_PERIOD
+                if row.get("INV_DATE"):
+                    row["INV_DATE"] = format_date_clean(row["INV_DATE"])
+                if row.get("BILLING_PERIOD"):
+                    row["BILLING_PERIOD"] = format_period_clean(row["BILLING_PERIOD"])
+                # ------------------------------------------------------------------
                 # -------------------------------------------------------
                 # Remove internal fields that shouldn't be in Excel
                 for internal_field in ["PRICING_MODEL", "RELATIONSHIP"]:
