@@ -433,8 +433,8 @@ def format_date_clean(val: Optional[str]) -> Optional[str]:
 
 def format_period_clean(val: Optional[str]) -> Optional[str]:
     """
-    Standardize date ranges to m/d/yyyy - m/d/yyyy format.
-    Example: 04/01-04/30/2026 -> 4/1/2026 - 4/30/2026
+    Standardize date ranges to only return the start date in m/d/yyyy format.
+    Example: 04/01-04/30/2026 -> 4/1/2026
     """
     if not val or not str(val).strip() or str(val).lower() in ["n/a", "none"]:
         return val
@@ -461,10 +461,8 @@ def format_period_clean(val: Optional[str]) -> Optional[str]:
                     start_part = start_part.replace('-', '/') + f"/{year}"
         
         clean_start = format_date_clean(start_part)
-        clean_end = format_date_clean(end_part)
-        
-        if clean_start and clean_end and clean_start != start_part or clean_end != end_part:
-            return f"{clean_start} - {clean_end}"
+        # Per user request: return ONLY the start date
+        return clean_start
             
     # If not a range, try single date clean
     return format_date_clean(s)
