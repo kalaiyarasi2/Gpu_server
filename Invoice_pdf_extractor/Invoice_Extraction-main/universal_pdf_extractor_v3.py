@@ -1517,6 +1517,12 @@ Extract data from the document text provided below.
         - Member IDs starting with **700** -> PLAN_NAME: "Identity Theft Plan", PLAN_TYPE: "VOLUNTARY"
     - Preserve the row-level date in the `INV_DATE` field for that line item.
 
+- **Delta Dental**:
+    - **SECTION PRIORITY (CRITICAL)**: Look for the injected markers `### SECTION: ... ###`.
+        1. **`### SECTION: DELTA_DENTAL_CURRENT ###`**: Find member names and capture their amount into **CURRENT_PREMIUM**.
+        2. **`### SECTION: DELTA_DENTAL_ADJUSTMENTS ###`**: Find member names and capture their amount into **ADJUSTMENT_PREMIUM**.
+    - **PLAN TYPE/NAME**: Default `PLAN_TYPE` to "DENTAL" and `PLAN_NAME` to "Dental" unless specified otherwise.
+    - **COVERAGE MAPPING**: Map "EE Only" -> **EE**, "EE + Spouse" -> **ES**, "EE + Children" -> **EC**, "Family" -> **FAM**.
 - **Adjustment Table (GUARDIAN)**:
       - If you see **"New Premium"** and **"New Premium Adjustment"**:
         - `New Premium` (e.g., 2.50) -> `CURRENT_PREMIUM`.
@@ -2409,6 +2415,21 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
             
             # Prepend marker to the page text
             pages[i] = f"### SECTION: {current_kcl_section} ###\n" + pages[i]
+
+    # [V5] Delta Dental Section Marker Injection
+    is_delta_dental = "DELTA DENTAL" in text.upper()
+    if is_delta_dental:
+        print(f"  [V5][DELTA DENTAL] Injecting section markers...")
+        current_dd_section = "UNKNOWN"
+        for i in range(len(pages)):
+            page_content = pages[i]
+            if "List of enrollees and premiums" in page_content:
+                current_dd_section = "DELTA_DENTAL_CURRENT"
+            elif "Enrollee adjustment" in page_content:
+                current_dd_section = "DELTA_DENTAL_ADJUSTMENTS"
+            
+            if current_dd_section != "UNKNOWN":
+                pages[i] = f"### SECTION: {current_dd_section} ###\n" + pages[i]
     
     # [V3][VERIFY] Data Integrity Check for Chunking
     original_len = len(text)
@@ -2755,6 +2776,18 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
 
     # Sort results
     results.sort(key=lambda x: x["index"])
+    # First Pass: Map disconnected headers (like AMOUNT_DUE) to their respective invoice numbers globally.
+    global_inv_map = {}
+    for res in results:
+        p_header = res["header"]
+        i_num = str(p_header.get("INV_NUMBER", ""))
+        a_due = to_float(p_header.get("TOTAL_BILLED") or p_header.get("AMOUNT_DUE"))
+        if len(i_num) > 3 and a_due > 0:
+            if i_num not in global_inv_map or a_due > global_inv_map[i_num]:
+                global_inv_map[i_num] = a_due
+                
+
+
     for res in results:
         p_header = res["header"]
         for k, v in p_header.items():
@@ -2771,6 +2804,17 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
                         final_header[k] = v
         items = res["items"]
         if items:
+            # Inject chunk-specific header data directly into the line items
+            for item in items:
+                for k, v in p_header.items():
+                    if v and str(v).lower() not in ["n/a", "none"] and not item.get(k):
+                        item[k] = v
+                
+                # Apply strictly anchored cross-chunk headers to items (e.g. Total from Summary page to Details page)
+                cur_inv = str(item.get("INV_NUMBER", ""))
+                if cur_inv in global_inv_map:
+                    item["AMOUNT_DUE"] = global_inv_map[cur_inv]
+                    
             all_line_items.extend(items)
 
     # --- STEP 3: Recovery Pass (Identity Audit Check) ---
@@ -2803,18 +2847,52 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
             data["HEADER"]["AMOUNT_DUE"] = _computed_ad
     
     # Propagate Header Total to line item field if AI only extracted it in header
-    # This ensures consistency even if the LLM followed instructions to keep it in HEADER
-    header_amt_due = final_header.get("AMOUNT_DUE")
-    if header_amt_due and not any(item.get("PLAN_NAME") == "TOTAL" for item in all_line_items):
-        final_total = to_float(header_amt_due)
-        if final_total > 0:
-            print(f"    [V4] Adding synthetic TOTAL row from Header AMOUNT_DUE: {final_total}")
-            all_line_items.append({
-                "PLAN_NAME": "TOTAL",
-                "FIRSTNAME": "INVOICE TOTAL",
-                "CURRENT_PREMIUM": final_total,
-                "PLAN_TYPE": None  # Ensure no default for synthetic row
-            })
+    # Check for multiple distinct invoices and their amounts
+    inv_totals_map = {}
+    for item in all_line_items:
+        inv = str(item.get("INV_NUMBER") or "global")
+        amt = to_float(item.get("AMOUNT_DUE", 0))
+        if inv not in inv_totals_map:
+            inv_totals_map[inv] = {"amt": amt, "has_total_row": False}
+        elif amt > inv_totals_map[inv]["amt"]:
+            inv_totals_map[inv]["amt"] = amt
+        
+        # Check if a total row already exists for this block
+        _pn = str(item.get("PLAN_NAME") or "").upper()
+        _fn = str(item.get("FIRSTNAME") or "").upper()
+        if "TOTAL" in _pn or "TOTAL" in _fn:
+            inv_totals_map[inv]["has_total_row"] = True
+
+    added_synthetic_row = False
+    if len(inv_totals_map) > 1 or (len(inv_totals_map) == 1 and "global" not in inv_totals_map):
+        # We have concrete invoice clusters, map totals to them
+        for inv, info in inv_totals_map.items():
+            if not info["has_total_row"] and info["amt"] > 0:
+                print(f"    [V5] Adding synthetic TOTAL row for Invoice {inv}: {info['amt']}")
+                synthetic_row = {
+                    "PLAN_NAME": "TOTAL",
+                    "FIRSTNAME": "REPORTED INVOICE TOTAL (FOR AUDIT)",
+                    "CURRENT_PREMIUM": info["amt"],
+                    "PLAN_TYPE": None
+                }
+                if inv != "global":
+                    synthetic_row["INV_NUMBER"] = inv
+                all_line_items.append(synthetic_row)
+                added_synthetic_row = True
+                
+    # Safe Fallback to standard V4 global header (for documents where headers never hit the line items correctly)
+    if not added_synthetic_row and not any("TOTAL" in str(item.get("PLAN_NAME") or "").upper() for item in all_line_items):
+        header_amt_due = final_header.get("AMOUNT_DUE")
+        if header_amt_due:
+            final_total = to_float(header_amt_due)
+            if final_total > 0:
+                print(f"    [V4] Adding synthetic TOTAL row from Header AMOUNT_DUE: {final_total}")
+                all_line_items.append({
+                    "PLAN_NAME": "TOTAL",
+                    "FIRSTNAME": "REPORTED INVOICE TOTAL (FOR AUDIT)",
+                    "CURRENT_PREMIUM": final_total,
+                    "PLAN_TYPE": None
+                })
     
     # [V4][COVERAGE NORMALIZE] Programmatic fix for UHC coverage tier mapping
     all_line_items = normalize_uhc_coverage(all_line_items)
@@ -3023,6 +3101,11 @@ def process_single_pdf_to_excel(pdf_path: str, output_excel: str):
     cols = [c for c in cols if c in df.columns]
     df = df[cols]
     
+    # Group outputs by Invoice Number and name so they are separated cleanly in the list
+    sort_cols = [c for c in ['INV_NUMBER', 'LASTNAME', 'FIRSTNAME'] if c in df.columns]
+    if sort_cols:
+        df = df.sort_values(by=sort_cols, na_position='last')
+        
     # Save to Excel
     df.to_excel(output_excel, index=False, engine='openpyxl')
     
@@ -3081,6 +3164,11 @@ def process_multiple_pdfs(pdf_directory: str, output_excel: str):
     cols = [c for c in cols if c in df.columns]
     df = df[cols]
     
+    # Group outputs by Invoice Number and name so they are separated cleanly in the list
+    sort_cols = [c for c in ['INV_NUMBER', 'LASTNAME', 'FIRSTNAME'] if c in df.columns]
+    if sort_cols:
+        df = df.sort_values(by=sort_cols, na_position='last')
+        
     # Save to Excel
     df.to_excel(output_excel, index=False, engine='openpyxl')
     
@@ -3824,7 +3912,7 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                     fields_to_clear = [
                         "FIRSTNAME", "LASTNAME", "MEMBERID", "SSN", 
                         "PLAN_TYPE", "COVERAGE", "MIDDLENAME", "POLICYID",
-                        "SOURCE_FILE", "INV_DATE", "INV_NUMBER", "BILLING_PERIOD"
+                        "SOURCE_FILE", "INV_DATE", "BILLING_PERIOD"
                     ]
                     for field in fields_to_clear:
                         if field in row:
@@ -3968,7 +4056,38 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                 # for f in ["INV_DATE", "BILLING_PERIOD"]:
                 #     if row_report.get(f): row_report[f] = format_date_clean(row_report[f])
                 
-                final_total_rows.append(row_report)
+                # --- MULTI-INVOICE PROTECTION ---
+                # If we detected multiple invoice numbers, do NOT add a single global row 
+                # here as it will likely have the wrong invoice number or value for one of the groups.
+                # Instead, build a correctly-valued total row for each invoice.
+                unique_invs = set(str(mr.get("INV_NUMBER") or "") for mr in (member_rows + adjustment_rows))
+                unique_invs.discard("")
+                
+                if len(unique_invs) <= 1:
+                    final_total_rows.append(row_report)
+                else:
+                    print(f"    [V5] Multi-invoice ({len(unique_invs)} invoice #s): Building per-invoice total rows.")
+                    # Build a per-invoice total row from AMOUNT_DUE already injected into member items
+                    inv_amount_map = {}
+                    for mr in (member_rows + adjustment_rows):
+                        inv = str(mr.get("INV_NUMBER") or "")
+                        amt = to_float(mr.get("AMOUNT_DUE", 0))
+                        if inv and amt > 0:
+                            # Use the highest AMOUNT_DUE seen for each invoice (most likely the real total)
+                            if inv not in inv_amount_map or amt > inv_amount_map[inv]:
+                                inv_amount_map[inv] = amt
+                    
+                    for inv, inv_total in inv_amount_map.items():
+                        inv_row = {field: None for field in REQUIRED_FIELDS}
+                        inv_row.update(clean_header)
+                        inv_row["INV_NUMBER"] = inv
+                        inv_row["PLAN_NAME"] = "REPORTED INVOICE TOTAL (FOR AUDIT)"
+                        inv_row["CURRENT_PREMIUM"] = inv_total
+                        inv_row["SOURCE_FILE"] = source_filename
+                        final_total_rows.append(inv_row)
+                        print(f"    [V5] Added per-invoice total row: Invoice #{inv} = {inv_total}")
+
+
                 
                 # Enhanced Validation Logging
                 reported_val = header_total if header_total > 0 else llm_total_val
@@ -3985,7 +4104,11 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
             member_rows.sort(key=lambda x: (str(x.get("LASTNAME") or "").upper(), 
                                            str(x.get("FIRSTNAME") or "").upper()))
 
+            # Always use the standard combination - total rows now correctly 
+            # contain per-invoice amounts for multi-invoice documents
             rows = member_rows + adjustment_rows + final_total_rows
+
+
                 
     else:
         # Fallback for legacy/error case

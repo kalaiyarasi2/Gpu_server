@@ -75,61 +75,52 @@ class StructuredExcelExtractor:
         print(f"  [AI] Mapping columns: {columns}")
         prompt = f"""Map these CSV/Excel columns to our target fields.
         COLUMNS: {columns}
-        TARGET FIELDS: {REQUIRED_FIELDS} + ['MEMBER_NAME', 'EMPLOYEE_ID']
+        TARGET FIELDS: {REQUIRED_FIELDS} + ['MEMBER_NAME', 'FIRST_NAME', 'LAST_NAME', 'EMPLOYEE_ID']
         
         RULES:
         - Return ONLY JSON: {{"SourceColumn": "TargetField"}}
-        - Identify columns that contain premium amounts for specific benefits.
+        - Identify columns that contain premium amounts or billed amounts.
         - Mapping tips:
-          'Member Name' -> 'MEMBER_NAME'
-          'Member Id' -> 'MEMBERID'
+          'Member Name' or 'Enrollee Name' -> 'MEMBER_NAME'
+          'First Name' or 'Enrollee First Name' -> 'FIRST_NAME'
+          'Last Name' or 'Enrollee Last Name' -> 'LAST_NAME'
+          'Member Id' or 'Enrollee ID' -> 'MEMBERID'
           'Employee ID' -> 'EMPLOYEE_ID'
+          'Amount Due', 'Amount', 'Premium', 'Total Charge' -> 'TOTAL_PREMIUM'
+          'Coverage Option', 'Coverage', 'Enrolled Option' -> 'COVERAGE'
+          'Plan Name', 'Plan Description' -> 'PLAN_NAME'
           'Accident' or 'Accident Premium' -> 'ACCIDENT_PREMIUM'
           'Dental' or 'Dental Premium' -> 'DENTAL_PREMIUM'
           'Vision' or 'Vision Premium' -> 'VISION_PREMIUM'
           'STD' or 'STD Premium' -> 'STD_PREMIUM'
           'LTD' or 'LTD Premium' -> 'LTD_PREMIUM'
           'Basic Term Life' or 'Life Premium' -> 'LIFE_PREMIUM'
-          'Total Premium' -> 'TOTAL_PREMIUM'
           '.* Indicator' -> 'COVERAGE'
+        - NEGATIVE CONSTRAINTS: DO NOT map columns containing 'Header', 'Summary', 'Total', or 'Category' to name fields.
         """
         try:
+
             response = self.client.chat.completions.create(
                 model="gpt-4o",
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"}
             )
             return json.loads(response.choices[0].message.content)
+
         except Exception as e: 
             print(f"  [ERR] AI Mapping failed: {e}")
             return {}
 
-    def process_file(self, file_path: str) -> str:
-        print(f"\n[StructuredExcelExtractor] Processing: {file_path}")
-        file_path = Path(file_path)
-        ext = file_path.suffix.lower()
-        
-        if ext == ".csv":
-            try:
-                # Use names=range(100) to force a wide dataframe. 
-                # This prevents on_bad_lines='skip' from dropping data if header is wider than preamble.
-                df = pd.read_csv(file_path, header=None, engine='python', names=range(100), on_bad_lines='skip', encoding='utf-8-sig')
-            except Exception as e:
-                print(f"  [WARN] UTF-8 read failed ({e}). Trying latin-1 fallback...")
-                df = pd.read_csv(file_path, header=None, engine='python', names=range(100), on_bad_lines='skip', encoding='latin-1')
-            
-            # Drop completely empty columns that were forced by names=range(100)
-            df = df.dropna(axis=1, how='all')
-        else:
-            df = pd.read_excel(file_path, header=None)
+    def _extract_from_dataframe(self, df: pd.DataFrame, file_path: Path, sheet_name: Optional[str] = None) -> List[Dict]:
+        """Core extraction logic for a single sheet/dataframe."""
+        if sheet_name:
+            print(f"  [Sheet] Extracting from: {sheet_name}")
 
         # 1. Find the header row
         header_idx = -1
-        # High-signal keywords that definitely indicate a participant/member table
-        primary_keywords = ["participant name", "member name", "subscriber name", "employee name", "participant name"]
-        # Generic keywords that might be in summary or detail headers
-        secondary_keywords = ["member id", "participant id", "employee id", "ssn", "dob"]
-        
+        primary_keywords = ["participant name", "member name", "subscriber name", "employee name", "enrollee name", "enrollee last name"]
+        secondary_keywords = ["member id", "participant id", "employee id", "enrollee id", "ssn", "dob"]
+
         # Pass 1: Look for primary anchors
         for i, row in df.iterrows():
             row_str = " ".join(row.fillna("").astype(str)).lower()
@@ -147,19 +138,18 @@ class StructuredExcelExtractor:
                         break
         
         if header_idx == -1:
-            print("  [WARN] Header not found by keywords. Defaulting to row 1.")
-            header_idx = min(1, len(df)-1) if len(df) > 0 else 0
+            if sheet_name:
+                print(f"    [SKIP] Header not found in sheet: {sheet_name}")
+            return []
         
         if header_idx >= len(df):
-            print(f"  [ERR] Header index {header_idx} out of bounds for dataframe with {len(df)} rows.")
-            return None
+            return []
         
         # Extract global metadata (Billing Period/Inv Date) from above header
         global_billing_period = None
         global_inv_number = None
         global_inv_date = None
         
-        # Try to find Invoice Number in filename
         match_inv = re.search(r'(\d+\.\d+-\d+\.\d+)', file_path.name)
         if match_inv:
             global_inv_number = match_inv.group(1)
@@ -167,18 +157,14 @@ class StructuredExcelExtractor:
         for i in range(header_idx):
             row = df.iloc[i].fillna("").astype(str).tolist()
             row_str = " ".join(row).lower()
-            
-            # 1. Billing Period Regex (Range)
             if not global_billing_period:
                 match_bp = re.search(r'\d{1,2}/\d{1,2}/\d{2,4}\s*-\s*\d{1,2}/\d{1,2}/\d{2,4}', row_str)
                 if match_bp:
                     global_billing_period = match_bp.group(0)
             
-            # 2. Key-Value Extraction for Invoice Number/Date
             for idx, cell in enumerate(row):
                 cell_lower = cell.strip().lower()
                 if not global_inv_number and ("invoice_number" in cell_lower or "inv_number" in cell_lower or "invoice number" in cell_lower):
-                    # Value is likely in the next non-empty cell
                     for next_cell in row[idx+1:]:
                         val = next_cell.strip().replace("=", "").replace('"', "")
                         if val:
@@ -197,77 +183,80 @@ class StructuredExcelExtractor:
         
         # 3. Get Semantic Mapping
         mapping = self.get_ai_mapping(df.columns.tolist())
-        
-        # 4. Forward Fill identifiers for multi-line records
-        # Identify columns that are likely identifiers to fill
+        print(f"  [DEBUG] Final Mapping: {mapping}")
+
+        # 4. Forward Fill identifiers
         id_cols = [c for c, t in mapping.items() if t in ["MEMBER_NAME", "MEMBERID", "EMPLOYEE_ID", "BILLING_PERIOD"]]
-        
-        # Standard keywords if AI missed them - using more specific matching
-        # Avoid matching 'id' inside 'Accident' or other premium columns
         target_id_keywords = ["name", "id", "period", "date", "type", "ssn", "policy"]
         for col in df.columns:
             col_lower = col.lower()
-            # Explicitly exclude premium and amount columns from being used as identifiers for ffill
             if "premium" in col_lower or "amount" in col_lower:
                 continue
-            
-            # Check for identifiers using word boundaries or specific checks
-            if any(re.search(rf"\b{re.escape(k)}\b", col_lower) for k in target_id_keywords):
+            if any(re.search(rf"\b{re.escape(k)}\b", col_lower) for k in target_id_keywords + ["enrollee"]):
                 id_cols.append(col)
         
         id_cols = list(set(id_cols))
-        print(f"  [DEBUG] ID Columns for ffill: {id_cols}")
-        
         for col in id_cols:
             if col in df.columns:
                 df[col] = df[col].replace("", pd.NA).replace("nan", pd.NA).replace("None", pd.NA).ffill()
-
+        
         # 5. Flatten multi-plan columns
-        # Identify premium columns from mapping
-        premium_map = {c: t for c, t in mapping.items() if t.endswith("_PREMIUM") and t != "TOTAL_PREMIUM"}
-        # Fallback to keyword search if AI mapping is sparse or missed specific benefit columns
-        benefit_keywords = ["ACCIDENT", "DENTAL", "VISION", "LIFE", "LTD", "STD", "MEDICAL", "CRITICAL", "HOSPITAL", "AD&D"]
+        premium_map = {c: t for c, t in mapping.items() if t and t.endswith("_PREMIUM")}
+        benefit_keywords = ["ACCIDENT", "DENTAL", "VISION", "LIFE", "LTD", "STD", "MEDICAL", "CRITICAL", "HOSPITAL", "AD&D", "AMOUNT", "DUE", "CHARGE"]
+
         if not premium_map:
             for col in df.columns:
                 col_upper = col.upper()
                 if "TOTAL" in col_upper or "TYPE" in col_upper:
                     continue
-                
-                # Check for "Premium" in name OR if it matches a benefit keyword exactly (or with "Premium" suffix)
                 if "PREMIUM" in col_upper:
                     premium_map[col] = col.replace("Premium", "").strip().upper() + "_PREMIUM"
                 elif any(re.search(rf"\b{re.escape(k)}\b", col_upper) for k in benefit_keywords):
                     premium_map[col] = col.strip().upper() + "_PREMIUM"
 
-        # Detect row-per-benefit format: a single generic "Premium" column with a "Benefit Description" column
         benefit_desc_col = next((c for c in df.columns if c.strip().lower() == "benefit description"), None)
         is_row_per_benefit = benefit_desc_col is not None and any(
             c.strip().lower() in ("premium", "current premium") for c in df.columns
         )
 
-        rows = []
+        sheet_rows = []
         for _, row in df.iterrows():
             has_premium = False
-            
-            # Find Member Name and Id using mapping
-            # Try AI mapping first, then fall back to common column name variants
             name_col = next((c for c, t in mapping.items() if t == "MEMBER_NAME"), None)
             if name_col is None or name_col not in df.columns:
-                name_col = next((c for c in df.columns if c.strip().lower() in ("name", "member name", "employee name", "subscriber name", "participant name")), None)
-            id_col = next((c for c, t in mapping.items() if t == "MEMBERID"), None)
-            if id_col is None or id_col not in df.columns:
-                id_col = next((c for c in df.columns if c.strip().lower() in ("member id", "memberid", "member_id", "employee id", "subscriber id")), None)
-            emp_id_col = next((c for c, t in mapping.items() if t == "EMPLOYEE_ID"), None)
-            if emp_id_col is None or emp_id_col not in df.columns:
-                emp_id_col = next((c for c in df.columns if c.strip().lower() in ("employee id", "employeeid", "client policy")), None)
+                name_col = next((c for c in df.columns if c.strip().lower() in ("name", "member name", "employee name", "subscriber name", "participant name", "enrollee name")), None)
+            
+            first_name_col = next((c for c, t in mapping.items() if t == "FIRST_NAME"), None)
+            if first_name_col is None or first_name_col not in df.columns:
+                first_name_col = next((c for c in df.columns if c.strip().lower() in ("first name", "firstname", "enrollee first name", "given name")), None)
+            last_name_col = next((c for c, t in mapping.items() if t == "LAST_NAME"), None)
+            if last_name_col is None or last_name_col not in df.columns:
+                last_name_col = next((c for c in df.columns if c.strip().lower() in ("last name", "lastname", "enrollee last name", "surname")), None)
 
-            fullname = str(row.get(name_col, "")) if name_col else ""
+            fullname = None
+            if first_name_col and last_name_col:
+                f_val = str(row.get(first_name_col, "")).strip()
+                l_val = str(row.get(last_name_col, "")).strip()
+                if f_val and l_val and f_val.lower() != "nan" and l_val.lower() != "nan":
+                    if not any(kw in f_val.lower() or kw in l_val.lower() for kw in ("header", "summary", "total", "adj")):
+                        fullname = f"{l_val}, {f_val}"
+
+            if not fullname:
+                fullname = str(row.get(name_col, "")) if name_col else ""
+                if fullname and any(kw in fullname.lower() for kw in ("header", "summary", "total", "adj")):
+                    fullname = ""
+            
             if not fullname or fullname.lower() == "nan":
-                continue # Skip truly empty rows
+                continue
 
             last, first, mid = self.split_fullname(fullname)
-            
-            # Billing Period extraction
+            id_col = next((c for c, t in mapping.items() if t == "MEMBERID"), None)
+            if id_col is None or id_col not in df.columns:
+                id_col = next((c for c in df.columns if c.strip().lower() in ("member id", "memberid", "member_id", "employee id", "subscriber id", "enrollee id")), None)
+            emp_id_col = next((c for c, t in mapping.items() if t == "EMPLOYEE_ID"), None)
+            if emp_id_col is None or emp_id_col not in df.columns:
+                emp_id_col = next((c for c in df.columns if c.strip().lower() in ("employee id", "employeeid", "client policy", "enrollee id")), None)
+
             bp = row.get("Billing Period", global_billing_period)
             from_date = None
             if bp and isinstance(bp, str):
@@ -275,177 +264,149 @@ class StructuredExcelExtractor:
                 if date_match:
                     from_date = date_match.group(1)
 
-            # --- Row-per-benefit path (e.g. Unum) ---
-            # When each row already contains a single benefit + premium, emit directly
             if is_row_per_benefit:
                 prem_col = next((c for c in df.columns if c.strip().lower() in ("premium", "current premium")), None)
                 val = self.clean_currency(row.get(prem_col, 0)) if prem_col else 0.0
                 benefit_desc = str(row.get(benefit_desc_col, "")).strip()
-                # Skip header-like, total, or empty rows
                 if not benefit_desc or benefit_desc.lower() in ("nan", "benefit description", "total"):
                     continue
-                # Derive plan type from description text
                 desc_upper = benefit_desc.upper()
                 if "ACCIDENT" in desc_upper:   plan_type = "ACCIDENT"
                 elif "DENTAL" in desc_upper:   plan_type = "DENTAL"
                 elif "VISION" in desc_upper:   plan_type = "VISION"
                 elif "LIFE" in desc_upper:     plan_type = "LIFE"
-                elif "LTD" in desc_upper or "LONG TERM" in desc_upper: plan_type = "LTD"
-                elif "STD" in desc_upper or "SHORT TERM" in desc_upper: plan_type = "STD"
-                elif "MEDICAL" in desc_upper or "HEALTH" in desc_upper: plan_type = "MEDICAL"
+                elif "LTD" in desc_upper:     plan_type = "LTD"
+                elif "STD" in desc_upper:     plan_type = "STD"
+                elif "MEDICAL" in desc_upper:     plan_type = "MEDICAL"
                 else:                          plan_type = "OTHER"
                 item = {
-                    "INV_DATE": global_inv_date,
-                    "INV_NUMBER": global_inv_number,
-                    "BILLING_PERIOD": from_date or bp,
-                    "LASTNAME": last,
-                    "FIRSTNAME": first,
-                    "MIDDLENAME": mid,
-                    "SSN": None,
+                    "INV_DATE": global_inv_date, "INV_NUMBER": global_inv_number, "BILLING_PERIOD": from_date or bp,
+                    "LASTNAME": last, "FIRSTNAME": first, "MIDDLENAME": mid, "SSN": None,
                     "POLICYID": row.get(emp_id_col, None) if emp_id_col else None,
                     "MEMBERID": row.get(id_col, "") if id_col else "",
-                    "PLAN_NAME": benefit_desc,
-                    "PLAN_TYPE": plan_type,
-                    "COVERAGE": None,
-                    "CURRENT_PREMIUM": val,
-                    "ADJUSTMENT_PREMIUM": 0.0
+                    "PLAN_NAME": benefit_desc, "PLAN_TYPE": plan_type, "COVERAGE": None,
+                    "CURRENT_PREMIUM": val, "ADJUSTMENT_PREMIUM": 0.0
                 }
-                # Total Adjustment Amount maps to adjustment
-                adj_col = next((c for c in df.columns if "adjustment" in c.lower()), None)
-                if adj_col:
-                    adj_val = self.clean_currency(row.get(adj_col, 0))
-                    if adj_val != 0:
-                        item["ADJUSTMENT_PREMIUM"] = adj_val
-                rows.append(item)
-                continue  # Skip the column-per-benefit loop below
+                sheet_rows.append(item)
+                continue
 
             for p_col, p_type in premium_map.items():
                 val = self.clean_currency(row.get(p_col, 0))
                 if val != 0:
                     has_premium = True
-                    
-                    # Benefit prefix (e.g., "Dental", "Vision", "Accident")
                     benefit_prefix = p_col.replace("Premium", "").strip()
                     benefit_type = p_type.replace("_PREMIUM", "").upper()
                     
-                    # Coverage extraction: check indicator column next to it
-                    # Usually "p_col Family Indicator"
                     cov_col = f"{benefit_prefix} Family Indicator"
                     coverage = row.get(cov_col, None)
-                    
                     if not coverage or str(coverage).lower() == "nan":
-                        # Fallback to AI mapping for coverage, but IGNORE Volumes
-                        # Guard: benefit_prefix may be empty if the column was named exactly "Premium"
                         bp_word = benefit_prefix.split()[0] if benefit_prefix.strip() else None
-                        coverage = next((row[c] for c, t in mapping.items() 
-                                       if t == "COVERAGE" and (bp_word is None or bp_word in c) 
-                                       and "volume" not in c.lower()), None)
+                        coverage = next((row[c] for c, t in mapping.items() if t == "COVERAGE" and (bp_word is None or bp_word in c) and "volume" not in c.lower()), None)
+                    if not coverage or str(coverage).lower() == "nan":
+                        coverage = next((row[c] for c in df.columns if c.strip().lower() in ("coverage option", "coverage", "plan option")), None)
 
-                    # Normalize coverage
                     cov_str = str(coverage).upper() if coverage else ""
-                    # Handle cases where Volume (like 50000) might have leaked in
                     if cov_str.replace(".", "").isdigit():
-                        coverage = None # Likely a Volume, not a Coverage Indicator
+                        coverage = None
                     else:
                         if "EMP" in cov_str and "CH" in cov_str: coverage = "EC"
                         elif "EMP" in cov_str and "SP" in cov_str: coverage = "ES"
+                        elif "EE" in cov_str and "ONLY" in cov_str: coverage = "EE"
                         elif "FAM" in cov_str: coverage = "FAM"
+                        elif "EE + SP" in cov_str: coverage = "ES"
+                        elif "EE + CH" in cov_str: coverage = "EC"
                         elif "EMP" in cov_str: coverage = "EE"
                         elif "CH" in cov_str: coverage = "EC"
                         elif "SP" in cov_str: coverage = "ES"
 
-                    # Fix Plan Type if it's too generic (like "CURRENT")
-                    if benefit_type in ("CURRENT", "", "_"):
-                        # Try benefit_prefix first, then Benefit Description column
+                    if benefit_type in ("CURRENT", "TOTAL", "", "_"):
                         search_str = benefit_prefix.upper()
-                        if not search_str and benefit_desc_col:
-                            search_str = str(row.get(benefit_desc_col, "")).upper()
+                        if not search_str and benefit_desc_col: search_str = str(row.get(benefit_desc_col, "")).upper()
+                        fn_upper = file_path.name.upper()
+                        if not search_str or search_str in ("TOTAL", "AMOUNT DUE"): search_str += " " + fn_upper
                         if "ACCIDENT" in search_str:   benefit_type = "ACCIDENT"
                         elif "DENTAL" in search_str:   benefit_type = "DENTAL"
                         elif "VISION" in search_str:   benefit_type = "VISION"
                         elif "LIFE" in search_str:     benefit_type = "LIFE"
-                        elif "LTD" in search_str or "LONG TERM" in search_str: benefit_type = "LTD"
-                        elif "STD" in search_str or "SHORT TERM" in search_str: benefit_type = "STD"
-                        elif "MEDICAL" in search_str or "HEALTH" in search_str: benefit_type = "MEDICAL"
-                        # If still generic, use Benefit Description value directly
-                        elif benefit_desc_col:
-                            benefit_type = str(row.get(benefit_desc_col, "OTHER")).strip().upper() or "OTHER"
+                        elif "LTD" in search_str:     benefit_type = "LTD"
+                        elif "STD" in search_str:     benefit_type = "STD"
+                        elif "MEDICAL" in search_str:     benefit_type = "MEDICAL"
+                        elif benefit_desc_col: benefit_type = str(row.get(benefit_desc_col, "OTHER")).strip().upper() or "OTHER"
 
+                    is_adj_sheet = sheet_name and any(x in sheet_name.lower() for x in ("adj", "change", "term"))
+                    
                     item = {
                         "INV_DATE": row.get("Billing Due Date", global_inv_date),
                         "INV_NUMBER": global_inv_number,
                         "BILLING_PERIOD": from_date or bp,
-                        "LASTNAME": last,
-                        "FIRSTNAME": first,
-                        "MIDDLENAME": mid,
-                        "SSN": None,
+                        "LASTNAME": last, "FIRSTNAME": first, "MIDDLENAME": mid, "SSN": None,
                         "POLICYID": row.get(emp_id_col, None) if emp_id_col else None,
                         "MEMBERID": row.get(id_col, "") if id_col else "",
                         "PLAN_NAME": str(row.get(benefit_desc_col, p_col)).strip() if (benefit_desc_col and benefit_prefix == "") else p_col,
                         "PLAN_TYPE": benefit_type,
                         "COVERAGE": coverage,
-                        "CURRENT_PREMIUM": val,
-                        "ADJUSTMENT_PREMIUM": 0.0
+                        "CURRENT_PREMIUM": 0.0 if is_adj_sheet else val,
+                        "ADJUSTMENT_PREMIUM": val if is_adj_sheet else 0.0
                     }
-                    
-                    # Handle Adjustments
-                    if str(row.get("Premium Type", "")).lower() == "premium adjustment":
+                    if not is_adj_sheet and str(row.get("Premium Type", "")).lower() == "premium adjustment":
                         item["ADJUSTMENT_PREMIUM"] = val
                         item["CURRENT_PREMIUM"] = 0.0
-                    
-                    rows.append(item)
-            
-            # Special case for "Premium Adjustment" row specifically if it missed standard columns
-            if not has_premium and str(row.get("Premium Type", "")).lower() == "premium adjustment":
-                # Look for ANY non-zero value that might be an adjustment
-                for col in df.columns:
-                    if "premium" in col.lower() and "total" not in col.lower():
-                        val = self.clean_currency(row.get(col, 0))
-                        if val != 0:
-                            # Add specifically as adjustment
-                            # (already handled in loop above if p_col was in premium_map)
-                            pass
+                    sheet_rows.append(item)
+        return sheet_rows
 
-        if not rows:
-            print("  [ERR] No records extracted.")
+    def process_file(self, file_path: str) -> str:
+        print(f"\n[StructuredExcelExtractor] Processing: {file_path}")
+        file_path = Path(file_path)
+        ext = file_path.suffix.lower()
+        
+        all_rows = []
+        if ext == ".csv":
+            try:
+                df = pd.read_csv(file_path, header=None, engine='python', names=range(100), on_bad_lines='skip', encoding='utf-8-sig')
+            except:
+                df = pd.read_csv(file_path, header=None, engine='python', names=range(100), on_bad_lines='skip', encoding='latin-1')
+            df = df.dropna(axis=1, how='all')
+            all_rows = self._extract_from_dataframe(df, file_path)
+        else:
+            xl = pd.ExcelFile(file_path)
+            for sheet in xl.sheet_names:
+                df = xl.parse(sheet, header=None)
+                all_rows.extend(self._extract_from_dataframe(df, file_path, sheet_name=sheet))
+
+        if not all_rows:
+            print("  [ERR] No records extracted from any sheet.")
             return None
 
-        # 6. Final Standardization
-        result_df = pd.DataFrame(rows)
+        result_df = pd.DataFrame(all_rows)
         for field in REQUIRED_FIELDS:
-            if field not in result_df.columns:
-                result_df[field] = None
-        
+            if field not in result_df.columns: result_df[field] = None
         result_df = result_df[REQUIRED_FIELDS]
 
         # Add Totals
-        total_rows = []
         sum_current = result_df["CURRENT_PREMIUM"].sum()
         sum_adj = result_df["ADJUSTMENT_PREMIUM"].sum()
-        
-        total_rows.append({col: None for col in REQUIRED_FIELDS})
-        total_rows[-1]["PLAN_NAME"] = "TOTAL CURRENT PREMIUM"
-        total_rows[-1]["CURRENT_PREMIUM"] = sum_current
-        total_rows.append({col: None for col in REQUIRED_FIELDS})
-        total_rows[-1]["PLAN_NAME"] = "TOTAL ADJUSTMENTS"
-        total_rows[-1]["ADJUSTMENT_PREMIUM"] = sum_adj
-        total_rows.append({col: None for col in REQUIRED_FIELDS})
-        total_rows[-1]["PLAN_NAME"] = "GRAND TOTAL"
-        total_rows[-1]["CURRENT_PREMIUM"] = sum_current + sum_adj
-        
+        total_rows = [
+            {col: None for col in REQUIRED_FIELDS},
+            {**{col: None for col in REQUIRED_FIELDS}, "PLAN_NAME": "TOTAL CURRENT PREMIUM", "CURRENT_PREMIUM": sum_current},
+            {**{col: None for col in REQUIRED_FIELDS}, "PLAN_NAME": "TOTAL ADJUSTMENTS", "ADJUSTMENT_PREMIUM": sum_adj},
+            {**{col: None for col in REQUIRED_FIELDS}, "PLAN_NAME": "GRAND TOTAL", "CURRENT_PREMIUM": sum_current + sum_adj}
+        ]
         result_df = pd.concat([result_df, pd.DataFrame(total_rows)], ignore_index=True)
 
-        output_file = self.output_dir / f"{file_path.stem}_v2.xlsx"
-        result_df.to_excel(output_file, index=False)
-        print(f"  [OK] Extraction successful: {output_file.name}")
-        return str(output_file)
+        output_xlsx = self.output_dir / f"{file_path.stem}_v2.xlsx"
+        output_json = self.output_dir / f"{file_path.stem}_v2.json"
+        
+        result_df.to_excel(output_xlsx, index=False)
+        with open(output_json, 'w') as f:
+            json.dump(all_rows, f, indent=4)
+            
+        print(f"  [OK] Extraction successful: {output_xlsx.name} and {output_json.name}")
+        return str(output_xlsx)
 
 if __name__ == "__main__":
     import sys
-    # Load .env explicitly if needed
     env_path = Path(__file__).parent.parent.parent / ".env"
     load_dotenv(dotenv_path=env_path)
-    
     if len(sys.argv) < 2:
         print("Usage: python structured_excel_extractor.py <file_path>")
     else:
