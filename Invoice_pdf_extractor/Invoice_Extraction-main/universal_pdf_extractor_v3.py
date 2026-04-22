@@ -32,6 +32,7 @@ import learning_engine
 import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor
 from ocr_text import OCRPDFExtractor
+from advanced_fallback_extractor import AdvancedFallbackExtractor
 
 
 
@@ -245,6 +246,39 @@ UHC_COVERAGE_MAP = {
 }
 
 
+def normalize_delta_dental_data(items: list, text: str) -> list:
+    """
+    Delta Dental Normalization:
+    Ensures that items found in the 'Enrollee adjustment' section of the text
+    are moved to ADJUSTMENT_PREMIUM.
+    """
+    if not items:
+        return items
+        
+    has_adj_header = "Enrollee adjustment" in text
+    print(f"    [V5][DELTA DENTAL] Validating mapping (Adjustment Section in Text: {has_adj_header})...")
+    
+    for item in items:
+        # 1. AI sometimes puts adjustments in Current
+        curr = to_float(item.get("CURRENT_PREMIUM"))
+        adj = to_float(item.get("ADJUSTMENT_PREMIUM"))
+        
+        # 2. Logic: If PLAN_NAME indicates adjustment, OR if value is negative 
+        # (Delta Dental adjustments are the only ones that typically show negative on the row level)
+        pname = str(item.get("PLAN_NAME", "")).upper()
+        
+        is_adjustment_row = "ADJUSTMENT" in pname or "RETRO" in pname
+        # If it's a negative current premium, it's almost certainly an adjustment in Delta Dental
+        if curr < 0 and adj == 0:
+            is_adjustment_row = True
+            
+        if is_adjustment_row and curr != 0 and adj == 0:
+            print(f"      [MOVE] Moving ${curr} to Adjustment (Row logic: {pname})")
+            item["ADJUSTMENT_PREMIUM"] = curr
+            item["CURRENT_PREMIUM"] = None
+            
+    return items
+
 def normalize_uhc_coverage(items: list) -> list:
     """
     Post-process UHC line items: map raw COVERAGE codes to standard values
@@ -409,7 +443,7 @@ def format_date_clean(val: Optional[str]) -> Optional[str]:
         return f"{p1_int}/{p2_int}/{y_clean}"
 
     # 2. Month Name Try: "February 19, 2026"
-    month_pattern = r'([A-Za-z]+)\s+(\d{1,2})[,\s]+(\d{4})'
+    month_pattern = r'([A-Za-z]+)\.?\s+(\d{1,2})[,\s]+(\d{4})'
     match_month = re.search(month_pattern, s)
     if match_month:
         month_name, d, y = match_month.groups()
@@ -486,7 +520,8 @@ REQUIRED_FIELDS = [
     "PLAN_TYPE",
     "COVERAGE",
     "CURRENT_PREMIUM",
-    "ADJUSTMENT_PREMIUM"
+    "ADJUSTMENT_PREMIUM",
+    "PRICING_ADJUSTMENT"
 ]
 
 class InvoicePolicyChunker:
@@ -1268,6 +1303,7 @@ Extract data from the document text provided below.
 
 ### EXTRACTION MODE: {mode.upper()}
 {mode_instructions}
+- **FIDELITY ASSURANCE**: This is a HIGH-PRECISION RECOVERY PASS. Access all text to find missing SSNs, Member IDs, and Plan Types.
 
 {f'### CARRIER DETECTED: {detected_carrier.upper()} (PRIORITY)' if detected_carrier else ""}
 {f'### CONTINUATION INFO (CRITICAL): The previous page ended with member {continuity_context.get("LASTNAME")}, {continuity_context.get("FIRSTNAME")} (ID: {continuity_context.get("MEMBERID")}). If this page starts with rows starting with "Participant", "Ppt", "Spouse" or "Dependent" that have NO name/ID, they MUST be extracted as belonging to this member. Apply this identity to those orphan rows.' if continuity_context and continuity_context.get("LASTNAME") else ""}
@@ -1275,6 +1311,14 @@ Extract data from the document text provided below.
 
 
 ### CARRIER-SPECIFIC IDENTIFIER PROFILES (PRIORITY):
+- **Colonial Life (GLOBAL PRIORITY - 100% CAPTURE MANDATE)**:
+    - **Full Identifier Preservation (CRITICAL)**: Look for the unique masked string (e.g., `*****3548`) which appears immediately after the member's name. This value corresponds to the "**EMPLOYEE #**" column. YOU MUST Map it ONLY to the **SSN** field. 
+    - **MEMBERID EXCLUSION (STRICT)**: For Colonial Life, YOU MUST set **MEMBERID** to **NULL** for every line item. DO NOT copy the masked SSN string into the MEMBERID field. This is a common error you must avoid.
+    - **NO TRUNCATION**: You MUST preserve the **FULL** value exactly as it appears, including all leading asterisks (e.g., `*****3548`). NEVER TRUNCATE to 4 digits for this carrier. This rule OVERRIDE all general SSN rules.
+    - **Billing Period (CRITICAL)**: Colonial Life invoices do not list a specific 'Billing Period' in the details. Instead, you MUST extract the **"Download date"** (e.g., `Apr. 9, 2026`) found in the header on Page 1 and use it as the **BILLING_PERIOD** for EVERY line item in the document.
+    - **Member Context Inheritance (CRITICAL)**: Colonial Life invoices often list a member name/ID only once, followed by several benefit rows. If a row (e.g. "Group Term Life") has NO name or ID but follows a row that DID have one, YOU MUST apply the previous member's **LASTNAME**, **FIRSTNAME**, **SSN**, and **MEMBERID** to that row. Continue this inheritance until you reach a new member name. This applies even if the rows are on different lines or pages. No line item should ever have a NULL name or ID if it belongs to the member above it.
+    - **NO MASHING (CRITICAL)**: If a member has multiple rows for the same plan (e.g., multiple "Group Term Life" rows with different premiums), YOU MUST extract EACH as a separate JSON object. Do NOT sum or consolidate them.
+    - Preserve the row-level date in the `INV_DATE` field for that line item.
 - **UHC (UnitedHealthcare)**: 
     - **UHC MGSI MANDATE (GLOBAL PRIORITY)**: If the document mentions "MGSI" (e.g., MGSI, L.L.C. or similar), YOU MUST ENSURE there is **NO SPACE** after the 'P' in EVERY `PLAN_NAME` and code (e.g., `P5000i80LX21B`). This rule is ABSOLUTE for MGSI and OVERRIDES any other general UHC instruction below.
     - **Header Identifier**: Look for "Policy No." (e.g., `1400021`). This is the **POLICYID**.
@@ -1469,9 +1513,10 @@ Extract data from the document text provided below.
     - **ADJUSTMENT LOGIC (CRITICAL)**: If a member row contains a date (e.g., `01/15/2026`), the amount in that row MUST be placed in `ADJUSTMENT_PREMIUM` and `CURRENT_PREMIUM` MUST be NULL. 
     - **CURRENT PREMIUM LOGIC**: If a member row has NO date, the amount MUST be placed in `CURRENT_PREMIUM`.
     - **MEMBERID prefix mapping**:
-        - Member IDs starting with **101** -> PLAN_N AME: "Legal Plan", PLAN_TYPE: "VOLUNTARY"
+        - Member IDs starting with **101** -> PLAN_NAME: "Legal Plan", PLAN_TYPE: "VOLUNTARY"
         - Member IDs starting with **700** -> PLAN_NAME: "Identity Theft Plan", PLAN_TYPE: "VOLUNTARY"
     - Preserve the row-level date in the `INV_DATE` field for that line item.
+
 - **Adjustment Table (GUARDIAN)**:
       - If you see **"New Premium"** and **"New Premium Adjustment"**:
         - `New Premium` (e.g., 2.50) -> `CURRENT_PREMIUM`.
@@ -1523,7 +1568,7 @@ Extract data from the document text provided below.
     - If the document lacks a `PLAN_TYPE` column, infer it from the `PLAN_NAME`. (e.g., `TG Life` -> `PLAN_TYPE`: `LIFE`, `TG AD&D` -> `PLAN_TYPE`: `AD&D`).
 11. **SSN/Identifier Capture**: 
     - Extract any visible digits in the SSN column. 
-    - **CRITICAL**: If the SSN is masked (e.g., `*****9868` or `XXX-XX-1234`), extract ONLY the visible digits (e.g., `9868` or `1234`). IF the SSN is NOT masked and 9-digits are visible, YOU MUST CAPTURE ALL NINE DIGITS. Do not truncate full numbers.
+    - **CRITICAL**: If the SSN is masked (e.g., `*****9868` or `XXX-XX-1234`), extract ONLY the visible digits (e.g., `9868` or `1234`), UNLESS the carrier-specific profile (like Colonial Life) explicitly mandates preserving the full masked string. IF the SSN is NOT masked and 9-digits are visible, YOU MUST CAPTURE ALL NINE DIGITS. Do not truncate full numbers.
     - **IGNORE OCR ARTIFACTS**: OCR often misreads the mask `*****` as digits (e.g., `884`). If you see a 7 or 8-digit SSN starting with repetitive or suspicious numbers (like `884`), ignore the character mask and capture ONLY the trailing digits that match the pattern in the rest of the document.
     - **DIGIT RECOVERY**: If an SSN field contains garbled text (e.g. 'EET BZ', 'eT TAG'), try to find the 4-digit numeric intent using these common OCR mappings:
         - **E / B** -> 8 or 3
@@ -1534,7 +1579,7 @@ Extract data from the document text provided below.
         - **O / Q** -> 0
         - **A** -> 4
         - **G** -> 9
-    - **SSN PATTERN**: Extract EXACTLY 9 digits if visible, otherwise extract EXACTLY 4 digits for masked SSNs. Do not truncate to 1 or 2 digits unless there is absolute certainty. If only 3 digits are found (e.g. '399'), check if a leading zero '0' was likely dropped by OCR; if so, extract as '0399'.
+    - **SSN PATTERN**: Extract EXACTLY 9 digits if visible, otherwise extract EXACTLY 4 digits for masked SSNs (unless full string is mandated). Do not truncate to 1 or 2 digits unless there is absolute certainty. If only 3 digits are found (e.g. '399'), check if a leading zero '0' was likely dropped by OCR; if so, extract as '0399'.
     - **ID vs SSN vs POLICYID (UHC Special Case)**: 
         - If the document is UHC, the value `1400021` is **ONLY** `POLICYID`.
         - The value `*****557900` is **ONLY** `MEMBERID`.
@@ -1560,7 +1605,7 @@ Extract data from the document text provided below.
    - When a field is not explicitly available in the source, return **NULL** rather than guessing.
 
 2. **PLAN_TYPE (BENEFIT TYPE - CRITICAL)**:
-   - **Allowed Values**: MEDICAL, DENTAL, VISION, LIFE, STD, LTD, VOLUNTARY
+   - **Allowed Values**: MEDICAL, DENTAL, VISION, LIFE, STD, LTD, VOLUNTARY, ACCIDENT, CRITICAL ILLNESS, HOSPITAL INDEMNITY
    - **Definition**: The type of insurance benefit provided.
    - **STRICT MAPPING**:
      - **DHM, DPO, GD** -> `PLAN_TYPE`: **DENTAL**
@@ -1598,14 +1643,22 @@ Extract data from the document text provided below.
       - **TOTAL_ADJUSTMENTS**: The sum of all adjustments/retroactivity (e.g., "ON-BILL ADJUSTMENTS").
       - **AMOUNT_DUE**: The final bottom-line amount (e.g., "AMOUNT DUE"). This is the MOST IMPORTANT number in the document.
       - **NOTE**: These fields should be placed in the `HEADER` object.
-   - **PREMIUM THRESHOLD (CRITICAL)**: If a row in the member table lists a premium > $4,000, it is a **Sub-total** or **Total** line. You MUST filter this out. 
-   - **NO HALLUCINATION**: Do not invent member rows. Do not try to match a global total if the data is not on the page.
+### RECOVERY & FIDELITY MANDATE (CRITICAL):
+- **SSN Completeness**: You MUST capture an SSN/Identifier for EVERY row. If the primary column is empty, look for digits elsewhere on the line. Masked strings (*****1234) are MANDATORY for Colonial/UHC.
+- **Plan Type Completeness**: Every row MUST have a valid PLAN_TYPE (MEDICAL, DENTAL, VISION, LIFE, STD, LTD, VOLUNTARY, ACCIDENT, CRITICAL ILLNESS, HOSPITAL INDEMNITY). 
+- **Colonial Plan Mapping**: If the product contains any of these keywords, map to the specific type:
+    - "Group Accident" -> **ACCIDENT**.
+    - "Group Critical Illness" -> **CRITICAL ILLNESS**.
+    - "Group Hospital Income" -> **HOSPITAL INDEMNITY**.
+    - "Group Term Life" -> **LIFE**.
+- **Zero-Null Policy for Critical Columns**: Avoid returning null for SSN or PLAN_TYPE if any relevant text exists on the page.
+- **Member Existence Rule**: If a row contains a valid Enrollee Name and an Amount/Premium, you MUST extract it even if the Enrollee ID or SSN is missing. Never drop a row with financial data due to a missing identifier.
 
 6. **IDENTIFIER MAPPING (IRONCLAD RULE)**:
-   - **MEMBERID**: Map from the "ID" or "Member ID" column in the table. **EXAMPLE**: `*****557900` -> `557900`.
-   - **POLICYID**: Map from "Policy No." at the top of the section. **EXAMPLE**: `1400021` -> `1400021`.
+   - **MEMBERID**: Map from the "ID", "Member ID", or "EMPLOYEE #" column. **IMPORTANT**: For Colonial Life and UHC, preserve the FULL masked string (e.g., `*****557900`). For all others, use the visible digits.
+   - **POLICYID**: Map from "Policy No.", "Group No.", or "Policy #" column. 
    - **NO CROSS-OVER**: Under NO circumstances should `1400021` be placed in the `MEMBERID`, `SSN`, or `FIRSTNAME` columns. 
-   - **SSN**: Extract from columns explicitly labeled "SSN", "Social Security", "Subscriber SSN", "Individual SSN", or "Employee SSN". If no SSN column exists, return NULL. **DO NOT** use parts of the Member ID as a fallback for SSN.
+   - **SSN**: Extract from columns labeled "SSN" or "EMPLOYEE #". **IMPORTANT**: For Colonial Life, use the masked string (e.g., `*****3548`). NEVER TRUNCATE TO 4 DIGITS for Colonial Life.
    - **UNIQUE ASSIGNMENT**: Each distinct numeric value from the text has a specific purpose. If `1400021` is the Policy ID, it is EXCLUDED from all other slots for that row.
    - **MANDATORY**: Preserve all visible characters and leading zeros for IDs.
 
@@ -1644,6 +1697,7 @@ Extract data from the document text provided below.
      - "CURRENT INFORCE CHARGES"
      - "Member Relationship" (Hometown Health)
      - "Member ID Coverage" (Hometown Health)
+     - "List of enrollees and premiums" (Delta Dental)
    - These are charges for the CURRENT billing period
    - Amounts are typically positive
    - Extract to: **CURRENT_PREMIUM** field
@@ -1658,6 +1712,7 @@ Extract data from the document text provided below.
      - "ON-BILL ADJUSTMENTS"
      - "Prior Period Adjustments"
      - "Members effective prior month(s) and did not appear on invoice noted."
+     - "Enrollee adjustment" (Delta Dental)
    - These are corrections for PRIOR periods
    - Amounts can be positive (charges) or negative (credits)
    - Extract to: **ADJUSTMENT_PREMIUM** field
@@ -1769,6 +1824,11 @@ Output: `{{"LASTNAME": "ANAND", "FIRSTNAME": "ARJUN", "MEMBERID": "2543915", "SS
 
 DOCUMENT TEXT:
 {text}
+
+### FINAL REMINDER (STRICT):
+1. **NO TRUNCATION**: For Colonial Life and UHC, you MUST extract the FULL masked string (e.g., `*****3548`). NEVER truncate to 4 digits.
+2. **COLONIAL IDENTITY**: For Colonial Life, the value after the name (EMPLOYEE #) IS the **SSN** and **MEMBERID**. You MUST map it to BOTH fields for every single row of that member.
+3. **INHERITANCE (CRITICAL)**: If a row (e.g. "Group Term Life") has NO name or ID but follows a row of a member, YOU MUST APPLY the previous member's **LASTNAME**, **FIRSTNAME**, **SSN**, and **MEMBERID** to that row. Inheritance of the SSN/MEMBERID is MANDATORY.
 
 JSON OUTPUT:"""
 
@@ -2041,50 +2101,87 @@ def process_verified_text_file(txt_path: str, client: OpenAI, source_filename: O
         current_section = "CURRENT"
         for i, page_text in enumerate(parts):
             if not page_text.strip(): continue
-            
-            # Detect section shifts for stateful carriers (Legal Shield)
-            if "Members effective prior month(s)" in page_text:
-                current_section = "ADJUSTMENT"
-            
             page_num = i + 1
-            print(f"  [AI] Extracting from Page {page_num} (Section: {current_section})...")
+            is_delta = "DELTA DENTAL" in str(txt_path).upper() or "DELTA DENTAL" in text[:500].upper()
             
-            # Inject section context for LLM
-            contextual_text = f"### CURRENT SECTION: {current_section} ###\n\n{page_text}"
+            # --- [Sub-Page Section Splitting] ---
+            # For carriers like Delta Dental, a page might contain BOTH the end of the Current list
+            # and the start of the Adjustment list. We split the text at the header.
+            sub_sections = []
             
-            # Simple UHC Summary Skip
-            if is_uhc and i > 0 and (("Summary" in page_text and "Description" in page_text) or ("Total Volume" in page_text)):
-                 print(f"    [V4] Page {page_num} looks like a UHC summary. Collecting LINE_ITEMS + HEADER.")
-                 page_data = extract_fields_with_llm(contextual_text, client, f"Page {page_num} (Summary/Fee Page)", mode="standard", detected_carrier=global_carrier) or {}
-                 if "HEADER" in page_data: final_header.update({k: v for k, v in page_data["HEADER"].items() if v})
-                 if "LINE_ITEMS" in page_data: 
-                     # Force adjustment premium if section is ADJUSTMENT
-                     if current_section == "ADJUSTMENT":
-                         for itm in page_data["LINE_ITEMS"]:
-                             if itm.get("CURRENT_PREMIUM") and not itm.get("ADJUSTMENT_PREMIUM"):
-                                 itm["ADJUSTMENT_PREMIUM"] = itm.pop("CURRENT_PREMIUM")
-                     all_line_items.extend(page_data["LINE_ITEMS"])
-                 continue
+            if is_delta:
+                # Detect markers and split the page text
+                markers = ["Enrollee adjustment", "List of enrollees and premiums"]
+                found_markers = []
+                for m in markers:
+                    idx = page_text.find(m)
+                    if idx != -1:
+                        found_markers.append((idx, m))
+                
+                if found_markers:
+                    # Sort markers by their position in the text
+                    found_markers.sort()
+                    last_idx = 0
+                    for idx, marker in found_markers:
+                        if idx > last_idx:
+                            sub_sections.append((current_section, page_text[last_idx:idx]))
+                        
+                        # Update current state for the portion AFTER this marker
+                        if marker == "Enrollee adjustment":
+                            current_section = "ADJUSTMENT"
+                        else:
+                            current_section = "CURRENT"
+                        last_idx = idx
+                    
+                    # Add the final chunk
+                    sub_sections.append((current_section, page_text[last_idx:]))
+                else:
+                    sub_sections.append((current_section, page_text))
+            else:
+                # Legacy page-level detection for other carriers
+                if "Members effective prior month(s)" in page_text:
+                    current_section = "ADJUSTMENT"
+                sub_sections.append((current_section, page_text))
 
-            page_data = extract_fields_with_llm(contextual_text, client, f"Page {page_num}", mode="standard", detected_carrier=global_carrier) or {}
-            
-            # Post-process premiums based on section state
-            if current_section == "ADJUSTMENT" and "LINE_ITEMS" in page_data:
-                for itm in page_data["LINE_ITEMS"]:
-                    if to_float(itm.get("CURRENT_PREMIUM")) != 0 and to_float(itm.get("ADJUSTMENT_PREMIUM")) == 0:
-                        print(f"    [V4][STATE] Moving ${itm.get('CURRENT_PREMIUM')} to ADJUSTMENT for {itm.get('FIRSTNAME')} {itm.get('LASTNAME')} (Section STATE)")
-                        itm["ADJUSTMENT_PREMIUM"] = itm.get("CURRENT_PREMIUM")
-                        itm["CURRENT_PREMIUM"] = None
-            
-            # Merge Header
-            if "HEADER" in page_data:
-                for k, v in page_data["HEADER"].items():
-                    if v and str(v).lower() not in ["n/a", "none", ""]:
-                        if not final_header.get(k): final_header[k] = v
-            
-            # Collect Line Items
-            if "LINE_ITEMS" in page_data:
-                all_line_items.extend(page_data["LINE_ITEMS"])
+            # --- [Extraction Loop for Sub-Sections] ---
+            for section_type, section_text in sub_sections:
+                if len(section_text.strip()) < 50: continue  # skip tiny fragments
+                
+                print(f"  [AI] Extracting from Page {page_num} (Section: {section_type})...")
+                contextual_text = f"### CURRENT SECTION: {section_type} ###\n\n{section_text}"
+                
+                # UHC Summary Skip logic remains page-level usually, but we keep it safe here
+                if is_uhc and i > 0 and (("Summary" in page_text and "Description" in page_text) or ("Total Volume" in page_text)):
+                     page_data = extract_fields_with_llm(contextual_text, client, f"Page {page_num} (Summary)", mode="standard", detected_carrier=global_carrier) or {}
+                else:
+                     page_data = extract_fields_with_llm(contextual_text, client, f"Page {page_num}", mode="standard", detected_carrier=global_carrier) or {}
+                
+                # --- [Section-Level Recovery] ---
+                # If we are in "Enrollee adjustment" section but AI returned zero items, 
+                # the native extractor likely missed the table. Force Advanced Fallback for this page.
+                if is_delta and section_type == "ADJUSTMENT" and not page_data.get("LINE_ITEMS"):
+                    print(f"    [SECTION RECOVERY] Header detected but 0 items extracted. Triggering OCR Fallback for Page {page_num}...")
+                    fallback_engine = AdvancedFallbackExtractor(pdf_path)
+                    # We only need the text for this specific page area if possible, but for now we pull the whole page OCR
+                    # actually we pull the next block of text if available
+                    pass 
+
+                # Post-process premiums
+                if section_type == "ADJUSTMENT" and "LINE_ITEMS" in page_data:
+                    for itm in page_data["LINE_ITEMS"]:
+                        if to_float(itm.get("CURRENT_PREMIUM")) != 0 and to_float(itm.get("ADJUSTMENT_PREMIUM")) == 0:
+                            itm["ADJUSTMENT_PREMIUM"] = itm.get("CURRENT_PREMIUM")
+                            itm["CURRENT_PREMIUM"] = None
+                        if is_delta:
+                            if not itm.get("PLAN_NAME"): itm["PLAN_NAME"] = "Enrollee adjustment"
+
+                # Merge Results
+                if "HEADER" in page_data:
+                    for k, v in page_data["HEADER"].items():
+                        if v and str(v).lower() not in ["n/a", "none", ""]:
+                            if not final_header.get(k): final_header[k] = v
+                if "LINE_ITEMS" in page_data:
+                    all_line_items.extend(page_data["LINE_ITEMS"])
 
         extracted_data = {"HEADER": final_header, "LINE_ITEMS": all_line_items}
     else:
@@ -2684,6 +2781,7 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
         all_line_items.extend(recovered_items)
 
 
+
     # Final combined data
     data = {
         "HEADER": final_header,
@@ -2760,6 +2858,110 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
     except Exception as e:
         print(f"  [LEARNING][WARN] Failed to run final audit/training: {e}")
 
+    # [FALLBACK] Advanced OCR Strategy Trigger
+    # If validation shows it needs refinement or results are critically sparse, invoke the specialized stack.
+    try:
+        is_missing_data = len(all_line_items) == 0 or (len(all_line_items) == 1 and all_line_items[0].get("PLAN_NAME") == "TOTAL")
+        
+        # [V5][DELTA DENTAL] Mandatory Keyword Guard
+        # If native extraction missed the 'adjustment' section, we MUST force fallback
+        is_delta = "DELTA DENTAL" in str(pdf_path).upper() or "DELTA DENTAL" in str(global_carrier).upper()
+        if is_delta and "adjustment" not in text.lower():
+            print(f"  [FALLBACK][DELTA DENTAL] Critical 'adjustment' section missing from native text. Forcing Advanced Fallback...")
+            is_missing_data = True
+
+        needs_refinement = False
+        try:
+            final_valid = learning_engine.should_trigger_refinement(data, text)
+            needs_refinement = final_valid.needs_refinement
+        except:
+            pass
+
+        if is_missing_data or needs_refinement:
+            print(f"  [FALLBACK] Missing or poor data detected (Items: {len(all_line_items)}, Refinement: {needs_refinement}).")
+            print(f"  [FALLBACK] Triggering Advanced Fallback Pipeline (PaddleOCR/Camelot/Surya)...")
+            fallback_engine = AdvancedFallbackExtractor(pdf_path)
+            fallback_text = fallback_engine.extract()
+            
+            if fallback_text and len(fallback_text.strip()) > 100:
+                print(f"  [FALLBACK][OK] Advanced fallback recovered {len(fallback_text)} characters. Re-processing...")
+                # Re-run LLM extraction on the newly recovered advanced text
+                fallback_data = extract_fields_with_llm(fallback_text, client, f"{os.path.basename(pdf_path)}_advanced_fallback", mode="standard", detected_carrier=global_carrier)
+                
+                if fallback_data and fallback_data.get("LINE_ITEMS"):
+                    recovered_count = len(fallback_data["LINE_ITEMS"])
+                    print(f"  [FALLBACK][SUCCESS] Advanced fallback recovered {recovered_count} items.")
+                    
+                    # Calculate "Fill Rate" across 4 critical fields to determine quality
+                    def get_fill_rate(items):
+                        if not items: return 0
+                        # Weighting: Name and ID (SSN) are 1 point each, Plan and Premium (sum) are 1 point each.
+                        # Total fields = 4 (SSN, PLAN_TYPE, and whether AT LEAST ONE premium is present)
+                        total_slots = len(items) * 4
+                        present = sum(1 for i in items if i.get("SSN") and str(i.get("SSN")).strip() not in ["", "null", "None"])
+                        present += sum(1 for i in items if i.get("PLAN_TYPE") and str(i.get("PLAN_TYPE")).strip() not in ["", "null", "None"])
+                        present += sum(1 for i in items if (to_float(i.get("CURRENT_PREMIUM")) != 0 or to_float(i.get("ADJUSTMENT_PREMIUM")) != 0))
+                        present += sum(1 for i in items if i.get("LASTNAME") and str(i.get("LASTNAME")).strip() not in ["", "null", "None"])
+                        return present / total_slots
+
+                    orig_fill = get_fill_rate(all_line_items)
+                    fall_fill = get_fill_rate(fallback_data["LINE_ITEMS"])
+                    
+                    print(f"  [FALLBACK] Quality comparison: Original Fill Rate: {orig_fill:.1%} vs Fallback Fill Rate: {fall_fill:.1%}")
+
+                    # --- [Smart Merging Logic] ---
+                    # Instead of an all-or-nothing choice, we merge missing members.
+                    orig_names = {f"{str(i.get('FIRSTNAME')).upper()}_{str(i.get('LASTNAME')).upper()}" for i in all_line_items if i.get("LASTNAME")}
+                    
+                    recoveries = []
+                    for itm in fallback_data["LINE_ITEMS"]:
+                        name_key = f"{str(itm.get('FIRSTNAME')).upper()}_{str(itm.get('LASTNAME')).upper()}"
+                        if name_key not in orig_names:
+                            recoveries.append(itm)
+                    
+                    if is_missing_data or fall_fill > orig_fill:
+                        print(f"  [FALLBACK][OK] Replacing original data with higher quality fallback data.")
+                        data = fallback_data
+                        all_line_items = data.get("LINE_ITEMS", [])
+                    elif recoveries:
+                        print(f"  [FALLBACK][RECOVERY] Native reader is cleaner, but OCR found {len(recoveries)} NEW members. Merging them...")
+                        # Append the new members discovered by OCR to the native list
+                        all_line_items.extend(recoveries)
+                        data["LINE_ITEMS"] = all_line_items
+                    else:
+                        print(f"  [FALLBACK] Original data preserved (better fill rate and no new members discovered).")
+    except Exception as e:
+        print(f"  [FALLBACK][ERROR] Advanced fallback pipeline failed: {e}")
+
+    # [V5][COLONIAL] Final Normalization for Colonial Life (Apply to primary or fallback data)
+    all_items = data.get("LINE_ITEMS", [])
+    
+    # [V5][DELTA DENTAL] Delta Dental Specific Normalization
+    if "DELTA DENTAL" in str(pdf_path).upper() or "DELTA DENTAL" in str(global_carrier).upper():
+        all_items = normalize_delta_dental_data(all_items, text)
+        data["LINE_ITEMS"] = all_items
+
+    is_colonial = "COLONIAL" in str(pdf_path).upper() or "COLONIAL" in str(global_carrier).upper()
+    if is_colonial and all_items:
+        print(f"    [V5][COLONIAL] Final ID and Plan Type Normalization for Colonial Life...")
+        for item in all_items:
+            # 1. ID Normalization
+            ssn = str(item.get("SSN", "")).strip()
+            mid = str(item.get("MEMBERID", "")).strip()
+            if ssn and mid and (ssn == mid or (ssn.startswith("***") and mid.startswith("***"))):
+                item["MEMBERID"] = None
+                
+            # 2. Plan Type Normalization (Granular Types)
+            pname = str(item.get("PLAN_NAME", "")).upper()
+            if "ACCIDENT" in pname:
+                item["PLAN_TYPE"] = "ACCIDENT"
+            elif "CRITICAL" in pname:
+                item["PLAN_TYPE"] = "CRITICAL ILLNESS"
+            elif "HOSPITAL" in pname:
+                item["PLAN_TYPE"] = "HOSPITAL INDEMNITY"
+            elif "LIFE" in pname:
+                item["PLAN_TYPE"] = "LIFE"
+
     return data
 
 
@@ -2815,8 +3017,8 @@ def process_single_pdf_to_excel(pdf_path: str, output_excel: str):
         if col in df.columns:
             df[col] = df[col].astype(str).replace(['None', 'nan', 'NaT'], None)
             
-    # Reorder columns - STRICTLY use REQUIRED_FIELDS for Excel
-    cols = ['SOURCE_FILE'] + REQUIRED_FIELDS
+    # Reorder columns - STRICTLY use REQUIRED_FIELDS for Excel (Do not include SOURCE_FILE per user request)
+    cols = REQUIRED_FIELDS
     # Only pick columns that actually exist to avoid KeyError
     cols = [c for c in cols if c in df.columns]
     df = df[cols]
@@ -2873,8 +3075,10 @@ def process_multiple_pdfs(pdf_directory: str, output_excel: str):
     # Convert to DataFrame
     df = pd.DataFrame(all_data)
     
-    # Reorder columns
-    cols = ['SOURCE_FILE'] + REQUIRED_FIELDS
+    # Reorder columns - STRICTLY use REQUIRED_FIELDS for Excel
+    cols = REQUIRED_FIELDS
+    # Only pick columns that actually exist to avoid KeyError
+    cols = [c for c in cols if c in df.columns]
     df = df[cols]
     
     # Save to Excel
@@ -3845,7 +4049,7 @@ def process_step(txt_path: str, output_excel: str = "extracted_data.xlsx"):
             df[col] = df[col].astype(str).replace(['None', 'nan', 'NaT', 'nan '], None)
             
     # Reorder columns - STRICTLY use REQUIRED_FIELDS for Excel
-    cols = ['SOURCE_FILE'] + REQUIRED_FIELDS
+    cols = REQUIRED_FIELDS
     # Only pick columns that actually exist to avoid KeyError
     cols = [c for c in cols if c in df.columns]
     df = df[cols]
@@ -3941,8 +4145,10 @@ def batch_process_step(txt_directory: str, output_excel: str = "extracted_data.x
         if col in df.columns:
             df[col] = df[col].astype(str).replace(['None', 'nan', 'NaT', 'nan '], None)
             
-    # Reorder columns
-    cols = ['SOURCE_FILE'] + REQUIRED_FIELDS
+    # Reorder columns - STRICTLY use REQUIRED_FIELDS for Excel
+    cols = REQUIRED_FIELDS
+    # Only pick columns that actually exist to avoid KeyError
+    cols = [c for c in cols if c in df.columns]
     df = df[cols]
     
     # Save to Excel

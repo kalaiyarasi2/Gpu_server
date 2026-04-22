@@ -147,25 +147,29 @@ CRITICAL RULES:
 # Financial reconciliation + quality validation
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _parse_float(val) -> float:
+    """Safely parse currency/numeric strings to float."""
+    if val is None or val == "":
+        return 0.0
+    if isinstance(val, (int, float)):
+        return float(val)
+    try:
+        s_val = str(val).replace(",", "").replace("$", "").strip()
+        if s_val.startswith("(") and s_val.endswith(")"):
+            s_val = "-" + s_val[1:-1]
+        if not s_val or s_val == "-":
+            return 0.0
+        return float(s_val)
+    except (ValueError, TypeError):
+        return 0.0
+
 def _sum_line_items(line_items: List[Dict]) -> float:
     """Sum CURRENT_PREMIUM and ADJUSTMENT_PREMIUM across all line items, safely."""
     total = 0.0
     for item in line_items:
         # Sum both Current and Adjustment premiums to reflect true invoice balance
         for field in ["CURRENT_PREMIUM", "ADJUSTMENT_PREMIUM"]:
-            raw = item.get(field)
-            if raw is None:
-                continue
-            try:
-                # Handle potential string formatting (commas, dollar signs)
-                s_val = str(raw).replace(",", "").replace("$", "").strip()
-                # Handle accounting parentheses for negative numbers
-                if s_val.startswith("(") and s_val.endswith(")"):
-                    s_val = "-" + s_val[1:-1]
-                val = float(s_val)
-                total += val
-            except (ValueError, TypeError):
-                pass
+            total += _parse_float(item.get(field))
     return total
 
 
@@ -302,8 +306,15 @@ def should_trigger_refinement(extracted_data: Dict, raw_text: str) -> Validation
             if not str(item.get("SSN", "")).strip() or str(item.get("SSN", "")).strip() == "-"
         )
         
+        null_plans = sum(
+            1 for item in line_items
+            if not str(item.get("PLAN_TYPE", "")).strip() or str(item.get("PLAN_TYPE", "")).lower() == "none"
+        )
+        
         id_pct = null_ids / len(line_items)
         ssn_pct = null_ssns / len(line_items)
+        plan_pct = null_plans / len(line_items)
+        
         result.missing_ids_pct = id_pct
         result.missing_ssn_pct = ssn_pct
         
@@ -315,12 +326,35 @@ def should_trigger_refinement(extracted_data: Dict, raw_text: str) -> Validation
             print(f"  [LEARNING] {result.reason}")
             return result
             
-        # Check if SSNs are likely present in the text (4-digit snippets or 9-digit numbers)
-        has_ssn_patterns = bool(re.search(r'\b\d{9}\b|\b\d{3}-\d{2}-\d{4}\b|\b\d{4}\b', raw_text))
-        if ssn_pct > 0.5 and has_ssn_patterns:
+        # TIGHTER THRESHOLDS for critical fields (SSN, PLAN_TYPE)
+        # Use 5% threshold as requested for invoices
+        if ssn_pct > 0.05:
             result.needs_refinement = True
             result.reason = (
-                f"High rate of missing SSNs ({null_ssns}/{len(line_items)} rows)."
+                f"Missing SSNs detected on {null_ssns}/{len(line_items)} rows ({ssn_pct:.1%})."
+            )
+            print(f"  [LEARNING] {result.reason}")
+            return result
+
+        if plan_pct > 0.05:
+            result.needs_refinement = True
+            result.reason = (
+                f"Missing Plan Types detected on {null_plans}/{len(line_items)} rows ({plan_pct:.1%})."
+            )
+            print(f"  [LEARNING] {result.reason}")
+            return result
+
+        # ── Heuristic 4: missing premiums ──────────────────────────────────
+        # If a row exists but has no financial value (both current and adjustment), it's likely a parsing failure
+        null_premiums = sum(
+            1 for item in line_items
+            if (abs(_parse_float(item.get("CURRENT_PREMIUM"))) < 0.01) and (abs(_parse_float(item.get("ADJUSTMENT_PREMIUM"))) < 0.01)
+        )
+        prem_pct = null_premiums / len(line_items)
+        if prem_pct > 0.05:
+            result.needs_refinement = True
+            result.reason = (
+                f"Missing Premiums detected on {null_premiums}/{len(line_items)} rows ({prem_pct:.1%})."
             )
             print(f"  [LEARNING] {result.reason}")
             return result

@@ -1017,8 +1017,8 @@ class UnifiedRouter:
         # RULE F3: Explicit insurance billing keywords in filename
         insurance_fn_kw = ["medlink", "medsupp", "cobra", "group benefit", "beneficiary", "uhc", "unitedhealthcare", "bcbs", "bluecross", "blueshield", "anthem", "humana", "aetna", "cigna"]
         if any(kw in filename_lower for kw in insurance_fn_kw):
-            # If it's an insurance carrier keyword and ALSO contains an invoice keyword, it's very likely an INVOICE
-            if any(ik in filename_lower for ik in ["inv", "invoice", "bill", "billing", "benefit", "master"]):
+            # If it's an insurance carrier keyword and ALSO contains an invoice keyword (including dollar signs), it's very likely an INVOICE
+            if any(ik in filename_lower for ik in ["inv", "invoice", "bill", "billing", "benefit", "master", "$"]):
                 print(f"[Pre-Classify] Insurance carrier + Invoice keyword in filename → INVOICE")
                 return "INVOICE", "Filename insurance + invoice keyword"
             
@@ -1048,9 +1048,70 @@ class UnifiedRouter:
         if not text_lower:
             return None, None   # No text available → defer to LLM
 
+        # Pre-calculate hits for cross-rule shielding
+        
+        # Insurance premium billing invoice (carrier billing members)
+        premium_billing_signals = [
+            "medlink", "group med sup", "group medical supplement",
+            "amount billed", "premium period",
+            "medsupp", "cobra",
+            "benefit billing", "enrollment bill",
+            "american public life", "apl",
+            "member premium", "subscriber premium",
+            "unitedhealthcare", "uhc", "bluecross", "blueshield", "bcbs", "humana", "aetna", "cigna",
+            "legal shield", "legalshield",
+            "policy no.", "subscriber id", "member id",
+            "benefit invoice", "premium statement", "billing summary", "billing statement", "premium amount"
+        ]
+        premium_hits = sum(1 for kw in premium_billing_signals if kw in text_lower)
+
+        # WC Loss Run / Claims content
+        loss_run_content_signals = [
+            "loss run", "wc loss run",
+            "policy summary",
+            "med only", "lost time",
+            "claimant", "adjustor",
+            "date of loss",
+            "incurred", "outstanding",
+            "paid losses", "reserve",
+            "claim number", "claim status",
+        ]
+        loss_hits = sum(1 for kw in loss_run_content_signals if kw in text_lower)
+
+        # ACORD form content signals
+        acord_content_signals = [
+            "workers compensation application",
+            "acord 130", "acord 133",
+            "rating by state", "class code",
+            "total estimated annual premium",
+            "employers liability",
+            "payroll", "experience modification",
+        ]
+        acord_hits = sum(1 for kw in acord_content_signals if kw in text_lower)
+
+        # ── HIGH PRIORITY INSURANCE CONTENT RULES (checked before Bank Statements) ─────────────────
+        
+        # RULE C1: ACORD signals → Work Comp
+        if acord_hits >= 3:
+            print(f"[Pre-Classify] ACORD content signals ({acord_hits} hits) → WORK_COMPENSATION")
+            return "WORK_COMPENSATION", f"ACORD content signals ({acord_hits} matches)"
+
+        # RULE C2: WC Loss Run signals → Claims
+        if loss_hits >= 4:
+            print(f"[Pre-Classify] WC Loss Run content signals ({loss_hits} hits) → INSURANCE_CLAIMS")
+            return "INSURANCE_CLAIMS", f"Loss run content signals ({loss_hits} matches)"
+
+        # RULE C3: Insurance Invoice signals → INVOICE
+        if premium_hits >= 2:
+            print(f"[Pre-Classify] Premium billing signals ({premium_hits} hits) → INVOICE")
+            return "INVOICE", f"Premium billing content signals ({premium_hits} matches)"
+
+        # ── SECONDARY CONTENT RULES ──────────────────────────────────────────
+
         # RULE C0: BANK STATEMENT (Weighted unique keyword scoring)
+        # Bank statements often share keywords like "Account Summary" or "Statement Period" with insurance/vendor docs.
+        # We use a higher threshold (shielding) if insurance signals are present.
         bank_signals = {
-            # High-weight unique markers (3 pts)
             "account summary": 3,
             "beginning balance": 3,
             "ending balance": 3,
@@ -1059,7 +1120,6 @@ class UnifiedRouter:
             "checks and other debits": 3,
             "daily balance summary": 3,
             "statement period": 3,
-            # Medium-weight markers (1 pt)
             "transaction date": 1,
             "withdrawal": 1,
             "deposit": 1,
@@ -1077,100 +1137,36 @@ class UnifiedRouter:
                 bank_score += weight
                 matched_bank_keywords.append(kw)
         
-        if bank_score >= 5:
-            print(f"[Pre-Classify] BANK STATEMENT score {bank_score} (Matches: {matched_bank_keywords})")
+        # [SHIELDING] Require a higher score if there was at least 1 insurance/claims hit
+        bank_threshold = 10 if (premium_hits > 0 or loss_hits > 0) else 5
+        
+        if bank_score >= bank_threshold:
+            print(f"[Pre-Classify] BANK STATEMENT score {bank_score} (Threshold: {bank_threshold}, Matches: {matched_bank_keywords})")
             return "BANK_STATEMENT", f"Bank scoring threshold met ({bank_score})"
 
-        # RULE C1: ACORD form content signals → Work Comp
-        acord_content_signals = [
-            "workers compensation application",
-            "acord 130", "acord 133",
-            "rating by state", "class code",
-            "total estimated annual premium",
-            "employers liability",
-            "payroll", "experience modification",
-        ]
-        acord_hits = sum(1 for kw in acord_content_signals if kw in text_lower)
-        if acord_hits >= 3:
-            print(f"[Pre-Classify] ACORD content signals ({acord_hits} hits) → WORK_COMPENSATION")
-            return "WORK_COMPENSATION", f"ACORD content signals ({acord_hits} matches)"
-
-        # RULE C2: WC Loss Run / Claims content (very specific combination)
-        loss_run_content_signals = [
-            "loss run", "wc loss run",
-            "policy summary",
-            "med only", "lost time",
-            "claimant", "adjustor",
-            "date of loss",
-            "incurred", "outstanding",
-            "paid losses", "reserve",
-            "claim number", "claim status",
-        ]
-        loss_hits = sum(1 for kw in loss_run_content_signals if kw in text_lower)
-        if loss_hits >= 4:
-            print(f"[Pre-Classify] WC Loss Run content signals ({loss_hits} hits) → INSURANCE_CLAIMS")
-            return "INSURANCE_CLAIMS", f"Loss run content signals ({loss_hits} matches)"
-
-        # RULE C3: Insurance premium billing invoice (carrier billing members)
-        premium_billing_signals = [
-            "medlink", "group med sup", "group medical supplement",
-            "amount billed", "premium period",
-            "medsupp", "cobra",
-            "benefit billing", "enrollment bill",
-            "american public life", "apl",
-            "member premium", "subscriber premium",
-            "unitedhealthcare", "uhc", "bluecross", "blueshield", "bcbs", "humana", "aetna", "cigna",
-            "legal shield", "legalshield",
-            "policy no.", "subscriber id", "member id",
-            "benefit invoice", "premium statement", "billing summary", "legal shield", "legalshield"
-        ]
-        premium_hits = sum(1 for kw in premium_billing_signals if kw in text_lower)
-        if premium_hits >= 2:
-            print(f"[Pre-Classify] Premium billing signals ({premium_hits} hits) → INVOICE")
-            return "INVOICE", f"Premium billing content signals ({premium_hits} matches)"
-
-        # RULE C4: Vendor / SaaS / utility invoice (GST, subscription, utility, common invoice headers)
+        # RULE C4: Vendor / SaaS / utility invoice
         invoice_poc_extractor_signals = [
-            "tax invoice",
-            "gstin", "gst number",
-            "cgst", "sgst",           # Indian GST split
-            "irn:",                    # Indian e-invoice reference
-            "hsn code", "sac:",        # Indian tax codes
+            "tax invoice", "gstin", "gst number", "cgst", "sgst", "irn:", "hsn code", "sac:",
             "zoho", "spectra", "quickbooks", "freshbooks", "stripe", "razorpay",
-            "recurring charges",
-            "amount payable",
-            "due date", "date due",
-            "unit price", "unit cost",
-            "qty", "quantity",
-            "description",
-            "subtotal",
-            "bill to", "ship to",
-            "bandwidth", "internet access", "mbps",   # telecom / ISP bills
-            "software license", "subscription",
-            "balance due",
-            "avanquest", "pdfescape", "software",
+            "recurring charges", "amount payable", "due date", "date due",
+            "unit price", "unit cost", "qty", "quantity", "description", "subtotal",
+            "bill to", "ship to", "bandwidth", "internet access", "mbps",
+            "software license", "subscription", "balance due", "avanquest", "pdfescape", "software",
         ]
         vendor_hits = sum(1 for kw in invoice_poc_extractor_signals if kw in text_lower)
         if vendor_hits >= 3:
-            # Shielding: If it looks like an insurance invoice (premium hits > 0), require more vendor signals
-            # Increase threshold to 5 if any premium signals found, to prevent misrouting insurance docs.
             vendor_threshold = 5 if premium_hits > 0 else 3
             if vendor_hits >= vendor_threshold:
                 print(f"[Pre-Classify] Vendor invoice content signals ({vendor_hits} hits) → invoice_poc_extractor")
                 return "invoice_poc_extractor", f"Vendor invoice content signals ({vendor_hits} matches)"
 
         # RULE C5: Identification documents
-        id_signals = [
-            "passport", "driver's license", "driver license",
-            "date of birth", "expiration date",
-            "ssn", "social security",
-            "state of", "license number",
-            "id number", "identification",
-        ]
+        id_signals = ["passport", "driver's license", "driver license", "date of birth", "expiration date", "ssn", "social security", "state of", "license number", "id number", "identification"]
         id_hits = sum(1 for kw in id_signals if kw in text_lower)
         if id_hits >= 3:
             print(f"[Pre-Classify] ID document signals ({id_hits} hits) → IDENTIFICATION")
             return "IDENTIFICATION", f"ID content signals ({id_hits} matches)"
+
 
         return None, None
 
@@ -1344,7 +1340,7 @@ BANK_STATEMENT
 ======================================================
 PRIORITY TIEBREAKER RULES:
 ======================================================
-- "Account Summary" + "Balance" -> BANK_STATEMENT
+- "Account Summary" + "Balance" -> BANK_STATEMENT (Only if NO insurance carrier or benefit keywords present)
 - "Loss Run" keyword ALWAYS -> INSURANCE_CLAIMS (overrides WC context)
 - "Amount Billed / Amount Due / Premium Period" -> INVOICE (even if carrier name present)
 - ACORD 130/133 form -> WORK_COMPENSATION
