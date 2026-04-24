@@ -507,6 +507,7 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 CHUNK_OVERLAP_CHARS = 1000  # Default overlap for invoice chunking
 
 REQUIRED_FIELDS = [
+    "SOURCE_FILE",
     "INV_DATE",
     "INV_NUMBER",
     "BILLING_PERIOD",
@@ -520,8 +521,7 @@ REQUIRED_FIELDS = [
     "PLAN_TYPE",
     "COVERAGE",
     "CURRENT_PREMIUM",
-    "ADJUSTMENT_PREMIUM",
-    "PRICING_ADJUSTMENT"
+    "ADJUSTMENT_PREMIUM"
 ]
 
 class InvoicePolicyChunker:
@@ -655,20 +655,21 @@ def _detect_member_ids_ai(text: str, client: OpenAI) -> List[str]:
         if len(text_blocks) > 1:
             print(f"   Scanning block {idx+1}/{len(text_blocks)}...")
             
-        prompt = f"""Identify every UNIQUE Member ID, Subscriber ID, or Payroll ID in this invoice text.
-These are usually 6-12 character alphanumeric strings or masked strings like '*****557900'.
+        prompt = f"""Identify every UNIQUE Member ID, Subscriber ID, or Payroll ID in this invoice text. 
+For Principal, look for 9-digit numeric strings starting with '9' at the beginning of rows.
+YOU MUST FIND EVERY SINGLE ONE. There are typically 50-100 IDs per document.
 
 Return a JSON object with a list of IDs.
 
 Example:
-{{ "member_ids": ["12345678", "ABC987654", "*****557900"] }}
+{{ "member_ids": ["959358735", "945679153", "931769812"] }}
 
 DOCUMENT TEXT:
 {block}
 """
         try:
             response = client.chat.completions.create(
-                model="-gpt4o",
+                model="gpt-4o",
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
                 max_tokens=4000,
@@ -684,7 +685,7 @@ DOCUMENT TEXT:
     print(f"   [OK] Global master list: {len(master_list)} unique IDs found.")
     return master_list
 
-def _extract_missing_members(full_text: str, current_items: List[Dict], master_list: List[str], client: OpenAI) -> List[Dict]:
+def _extract_missing_members(full_text: str, current_items: List[Dict], master_list: List[str], client: OpenAI, detected_carrier: str = None) -> List[Dict]:
     """Recovery Pass: Target missing Member IDs in the full text."""
     if not master_list:
         return []
@@ -732,7 +733,7 @@ def _extract_missing_members(full_text: str, current_items: List[Dict], master_l
         # This uses the main extraction function with a specialized prompt injected via 'text'
         # We wrap it in the expected prompt format
         try:
-            recovery_data = extract_fields_with_llm(prompt, client, "Recovery_Pass")
+            recovery_data = extract_fields_with_llm(prompt, client, "Recovery_Pass", detected_carrier=detected_carrier)
             if recovery_data and "LINE_ITEMS" in recovery_data:
                 batch_items = recovery_data["LINE_ITEMS"]
                 # Only keep items that match the target IDs to avoid duplicates
@@ -819,17 +820,39 @@ def extract_text_from_pdf_improved(pdf_path: str) -> str:
         text: str = ""
         pages_metadata = []
         
+        # Global fallback: open with fitz to check authoritative page count
+        doc_fitz = fitz.open(pdf_path)
+        fitz_count = len(doc_fitz)
+        
         with pdfplumber.open(pdf_path) as pdf:
-            print(f"  [V3][INFO] Extractions started for: {os.path.basename(pdf_path)}")
-            print(f"  Total pages: {len(pdf.pages)}")
+            plumber_count = len(pdf.pages)
+            use_plumber = (plumber_count == fitz_count)
             
-            for page_num, page in enumerate(pdf.pages, 1):
+            if not use_plumber:
+                print(f"  [V3][WARN] Page count mismatch: pdfplumber({plumber_count}) vs fitz({fitz_count}). Forcing PyMuPDF for all pages.")
+            
+            print(f"  [V3][INFO] Extractions started for: {os.path.basename(pdf_path)}")
+            print(f"  Total pages: {fitz_count}")
+            
+            for p_idx in range(fitz_count):
+                page_num = p_idx + 1
                 page_content = f"\n[[PAGE_{page_num}]]\n"
                 
-                # Extract tables with explicit settings
-                tables = page.extract_tables()
+                # Reset page-specific variables
+                page = None
+                tables = None
                 
-                if tables:
+                # Only use pdfplumber if it's reliable and aligned
+                if use_plumber:
+                    page = pdf.pages[p_idx]
+                    
+                    # Extract tables with explicit settings
+                    try:
+                        tables = page.extract_tables()
+                    except:
+                        tables = None
+                
+                if page and tables:
                     table_bboxes = page.find_tables()
                     
                     # 1. Text above first table
@@ -868,13 +891,30 @@ def extract_text_from_pdf_improved(pdf_path: str) -> str:
                             if bottom_area:
                                 bottom_text = bottom_area.extract_text(layout=True)
                                 if bottom_text: page_content += bottom_text + "\n"
-                else:
-                    # Fallback to standard layout extraction if no tables found
-                    page_text = page.extract_text(layout=True)
-                    if page_text:
-                        page_content += page_text + "\n"
+                elif page:
+                    # Fallback to standard layout extraction if no tables found or failed
+                    try:
+                        page_text = page.extract_text(layout=True)
+                        if page_text:
+                            page_content += page_text + "\n"
+                    except:
+                        pass
+                
+                # Check for empty page and try robust fallbacks
+                if len(page_content.strip()) < 50: # Only page marker found?
+                    # Fallback to PyMuPDF for this specific page
+                    try:
+                        fitz_page = doc_fitz[page_num-1]
+                        fitz_text = fitz_page.get_text()
+                        if fitz_text and len(fitz_text.strip()) > 10:
+                            page_content += fitz_text + "\n"
+                    except Exception as fe:
+                        pass
                 
                 text += page_content
+            
+            # Close fitz doc
+            doc_fitz.close()
         
         # If pdfplumber yielded very little, try PyMuPDF
         if len(text.strip()) < 500 and len(text.strip()) > 0:
@@ -936,22 +976,46 @@ def unmirror_text(text: str) -> str:
     """
     Reverse each line of text to fix mirroring issues, but ONLY for pages that look mirrored.
     """
-    pages = text.split('--- PAGE')
-    fixed_pages = []
+    # Split by recognizable page markers (--- PAGE or [[PAGE_n]])
+    # Use capturing group to keep the markers in the split list
+    parts = re.split(r'(--- PAGE|\[\[PAGE_\d+\]\])', text)
     
-    for page in pages:
-        if not page.strip():
-            continue
-            
-        # Detect if this specific page is mirrored
-        if detect_reversed_text(page):
-            lines = page.split('\n')
-            fixed_lines = [line[::-1] for line in lines]
-            fixed_pages.append('--- PAGE' + '\n'.join(fixed_lines))
+    fixed_parts = []
+    
+    # re.split with capturing groups returns [prefix, marker, content, marker, content...]
+    # If the first part is empty (text starts with marker), skip it
+    i = 0
+    if not parts[0].strip():
+        i = 1
+        
+    while i < len(parts):
+        part = parts[i]
+        
+        # If this is a marker, keep it and process the next part (content)
+        if re.match(r'--- PAGE|\[\[PAGE_\d+\]\]', part):
+            fixed_parts.append(part)
+            i += 1
+            if i < len(parts):
+                content = parts[i]
+                if detect_reversed_text(content):
+                    lines = content.split('\n')
+                    # Reverse each line [::-1]
+                    fixed_lines = [line[::-1] for line in lines]
+                    fixed_parts.append('\n'.join(fixed_lines))
+                else:
+                    fixed_parts.append(content)
+                i += 1
         else:
-            fixed_pages.append('--- PAGE' + page)
+            # Not a marker (could be leading text before first marker)
+            if detect_reversed_text(part):
+                 lines = part.split('\n')
+                 fixed_lines = [line[::-1] for line in lines]
+                 fixed_parts.append('\n'.join(fixed_lines))
+            else:
+                 fixed_parts.append(part)
+            i += 1
             
-    return '\n'.join(fixed_pages)
+    return ''.join(fixed_parts)
 
 def parse_unum_detail_mirrored(full_raw_text: str, inv_date: str = None, inv_number: str = None, billing_period: str = None, source_filename: str = "") -> list:
     """
@@ -1427,10 +1491,12 @@ Extract data from the document text provided below.
     - **MEMBERID**: Map "Payroll File Number" to `MEMBERID`. PRESERVE leading zeros.
     - **SOURCE SELECTION**: You MUST extract member line items and `CURRENT_PREMIUM` values EXCLUSIVELY from Page 2. Page 1 is for Header data only.
 - **Humana**:
-    - **INDIVIDUAL LINE ITEMS**: Extract members EXCLUSIVELY from the "Employee Detail" section (Page 4).
+    - **INDIVIDUAL LINE ITEMS**: Extract members EXCLUSIVELY from the "Employee Detail" section. This section typically spans multiple pages.
     - **SUMMARIES TO IGNORE**: Do NOT extract data from the "Group Summary" or "Premiums by Product/Plan Type" tables.
     - **MEMBER CONSOLIDATION**: If a member has multiple lines (e.g., Dental and Vision), extract them as separate objects; the system will programmaticly consolidate them by name.
     - **MEMBERID**: Extract the "Member ID Number" (9-digit numeric).
+    - **GRAND TOTAL MANDATE (CRITICAL)**: Extract the absolute "Amount due", "Total Balance Due", or "Invoiced Amount" (e.g., `$1,207.87`) from the payment coupon (typically Page 1). This value MUST be placed in `AMOUNT_DUE` in the HEADER and a standalone LINE_ITEM with `PLAN_NAME`: "REPORTED INVOICE TOTAL (FOR AUDIT)" and `FIRSTNAME`: "INVOICE TOTAL" and `CURRENT_PREMIUM` set to that exact value.
+    - **MIRRORED TEXT AWARENESS**: Note that some Humana invoices may have MIRRORED (reversed) text in name or plan columns (e.g., "ANITSIRC" → "CRISTINA", "NAIRB" → "BRIAN", "lacideM" → "Medical"). You MUST identify and correct these strings if they appear reversed in the source text.
 - **Unum**:
     - **IDENTIFICATION**: Unum invoices often have an "Employee Detail" section with a distinctive table format.
     - **MIRRORING**: Unum invoices are often MIRRORED (reversed). The system fixes this, but LLMs sometimes misread digits (e.g., '3' vs '8'). BE EXTREMELY CAREFUL with digits.
@@ -1523,6 +1589,21 @@ Extract data from the document text provided below.
         2. **`### SECTION: DELTA_DENTAL_ADJUSTMENTS ###`**: Find member names and capture their amount into **ADJUSTMENT_PREMIUM**.
     - **PLAN TYPE/NAME**: Default `PLAN_TYPE` to "DENTAL" and `PLAN_NAME` to "Dental" unless specified otherwise.
     - **COVERAGE MAPPING**: Map "EE Only" -> **EE**, "EE + Spouse" -> **ES**, "EE + Children" -> **EC**, "Family" -> **FAM**.
+- **Principal Life Insurance Company (STRICT IDENTIFIER CAPTURE)**:
+    - **Member ID (9-DIGITS MANDATORY)**: Look for the 9-digit numeric string (usually starting with '9') at the start of each member row. YOU MUST preserve the **FULL 9-digit** string exactly as it appears in the **MEMBERID** field. **NEVER** truncate to 4 digits.
+    - **SSN EXCLUSION**: For Principal, map the 9-digit number ONLY to **MEMBERID**. Set **SSN** to **NULL**.
+    - **MULTIPLE BENEFIT RECOVERY (CRITICAL)**: Principal invoices list multiple benefits (e.g., STD and LTD) on separate sub-lines for the same member. 
+        - Row 1: `9XXXXXXXX LASTNAME, FIRSTNAME STD [PREMIUM] [ROW_TOTAL]`
+        - Row 2: `LTD [PREMIUM]`
+        - YOU MUST extract TWO separate line items. Each line item MUST have the **LASTNAME**, **FIRSTNAME**, and **MEMBERID** populated.
+    - **Member Context Inheritance**: If a row (e.g. "LTD") follows a member row but lacks the Name/ID, YOU MUST apply the previous member's identity to it.
+    - **PLAN_TYPE**: Infer from the name (e.g. `STD` -> `STD`, `LTD` -> `LTD`, `Life` -> `LIFE`).
+- **Angle Health**:
+    - **Header Row Recognition**: Header typically includes "Subscriber Name", "ID", "Subscriber Type", "Plan Name", "Total Amount".
+    - **Member Identification**: "Subscriber Name" -> split to LASTNAME/FIRSTNAME. "ID" (e.g. ANG5586879) -> **MEMBERID**.
+    - **Coverage Mapping**: "Subscriber Type" column: "Employee" -> **EE**, "Family" -> **FAM**, "Employee + Spouse" -> **ES**.
+    - **Plan Identification**: "Plan Name" -> **PLAN_NAME**.
+    - **Structural Fidelity**: You MUST preserve the relationship between a subscriber row and its total amount. Use virtual pipes (|) to maintain column alignment.
 - **Adjustment Table (GUARDIAN)**:
       - If you see **"New Premium"** and **"New Premium Adjustment"**:
         - `New Premium` (e.g., 2.50) -> `CURRENT_PREMIUM`.
@@ -2447,10 +2528,9 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
     else:
         print(f"    - Result: WARNING (Length mismatch: {combined_pages_len + markers_len} vs {original_len})")
 
-    # [V5][AUDIT] Build a global master list of Member IDs to ensure 100% capture during the Recovery Pass.
-    # This acts as an "Identity Audit" for large or high-precision carrier documents.
+    # [V5][AUDIT] Building a global master list for high-precision carrier documents.
     master_list = []
-    if len(text) > 50000 or "Mutual of Omaha" in text or "Legal Shield" in text:
+    if len(text) > 50000 or "Mutual of Omaha" in text or "Legal Shield" in text or "Principal" in text:
         master_list = _detect_member_ids_ai(text, client)
     all_line_items = []
     final_header = {field: None for field in ["INV_DATE", "INV_NUMBER", "BILLING_PERIOD", "TOTAL_BILLED", "TOTAL_ADJUSTMENTS", "AMOUNT_DUE", "GROUP_NUMBER", "PRICING_ADJUSTMENT"]}
@@ -2474,10 +2554,40 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
     is_moo_invoice = any("OMAHA" in p.upper() for p in pages) or \
                      "OMAHA" in str(pdf_path).upper() or \
                      "MOO" in str(pdf_path).upper()
+    
+    # [V5] Principal Detection
+    is_principal_invoice = any("Principal" in p for p in pages) or \
+                           "Principal" in str(pdf_path).upper() or \
+                           "GULFSHORE" in str(pdf_path).upper()
+    
     global_carrier = None
     if is_moo_invoice:
         global_carrier = "Mutual of Omaha"
         print(f"  [V4][MOO] Mutual of Omaha detected document-wide.")
+    elif is_principal_invoice:
+        global_carrier = "Principal"
+        print(f"  [V5][PRINCIPAL] Principal Life Insurance Company detected document-wide.")
+        if not use_ocr:
+            print(f"  [V5][PRINCIPAL] Extracting with pdfplumber to preserve tabular alignment...")
+            try:
+                import pdfplumber
+                with pdfplumber.open(pdf_path) as pdf:
+                    new_text = ""
+                    for idx, page in enumerate(pdf.pages):
+                        p_text = page.extract_text()
+                        if p_text:
+                            new_text += f"\n[[PAGE_{idx+1}]]\n{p_text}\n"
+                text = new_text
+                # Update pages array
+                pages = re.split(r'\[\s*\[\s*PAGE_\d+\s*\]\s*\]', text)
+                if pages and not pages[0].strip():
+                    pages.pop(0)
+                pages = [p.strip() for p in pages]
+                # Re-run Identity Audit with the fixed text
+                print(f"  [V5][PRINCIPAL] Recalculating Identity Audit with aligned text...")
+                master_list = _detect_member_ids_ai(text, client)
+            except Exception as e:
+                print(f"  [V5][PRINCIPAL] pdfplumber fallback failed: {e}")
 
     # Unum Detection
     _unum_mirrored_signature = "ACIREMA FO YNAPMOC ECNARUSNI EFIL MUNU"
@@ -2490,6 +2600,13 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
     if is_legal_shield:
         global_carrier = "Legal Shield"
         print(f"  [V4][LEGALSHIELD] Legal Shield invoice detected.")
+
+    # Principal Detection
+    is_principal_invoice = any("Principal Life Insurance Company" in p.upper() for p in pages) or \
+                          "Principal" in str(pdf_path).upper()
+    if is_principal_invoice:
+        global_carrier = "Principal"
+        print(f"  [V6][PRINCIPAL] Principal Life Insurance Company detected.")
 
     print(f"  [V3] Splitting large document into {len(pages)} pages for reliable extraction...")
     
@@ -2819,7 +2936,7 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
 
     # --- STEP 3: Recovery Pass (Identity Audit Check) ---
     # Verify if any IDs from our master list were missed.
-    recovered_items = _extract_missing_members(text, all_line_items, master_list, client)
+    recovered_items = _extract_missing_members(text, all_line_items, master_list, client, detected_carrier=global_carrier)
     if recovered_items:
         print(f"  [V3][RECOVERY] Merging {len(recovered_items)} recovered items into results.")
         all_line_items.extend(recovered_items)
@@ -3095,7 +3212,7 @@ def process_single_pdf_to_excel(pdf_path: str, output_excel: str):
         if col in df.columns:
             df[col] = df[col].astype(str).replace(['None', 'nan', 'NaT'], None)
             
-    # Reorder columns - STRICTLY use REQUIRED_FIELDS for Excel (Do not include SOURCE_FILE per user request)
+    # Reorder columns - STRICTLY use REQUIRED_FIELDS for Excel (Include SOURCE_FILE as first column)
     cols = REQUIRED_FIELDS
     # Only pick columns that actually exist to avoid KeyError
     cols = [c for c in cols if c in df.columns]
@@ -3158,7 +3275,7 @@ def process_multiple_pdfs(pdf_directory: str, output_excel: str):
     # Convert to DataFrame
     df = pd.DataFrame(all_data)
     
-    # Reorder columns - STRICTLY use REQUIRED_FIELDS for Excel
+    # Reorder columns - STRICTLY use REQUIRED_FIELDS for Excel (Include SOURCE_FILE as first column)
     cols = REQUIRED_FIELDS
     # Only pick columns that actually exist to avoid KeyError
     cols = [c for c in cols if c in df.columns]
@@ -3746,6 +3863,7 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                 row = {"SOURCE_FILE": source_filename}
                 # Ensure all required fields are present (even as None/empty)
                 for field in REQUIRED_FIELDS:
+                    if field == "SOURCE_FILE": continue # Already set above
                     row[field] = item.get(field) # Will be None if missing
                 
                 row.update(clean_header)

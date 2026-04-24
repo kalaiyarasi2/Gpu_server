@@ -11,6 +11,7 @@ load_dotenv()
 
 # Required fields for the final output
 REQUIRED_FIELDS = [
+    "SOURCE_FILE",
     "INV_DATE",
     "INV_NUMBER",
     "BILLING_PERIOD",
@@ -280,6 +281,7 @@ class StructuredExcelExtractor:
                 elif "MEDICAL" in desc_upper:     plan_type = "MEDICAL"
                 else:                          plan_type = "OTHER"
                 item = {
+                    "SOURCE_FILE": file_path.name,
                     "INV_DATE": global_inv_date, "INV_NUMBER": global_inv_number, "BILLING_PERIOD": from_date or bp,
                     "LASTNAME": last, "FIRSTNAME": first, "MIDDLENAME": mid, "SSN": None,
                     "POLICYID": row.get(emp_id_col, None) if emp_id_col else None,
@@ -336,6 +338,7 @@ class StructuredExcelExtractor:
                     is_adj_sheet = sheet_name and any(x in sheet_name.lower() for x in ("adj", "change", "term"))
                     
                     item = {
+                        "SOURCE_FILE": file_path.name,
                         "INV_DATE": row.get("Billing Due Date", global_inv_date),
                         "INV_NUMBER": global_inv_number,
                         "BILLING_PERIOD": from_date or bp,

@@ -220,10 +220,10 @@ class ExcelExtractor:
         prompt = f"""Analyze these spreadsheet columns from carrier '{provider_hint}'.
         COLUMNS: {columns}
         
-        Required Schema (14 fields):
-        INV_DATE, INV_NUMBER, BILLING_PERIOD, LASTNAME, FIRSTNAME, MIDDLENAME, SSN, 
-        POLICYID, MEMBERID, PLAN_NAME, PLAN_TYPE, COVERAGE, CURRENT_PREMIUM, 
-        ADJUSTMENT_PREMIUM
+        Required Schema (15 fields):
+        SOURCE_FILE, INV_DATE, INV_NUMBER, BILLING_PERIOD, LASTNAME, FIRSTNAME, 
+        MIDDLENAME, SSN, POLICYID, MEMBERID, PLAN_NAME, PLAN_TYPE, COVERAGE, 
+        CURRENT_PREMIUM, ADJUSTMENT_PREMIUM
         
         TASK:
         Describe how these source columns map to the required schema. 
@@ -748,7 +748,9 @@ class UnifiedRouter:
         if noise_ratio > 0.08:
             words = re.findall(r'[a-zA-Z]{3,}', text)
             word_density = len(words) / max(total / 5, 1)
-            if word_density < 0.4:
+            # DENSE TABLES (like Humana, Mountain Star) have lots of numbers/IDs, lowering word density.
+            # 0.20 is a safer floor than 0.40.
+            if word_density < 0.20:
                 print(f"[Noise] Semi-scanned noise: noise={noise_ratio:.2%}, word_density={word_density:.2f}")
                 return True
 
@@ -761,48 +763,38 @@ class UnifiedRouter:
         return False
 
     def _detect_rotation_and_fix(self, pdf_path: str, tmp_dir: str) -> str:
-        """Detect and auto-fix page rotation for ALL 4 angles (0/90/180/270).
-        
-        Strategy:
-          1. Read fitz page.rotation metadata (embedded in PDF header) — most reliable.
-          2. If no metadata rotation, use block geometry heuristic (tall vs wide blocks).
-          3. Always save a normalized copy so pdfplumber can read the corrected text layer.
-        """
+        """Detect and auto-fix page rotation for ALL 4 angles (0/90/180/270)."""
         try:
+            import fitz
             doc = fitz.open(pdf_path)
             rotated_any = False
             for i in range(len(doc)):
                 page = doc[i]
                 
-                # Method 1: Trust the PDF rotation metadata (most accurate)
-                meta_rotation = page.rotation   # returns 0, 90, 180, or 270
+                # Trust existing metadata rotation if present
+                meta_rotation = page.rotation
                 if meta_rotation != 0:
-                    # Counteract the stored rotation so rendered text is upright
-                    correction = (360 - meta_rotation) % 360
-                    page.set_rotation(correction)
-                    rotated_any = True
-                    print(f"[Rotation] Page {i+1}: metadata rotation={meta_rotation} -> corrected by {correction} deg")
                     continue
 
-                # Method 2: Block geometry heuristic (for PDFs with no rotation metadata)
+                # Content heuristic for scanned documents with no rotation metadata
                 blocks = page.get_text("blocks")
                 if not blocks:
                     continue
+                # If blocks are significantly taller than wide, document is likely sideways
+                # Threshold of 8 blocks ensures we don't accidentally rotate charts/logos
                 vertical = sum(1 for b in blocks if abs(b[3]-b[1]) > abs(b[2]-b[0]) * 1.5)
                 horizontal = sum(1 for b in blocks if abs(b[2]-b[0]) >= abs(b[3]-b[1]))
-                if vertical > horizontal and vertical > 2:
+                if vertical > horizontal and vertical > 8:
                     page.set_rotation(90)
                     rotated_any = True
                     print(f"[Rotation] Page {i+1}: geometry heuristic -> corrected 90 deg")
 
-            rotated_path = os.path.join(tmp_dir, "rotated_snippet.pdf")
-            doc.save(rotated_path)
+            normalized_path = os.path.join(tmp_dir, "normalized_rotation.pdf")
+            doc.save(normalized_path)
             doc.close()
             if rotated_any:
-                print(f"[Rotation] Rotation corrected -> {rotated_path}")
-            else:
-                print(f"[Rotation] No rotation needed - using fitz-normalized copy")
-            return rotated_path
+                print(f"[Rotation] Normalization applied -> {normalized_path}")
+            return normalized_path
         except Exception as e:
             print(f"[Rotation] Rotation check failed: {e}")
         return pdf_path
@@ -1015,10 +1007,10 @@ class UnifiedRouter:
             return "INSURANCE_CLAIMS", "Filename loss run keyword"
 
         # RULE F3: Explicit insurance billing keywords in filename
-        insurance_fn_kw = ["medlink", "medsupp", "cobra", "group benefit", "beneficiary", "uhc", "unitedhealthcare", "bcbs", "bluecross", "blueshield", "anthem", "humana", "aetna", "cigna"]
+        insurance_fn_kw = ["medlink", "medsupp", "cobra", "group benefit", "beneficiary", "uhc", "unitedhealthcare", "bcbs", "bluecross", "blueshield", "anthem", "humana", "aetna", "cigna", "angle", "angle health", "principal"]
         if any(kw in filename_lower for kw in insurance_fn_kw):
             # If it's an insurance carrier keyword and ALSO contains an invoice keyword (including dollar signs), it's very likely an INVOICE
-            if any(ik in filename_lower for ik in ["inv", "invoice", "bill", "billing", "benefit", "master", "$"]):
+            if any(ik in filename_lower for ik in ["inv", "invoice", "bill", "billing", "benefit", "master", "$", "premium"]):
                 print(f"[Pre-Classify] Insurance carrier + Invoice keyword in filename → INVOICE")
                 return "INVOICE", "Filename insurance + invoice keyword"
             
@@ -1058,7 +1050,7 @@ class UnifiedRouter:
             "benefit billing", "enrollment bill",
             "american public life", "apl",
             "member premium", "subscriber premium",
-            "unitedhealthcare", "uhc", "bluecross", "blueshield", "bcbs", "humana", "aetna", "cigna",
+            "unitedhealthcare", "uhc", "bluecross", "blueshield", "bcbs", "humana", "aetna", "cigna", "angle", "angle health",
             "legal shield", "legalshield",
             "policy no.", "subscriber id", "member id",
             "benefit invoice", "premium statement", "billing summary", "billing statement", "premium amount"
@@ -1236,7 +1228,7 @@ class UnifiedRouter:
             "payroll", "employee", "acord", "member", "billing", "workers",
             "gstin", "cgst", "sgst", "loss run", "claimant", "subscription",
             "balance", "account", "deposit", "withdrawal", "statement",
-            "checking", "savings", "routing number", "transaction"
+            "checking", "savings", "routing number", "transaction", "benefit", "medical", "enrollment"
         ]
         has_meaningful_content = any(kw in text.lower() for kw in meaningful_keywords)
         is_noisy = file_ext == ".pdf" and (not text or clean_text_len < 50 or not has_meaningful_content)
@@ -2602,140 +2594,110 @@ Return ONLY the company name or UNKNOWN:"""
         if file_ext not in [".pdf", ".xlsx", ".xls", ".csv"]:
             return {"error": f"Unsupported file format: {file_ext}"}
 
-        # Step 1: Classify (Layer 1 & 2)
-        doc_type, provider = self.classify_document(file_path)
-        
-        if doc_type == "UNKNOWN":
-            print("\n" + "="*70)
-            print("[ERR] PROCESSING FAILED: UNKNOWN DOCUMENT TYPE")
-            print("="*70)
-            return {"error": "Could not classify document type"}
+        import tempfile
+        # Use a context manager to ensure the temp directory is cleaned up at the end
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            working_path = file_path
+            
+            # ── GLOBAL ROTATION & NORMALIZATION ──────────────────────────────
+            if file_ext == ".pdf":
+                print("\n[STEP] NORMALIZING PDF (ORIENTATION & ROTATION)...")
+                # We save a corrected copy for all downstream stages (classification + extraction)
+                working_path = Path(self._detect_rotation_and_fix(str(file_path), tmp_dir))
+            
+            # Step 1: Classify (Layer 1 & 2)
+            doc_type, provider = self.classify_document(str(working_path))
+            
+            if doc_type == "UNKNOWN":
+                print("\n" + "="*70)
+                print("[ERR] PROCESSING FAILED: UNKNOWN DOCUMENT TYPE")
+                print("="*70)
+                return {"error": "Could not classify document type"}
 
-        # ── Post-classification safety guard ─────────────────────────────────
-        # For spreadsheet files: WORK_COMPENSATION and INSURANCE_CLAIMS extractors
-        # only support PDF. If a .xlsx/.csv was classified as one of these, redirect
-        # to INVOICE pipeline (ExcelExtractor handles it via semantic mapping).
-        if file_ext in [".xlsx", ".xls", ".csv"] and doc_type not in ["INVOICE"]:
-            print(f"[WARN] Spreadsheet classified as {doc_type} — redirecting to INVOICE pipeline (Excel/CSV only supported there).")
-            doc_type = "INVOICE"
+            # ── Post-classification safety guard ─────────────────────────────
+            if file_ext in [".xlsx", ".xls", ".csv"] and doc_type not in ["INVOICE"]:
+                print(f"[WARN] Spreadsheet classified as {doc_type} — redirecting to INVOICE pipeline.")
+                doc_type = "INVOICE"
 
-        print(f"\n[ROUTE] doc_type={doc_type} | provider={provider} | format={file_ext}")
+            print(f"\n[ROUTE] doc_type={doc_type} | provider={provider} | format={file_ext}")
 
-        # Step 2: Route to appropriate extractor (Layer 4)
-        if doc_type == "INVOICE":
-            # Layer 4: Format-Specific Extraction
-            if file_ext in [".xlsx", ".xls", ".csv"]:
-                extractor = ExcelExtractor(output_base=OUTPUT_BASE)
-                excel_path = extractor.process(file_path)
-                
-                if isinstance(excel_path, dict) and "error" in excel_path:
-                    # ExcelExtractor returned a graceful failure
-                    result = excel_path
-                elif excel_path:
-                    result = {
-                        "type": "INVOICE",
-                        "excel": excel_path,
-                        "json": self.xlsx_to_json(Path(excel_path))
-                    }
-                else:
-                    result = {"error": "Excel/CSV extraction failed to yield structured data"}
-            else:
-                # TRY 1: Standard Extractor (PDF)
-                result = self.run_invoice_extractor(file_path, use_structural=False)
-                
-                # FALLBACK: If standard extraction yielded no data or failed, try structural
-                should_fallback = False
-                
-                # 1. Proactive Detection: Is this a Guardian or GIS 23 invoice?
-                is_guardian = False
-                is_gis23 = False
-                try:
-                    import pdfplumber
-                    with pdfplumber.open(file_path) as pdf:
-                        first_page_text = (pdf.pages[0].extract_text() or "").lower()
-                        if "guardian" in first_page_text:
-                            is_guardian = True
-                            print("[INFO] Guardian invoice detected proactively.")
-                        if "gis 23" in first_page_text or "restaurant services" in first_page_text:
-                            is_gis23 = True
-                            print("[INFO] GIS 23 Restaurant Services invoice detected proactively.")
-                except Exception as e:
-                    print(f"  [Router] Detection failed: {e}")
-
-                if "error" in result:
-                    should_fallback = True
-                else:
-                    try:
-                        df = pd.read_excel(result["excel"])
-                        if len(df) <= 1: # Only header or empty
-                            should_fallback = True
-                        
-                        # 2. Force fallback for complex invoices to ensure accuracy and prevent standard timeouts
-                        if is_guardian or is_gis23:
-                             should_fallback = True
-                             reason = "Guardian" if is_guardian else "GIS 23"
-                             print(f"[WARN] {reason} invoice: Forcing Structural layer for maximum accuracy...")
-                    except:
-                        should_fallback = True
-                
-                if should_fallback:
-                    print("\n[WARN] Standard extraction yielded insufficient results. Falling back to Structural Layer...")
-                    structural_result = self.run_invoice_extractor(file_path, use_structural=True)
-                    if "error" not in structural_result:
-                        result = structural_result
+            # Step 2: Route to appropriate extractor (Layer 4)
+            if doc_type == "INVOICE":
+                if file_ext in [".xlsx", ".xls", ".csv"]:
+                    extractor = ExcelExtractor(output_base=OUTPUT_BASE)
+                    excel_path = extractor.process(working_path)
+                    if isinstance(excel_path, dict) and "error" in excel_path:
+                        result = excel_path
+                    elif excel_path:
+                        result = {
+                            "type": "INVOICE",
+                            "excel": excel_path,
+                            "json": self.xlsx_to_json(Path(excel_path))
+                        }
                     else:
-                        print(f"[ERR] Structural fallback also failed: {structural_result.get('error')}")
-
-        elif doc_type == "invoice_poc_extractor":
-            result = self.run_general_invoice_extractor(file_path)
-
-        elif doc_type == "INSURANCE_CLAIMS":
-            if file_ext in [".xlsx", ".xls", ".csv"]:
-                print(f"[INFO] Routing Claim Spreadsheet to Structured Extractor...")
-                extractor = ExcelExtractor(output_base=OUTPUT_BASE)
-                excel_path = extractor.process(file_path)
-
-                if excel_path:
-                    result = {
-                        "type": "INSURANCE_CLAIMS",
-                        "excel": excel_path,
-                        "json": self.xlsx_to_json(Path(excel_path))
-                    }
+                        result = {"error": "Excel/CSV extraction failed"}
                 else:
-                    result = {"error": "Excel/CSV claim extraction failed to yield structured data"}
-            elif file_ext == ".pdf":
-                result = self.run_insurance_extractor(file_path)
+                    # Use working_path (fixed rotation) for ALL extraction attempts
+                    result = self.run_invoice_extractor(str(working_path), use_structural=False)
+                    
+                    # PROACTIVE FALLBACK DETECTION
+                    should_fallback = False
+                    is_guardian = False; is_gis23 = False; is_angle = False
+                    try:
+                        import pdfplumber
+                        with pdfplumber.open(working_path) as pdf:
+                            first_page_text = (pdf.pages[0].extract_text() or "").lower()
+                            if "guardian" in first_page_text: is_guardian = True
+                            if "gis 23" in first_page_text or "restaurant services" in first_page_text: is_gis23 = True
+                            if "angle" in first_page_text: is_angle = True
+                    except: pass
+
+                    if "error" in result:
+                        should_fallback = True
+                    else:
+                        try:
+                            df = pd.read_excel(result["excel"])
+                            if len(df) <= 1: should_fallback = True
+                            if is_guardian or is_gis23 or is_angle: should_fallback = True
+                        except:
+                            should_fallback = True
+                    
+                    if should_fallback:
+                        print("\n[WARN] Standard extraction failed or was empty. Trying Structural Layer...")
+                        structural_result = self.run_invoice_extractor(str(working_path), use_structural=True)
+                        if "error" not in structural_result:
+                            result = structural_result
+
+            elif doc_type == "invoice_poc_extractor":
+                result = self.run_general_invoice_extractor(str(working_path))
+            elif doc_type == "INSURANCE_CLAIMS":
+                if file_ext in [".xlsx", ".xls", ".csv"]:
+                    extractor = ExcelExtractor(output_base=OUTPUT_BASE)
+                    excel_path = extractor.process(working_path)
+                    result = {"type": "INSURANCE_CLAIMS", "excel": excel_path, "json": self.xlsx_to_json(Path(excel_path))} if excel_path else {"error": "Spreadsheet claim extraction failed"}
+                else:
+                    result = self.run_insurance_extractor(str(working_path))
+            elif doc_type == "WORK_COMPENSATION":
+                result = self.run_work_compensation_extractor(str(working_path))
+            elif doc_type == "BANK_STATEMENT":
+                result = self.run_bank_statement_extractor(str(working_path))
+            elif doc_type == "IDENTIFICATION":
+                result = self.run_identification_extractor(str(working_path))
             else:
-                 print(f"[ERR] Insurance extractor called for {file_ext} file. Not supported yet.")
-                 return {"error": "Insurance extraction (Loss Runs/Claims) currently only supports PDF or common spreadsheet formats (XLSX, CSV)."}
-        elif doc_type == "WORK_COMPENSATION":
-            result = self.run_work_compensation_extractor(file_path)
-        elif doc_type == "BANK_STATEMENT":
-            result = self.run_bank_statement_extractor(file_path)
-        elif doc_type == "IDENTIFICATION":
-            result = self.run_identification_extractor(file_path)
-        else:
-            return {"error": f"Unsupported document type: {doc_type}"}
-        
-        # Final summary (Layer 7: mandatory duo formats already handled by run_invoice_extractor)
-        if "error" not in result:
-            print("\n" + "="*70)
-            print("[OK] 7-LAYER PROCESSING COMPLETE - SUCCESS!")
-            print("="*70)
-            print(f"[INFO] Document Type: {result.get('type')}")
-            print(f"[INFO] Provider: {provider}")
-            print(f"[INFO] Excel File: {Path(result.get('excel', '')).name if result.get('excel') else 'N/A'}")
-            print(f"[INFO] JSON File: {Path(result.get('json', '')).name if result.get('json') else 'N/A'}")
-            print(f"[INFO] Completed: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')}")
-            print("="*70 + "\n")
-        else:
-            print("\n" + "="*70)
-            print("[ERR] PROCESSING FAILED")
-            print("="*70)
-            print(f"Error: {result.get('error')}")
-            print("="*70 + "\n")
-        
-        return result
+                return {"error": f"Unsupported document type: {doc_type}"}
+            
+            # Final summary
+            if "error" not in result:
+                print("\n" + "="*70)
+                print("[OK] 7-LAYER PROCESSING COMPLETE - SUCCESS!")
+                print("="*70)
+                print(f"[INFO] Document Type: {result.get('type')}")
+                print(f"[INFO] Provider: {provider}")
+                print(f"[INFO] Excel File: {Path(result.get('excel', '')).name if result.get('excel') else 'N/A'}")
+                print(f"[INFO] Completed: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')}")
+                print("="*70 + "\n")
+            
+            return result
     
     
 
