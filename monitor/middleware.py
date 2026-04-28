@@ -54,9 +54,12 @@ def _extract_response_body(response: Response) -> Tuple[Response, Optional[bytes
 class RequestMonitoringMiddleware(BaseHTTPMiddleware):
     """Middleware to monitor all requests to the /api/extract endpoint."""
     
+    # Endpoints that perform document extraction and should be monitored
+    MONITORED_PATHS = {"/api/extract", "/cognethro", "/work-comp", "/bank-statement"}
+
     async def dispatch(self, request: Request, call_next: Callable):
-        # Only monitor the extract endpoint
-        if request.url.path == "/api/extract" and request.method == "POST":
+        # Monitor all extraction endpoints
+        if request.method == "POST" and request.url.path in self.MONITORED_PATHS:
             return await self.monitor_extract_request(request, call_next)
         
         # For other endpoints, proceed normally
@@ -118,14 +121,30 @@ class RequestMonitoringMiddleware(BaseHTTPMiddleware):
                                 output_files.append(response_data['excel'])
                             if 'json' in response_data and response_data['json']:
                                 output_files.append(response_data['json'])
+                            
+                            # Extract document_type and provider for database record
+                            doc_type = response_data.get('type')
+                            provider = response_data.get('provider') or response_data.get('insurer')
+                            pages = response_data.get('pages', 0)
+                            if doc_type or provider:
+                                request_monitor.update_request_status(
+                                    request_id=request_id,
+                                    status='completed',
+                                    document_type=doc_type,
+                                    provider=provider
+                                )
                 except Exception:
                     pass
                 
                 # Complete the request successfully
+                metadata = {}
+                if 'pages' in locals() and pages:
+                    metadata['pages'] = pages
                 request_monitor.complete_request(
                     request_id=request_id,
                     output_files=output_files,
-                    processing_time=processing_time
+                    processing_time=processing_time,
+                    metadata=metadata if metadata else None
                 )
                 
                 logger.info(f"Request {request_id} completed successfully in {processing_time:.2f}s")

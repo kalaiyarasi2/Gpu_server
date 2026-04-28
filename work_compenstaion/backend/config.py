@@ -26,7 +26,7 @@ class Config:
     OCR_BINARIZE = True
     OCR_EDGE_ENHANCE = True
     OCR_PSM_MODE = 3  # Auto-layout without OSD - Better for forms
-    OCR_ENGINE = 'deepseek'  # Options: 'deepseek', 'tesseract', 'auto'
+    OCR_ENGINE = 'rostaing'  # Options: 'rostaing', 'deepseek', 'tesseract', 'auto'
     FALLBACK_OCR = True  # Use fallback OCR if primary fails
     ENABLE_MORPHOLOGY_CLEANING = True  # Clean images to remove dots/noise before OCR
     

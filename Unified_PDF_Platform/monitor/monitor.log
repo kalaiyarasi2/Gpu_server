@@ -12,3 +12,285 @@
 2026-03-20 12:21:15,769 - monitor_db - INFO - Added output files for request 6ccb9f42-f4de-46a9-8a28-081a8e464b72: ['http://localhost:8007/api/download/KCL- Quality Aircraft- March 26  2_invoice.xlsx', 'http://localhost:8007/api/download/KCL- Quality Aircraft- March 26  2_invoice.json']
 2026-03-20 12:21:15,770 - monitor_service - INFO - Completed monitoring for request 6ccb9f42-f4de-46a9-8a28-081a8e464b72 in 51.74s
 2026-03-20 12:21:15,770 - monitor_middleware - INFO - Request 6ccb9f42-f4de-46a9-8a28-081a8e464b72 completed successfully in 51.74s
+2026-04-13 11:00:55,740 - monitor_db - INFO - Database initialized successfully
+2026-04-13 11:01:04,641 - monitor_middleware - INFO - Monitoring middleware added to FastAPI application
+2026-04-13 11:01:04,820 - monitor_middleware - INFO - Monitoring middleware added to FastAPI application
+2026-04-13 11:35:22,586 - monitor_db - INFO - Created request: 138a0982-19dc-4a39-a99e-fe4d78b39388 - unknown
+2026-04-13 11:35:22,600 - monitor_service - INFO - Started monitoring request 138a0982-19dc-4a39-a99e-fe4d78b39388
+2026-04-13 11:35:22,601 - monitor_middleware - INFO - Monitoring started for request 138a0982-19dc-4a39-a99e-fe4d78b39388: unknown
+2026-04-13 11:35:22,631 - monitor_db - INFO - Updated request 138a0982-19dc-4a39-a99e-fe4d78b39388 status to: processing
+2026-04-13 11:35:25,131 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 11:35:25,190 - monitor_db - INFO - Updated metadata for request 138a0982-19dc-4a39-a99e-fe4d78b39388
+2026-04-13 11:35:25,190 - monitor_service - INFO - Recorded AI call for 138a0982-19dc-4a39-a99e-fe4d78b39388: gpt-4o-mini, 710 tokens, $0.0001 total cost
+2026-04-13 11:35:39,899 - monitor_db - INFO - Updated request 138a0982-19dc-4a39-a99e-fe4d78b39388 status to: completed
+2026-04-13 11:35:39,913 - monitor_db - INFO - Updated request 138a0982-19dc-4a39-a99e-fe4d78b39388 status to: completed
+2026-04-13 11:35:39,926 - monitor_db - INFO - Added output files for request 138a0982-19dc-4a39-a99e-fe4d78b39388: ['http://localhost:8007/api/download/APL- Rapid Trading- Dec 25 2_invoice.xlsx', 'http://localhost:8007/api/download/APL- Rapid Trading- Dec 25 2_invoice.json']
+2026-04-13 11:35:39,939 - monitor_db - INFO - Updated metadata for request 138a0982-19dc-4a39-a99e-fe4d78b39388
+2026-04-13 11:35:39,940 - monitor_service - INFO - Completed monitoring for request 138a0982-19dc-4a39-a99e-fe4d78b39388 in 17.31s
+2026-04-13 11:35:39,940 - monitor_middleware - INFO - Request 138a0982-19dc-4a39-a99e-fe4d78b39388 completed successfully in 17.31s
+2026-04-13 12:22:00,355 - monitor_db - INFO - Database initialized successfully
+2026-04-13 12:22:06,056 - monitor_middleware - INFO - Monitoring middleware added to FastAPI application
+2026-04-13 12:22:06,217 - monitor_middleware - INFO - Monitoring middleware added to FastAPI application
+2026-04-13 12:26:31,418 - monitor_db - INFO - Created request: 54ae8b83-b8cb-4d59-9ac1-603313725111 - unknown
+2026-04-13 12:26:31,429 - monitor_service - INFO - Started monitoring request 54ae8b83-b8cb-4d59-9ac1-603313725111
+2026-04-13 12:26:31,429 - monitor_middleware - INFO - Monitoring started for request 54ae8b83-b8cb-4d59-9ac1-603313725111: unknown
+2026-04-13 12:26:31,543 - monitor_db - INFO - Updated request 54ae8b83-b8cb-4d59-9ac1-603313725111 status to: processing
+2026-04-13 12:26:34,651 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 12:26:34,716 - monitor_db - INFO - Updated metadata for request 54ae8b83-b8cb-4d59-9ac1-603313725111
+2026-04-13 12:26:34,717 - monitor_service - INFO - Recorded AI call for 54ae8b83-b8cb-4d59-9ac1-603313725111: gpt-4o-mini, 870 tokens, $0.0001 total cost
+2026-04-13 12:26:38,983 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 12:26:41,133 - root - INFO - Using downloaded & verified file: C:\Users\Intern\.cache\doctr\models\db_resnet50-79bd7d70.pt
+2026-04-13 12:26:47,263 - root - INFO - Using downloaded & verified file: C:\Users\Intern\.cache\doctr\models\crnn_vgg16_bn-0417f351.pt
+2026-04-13 12:27:13,550 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 12:27:13,584 - monitor_db - INFO - Updated metadata for request 54ae8b83-b8cb-4d59-9ac1-603313725111
+2026-04-13 12:27:13,585 - monitor_service - INFO - Recorded AI call for 54ae8b83-b8cb-4d59-9ac1-603313725111: gpt-4o, 4233 tokens, $0.0114 total cost
+2026-04-13 12:27:14,934 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 12:27:14,971 - monitor_db - INFO - Updated metadata for request 54ae8b83-b8cb-4d59-9ac1-603313725111
+2026-04-13 12:27:14,971 - monitor_service - INFO - Recorded AI call for 54ae8b83-b8cb-4d59-9ac1-603313725111: gpt-4o, 6458 tokens, $0.0181 total cost
+2026-04-13 12:27:17,891 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 12:27:17,924 - monitor_db - INFO - Updated metadata for request 54ae8b83-b8cb-4d59-9ac1-603313725111
+2026-04-13 12:27:17,924 - monitor_service - INFO - Recorded AI call for 54ae8b83-b8cb-4d59-9ac1-603313725111: gpt-4o, 9030 tokens, $0.0261 total cost
+2026-04-13 12:27:23,260 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 12:27:23,275 - monitor_db - INFO - Updated metadata for request 54ae8b83-b8cb-4d59-9ac1-603313725111
+2026-04-13 12:27:23,275 - monitor_service - INFO - Recorded AI call for 54ae8b83-b8cb-4d59-9ac1-603313725111: gpt-4o, 14864 tokens, $0.0471 total cost
+2026-04-13 12:27:27,110 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 12:27:27,146 - monitor_db - INFO - Updated metadata for request 54ae8b83-b8cb-4d59-9ac1-603313725111
+2026-04-13 12:27:27,146 - monitor_service - INFO - Recorded AI call for 54ae8b83-b8cb-4d59-9ac1-603313725111: gpt-4o, 18227 tokens, $0.0584 total cost
+2026-04-13 12:27:29,270 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 12:27:29,664 - monitor_db - INFO - Updated request 54ae8b83-b8cb-4d59-9ac1-603313725111 status to: completed
+2026-04-13 12:27:29,675 - monitor_db - INFO - Updated request 54ae8b83-b8cb-4d59-9ac1-603313725111 status to: completed
+2026-04-13 12:27:29,688 - monitor_db - INFO - Added output files for request 54ae8b83-b8cb-4d59-9ac1-603313725111: ['http://localhost:8007/api/download/extracted_schema.xlsx', 'http://localhost:8007/api/download/extracted_schema.json']
+2026-04-13 12:27:29,700 - monitor_db - INFO - Updated metadata for request 54ae8b83-b8cb-4d59-9ac1-603313725111
+2026-04-13 12:27:29,700 - monitor_service - INFO - Completed monitoring for request 54ae8b83-b8cb-4d59-9ac1-603313725111 in 58.25s
+2026-04-13 12:27:29,701 - monitor_middleware - INFO - Request 54ae8b83-b8cb-4d59-9ac1-603313725111 completed successfully in 58.25s
+2026-04-13 15:37:57,088 - monitor_db - INFO - Created request: 1585c778-5107-47ff-8966-7fb8ffac040a - unknown
+2026-04-13 15:37:57,099 - monitor_service - INFO - Started monitoring request 1585c778-5107-47ff-8966-7fb8ffac040a
+2026-04-13 15:37:57,099 - monitor_middleware - INFO - Monitoring started for request 1585c778-5107-47ff-8966-7fb8ffac040a: unknown
+2026-04-13 15:37:57,171 - monitor_db - INFO - Updated request 1585c778-5107-47ff-8966-7fb8ffac040a status to: processing
+2026-04-13 15:37:58,529 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 15:37:58,565 - monitor_db - INFO - Updated metadata for request 1585c778-5107-47ff-8966-7fb8ffac040a
+2026-04-13 15:37:58,568 - monitor_service - INFO - Recorded AI call for 1585c778-5107-47ff-8966-7fb8ffac040a: gpt-4o-mini, 880 tokens, $0.0001 total cost
+2026-04-13 15:38:01,887 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 15:38:06,726 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 15:38:06,737 - monitor_db - INFO - Updated metadata for request 1585c778-5107-47ff-8966-7fb8ffac040a
+2026-04-13 15:38:06,737 - monitor_service - INFO - Recorded AI call for 1585c778-5107-47ff-8966-7fb8ffac040a: gpt-4o, 4271 tokens, $0.0133 total cost
+2026-04-13 15:38:09,098 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 15:38:09,138 - monitor_db - INFO - Updated metadata for request 1585c778-5107-47ff-8966-7fb8ffac040a
+2026-04-13 15:38:09,138 - monitor_service - INFO - Recorded AI call for 1585c778-5107-47ff-8966-7fb8ffac040a: gpt-4o, 6379 tokens, $0.0205 total cost
+2026-04-13 15:38:10,714 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 15:38:10,743 - monitor_db - INFO - Updated metadata for request 1585c778-5107-47ff-8966-7fb8ffac040a
+2026-04-13 15:38:10,743 - monitor_service - INFO - Recorded AI call for 1585c778-5107-47ff-8966-7fb8ffac040a: gpt-4o, 7482 tokens, $0.0243 total cost
+2026-04-13 15:38:12,354 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 15:38:12,363 - monitor_db - INFO - Updated metadata for request 1585c778-5107-47ff-8966-7fb8ffac040a
+2026-04-13 15:38:12,364 - monitor_service - INFO - Recorded AI call for 1585c778-5107-47ff-8966-7fb8ffac040a: gpt-4o, 10725 tokens, $0.0330 total cost
+2026-04-13 15:38:13,878 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 15:38:13,907 - monitor_db - INFO - Updated metadata for request 1585c778-5107-47ff-8966-7fb8ffac040a
+2026-04-13 15:38:13,907 - monitor_service - INFO - Recorded AI call for 1585c778-5107-47ff-8966-7fb8ffac040a: gpt-4o, 12259 tokens, $0.0371 total cost
+2026-04-13 15:38:17,234 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 15:38:17,261 - monitor_db - INFO - Updated metadata for request 1585c778-5107-47ff-8966-7fb8ffac040a
+2026-04-13 15:38:17,261 - monitor_service - INFO - Recorded AI call for 1585c778-5107-47ff-8966-7fb8ffac040a: gpt-4o, 13599 tokens, $0.0425 total cost
+2026-04-13 15:38:22,073 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 15:38:22,109 - monitor_db - INFO - Updated metadata for request 1585c778-5107-47ff-8966-7fb8ffac040a
+2026-04-13 15:38:22,109 - monitor_service - INFO - Recorded AI call for 1585c778-5107-47ff-8966-7fb8ffac040a: gpt-4o, 17755 tokens, $0.0570 total cost
+2026-04-13 15:38:24,434 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 15:38:24,473 - monitor_db - INFO - Updated metadata for request 1585c778-5107-47ff-8966-7fb8ffac040a
+2026-04-13 15:38:24,473 - monitor_service - INFO - Recorded AI call for 1585c778-5107-47ff-8966-7fb8ffac040a: gpt-4o, 19597 tokens, $0.0634 total cost
+2026-04-13 15:38:26,278 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 15:38:30,067 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 15:38:33,920 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 15:38:33,958 - monitor_db - INFO - Updated metadata for request 1585c778-5107-47ff-8966-7fb8ffac040a
+2026-04-13 15:38:33,959 - monitor_service - INFO - Recorded AI call for 1585c778-5107-47ff-8966-7fb8ffac040a: gpt-4o, 21236 tokens, $0.0695 total cost
+2026-04-13 15:38:42,158 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 15:38:42,192 - monitor_db - INFO - Updated metadata for request 1585c778-5107-47ff-8966-7fb8ffac040a
+2026-04-13 15:38:42,195 - monitor_service - INFO - Recorded AI call for 1585c778-5107-47ff-8966-7fb8ffac040a: gpt-4o, 26150 tokens, $0.0895 total cost
+2026-04-13 15:38:45,260 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 15:38:45,298 - monitor_db - INFO - Updated metadata for request 1585c778-5107-47ff-8966-7fb8ffac040a
+2026-04-13 15:38:45,299 - monitor_service - INFO - Recorded AI call for 1585c778-5107-47ff-8966-7fb8ffac040a: gpt-4o, 28461 tokens, $0.0982 total cost
+2026-04-13 15:38:47,190 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 15:38:50,770 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 15:38:53,349 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 15:38:53,385 - monitor_db - INFO - Updated metadata for request 1585c778-5107-47ff-8966-7fb8ffac040a
+2026-04-13 15:38:53,385 - monitor_service - INFO - Recorded AI call for 1585c778-5107-47ff-8966-7fb8ffac040a: gpt-4o, 29832 tokens, $0.1036 total cost
+2026-04-13 15:38:56,422 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 15:38:56,460 - monitor_db - INFO - Updated metadata for request 1585c778-5107-47ff-8966-7fb8ffac040a
+2026-04-13 15:38:56,461 - monitor_service - INFO - Recorded AI call for 1585c778-5107-47ff-8966-7fb8ffac040a: gpt-4o, 33726 tokens, $0.1155 total cost
+2026-04-13 15:38:58,244 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 15:38:58,284 - monitor_db - INFO - Updated metadata for request 1585c778-5107-47ff-8966-7fb8ffac040a
+2026-04-13 15:38:58,284 - monitor_service - INFO - Recorded AI call for 1585c778-5107-47ff-8966-7fb8ffac040a: gpt-4o, 35540 tokens, $0.1212 total cost
+2026-04-13 15:39:00,280 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 15:39:03,590 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 15:39:03,733 - monitor_db - INFO - Updated request 1585c778-5107-47ff-8966-7fb8ffac040a status to: completed
+2026-04-13 15:39:03,748 - monitor_db - INFO - Updated request 1585c778-5107-47ff-8966-7fb8ffac040a status to: completed
+2026-04-13 15:39:03,760 - monitor_db - INFO - Added output files for request 1585c778-5107-47ff-8966-7fb8ffac040a: ['http://localhost:8007/api/download/extracted_schema.xlsx', 'http://localhost:8007/api/download/extracted_schema.json']
+2026-04-13 15:39:03,774 - monitor_db - INFO - Updated metadata for request 1585c778-5107-47ff-8966-7fb8ffac040a
+2026-04-13 15:39:03,776 - monitor_service - INFO - Completed monitoring for request 1585c778-5107-47ff-8966-7fb8ffac040a in 66.64s
+2026-04-13 15:39:03,776 - monitor_middleware - INFO - Request 1585c778-5107-47ff-8966-7fb8ffac040a completed successfully in 66.64s
+2026-04-13 15:49:24,749 - monitor_db - INFO - Created request: 2a7b79e3-4e91-42f1-9207-b97653f76a80 - unknown
+2026-04-13 15:49:24,759 - monitor_service - INFO - Started monitoring request 2a7b79e3-4e91-42f1-9207-b97653f76a80
+2026-04-13 15:49:24,761 - monitor_middleware - INFO - Monitoring started for request 2a7b79e3-4e91-42f1-9207-b97653f76a80: unknown
+2026-04-13 15:49:24,858 - monitor_db - INFO - Updated request 2a7b79e3-4e91-42f1-9207-b97653f76a80 status to: processing
+2026-04-13 15:49:40,062 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 15:49:40,103 - monitor_db - INFO - Updated metadata for request 2a7b79e3-4e91-42f1-9207-b97653f76a80
+2026-04-13 15:49:40,104 - monitor_service - INFO - Recorded AI call for 2a7b79e3-4e91-42f1-9207-b97653f76a80: gpt-4o-mini, 180 tokens, $0.0000 total cost
+2026-04-13 15:50:22,030 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 16:07:33,418 - asyncio - ERROR - Exception in callback _ProactorBasePipeTransport._call_connection_lost(None)
+handle: <Handle _ProactorBasePipeTransport._call_connection_lost(None)>
+Traceback (most recent call last):
+  File "C:\Program Files\Python311\Lib\asyncio\events.py", line 84, in _run
+    self._context.run(self._callback, *self._args)
+  File "C:\Program Files\Python311\Lib\asyncio\proactor_events.py", line 165, in _call_connection_lost
+    self._sock.shutdown(socket.SHUT_RDWR)
+ConnectionResetError: [WinError 10054] An existing connection was forcibly closed by the remote host
+2026-04-13 16:22:19,891 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 16:22:23,728 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 16:22:23,988 - monitor_db - INFO - Updated request 2a7b79e3-4e91-42f1-9207-b97653f76a80 status to: completed
+2026-04-13 16:22:23,998 - monitor_db - INFO - Updated request 2a7b79e3-4e91-42f1-9207-b97653f76a80 status to: completed
+2026-04-13 16:22:24,006 - monitor_db - INFO - Added output files for request 2a7b79e3-4e91-42f1-9207-b97653f76a80: ['http://localhost:8007/api/download/extracted_schema.xlsx', 'http://localhost:8007/api/download/extracted_schema.json']
+2026-04-13 16:22:24,020 - monitor_db - INFO - Updated metadata for request 2a7b79e3-4e91-42f1-9207-b97653f76a80
+2026-04-13 16:22:24,021 - monitor_service - INFO - Completed monitoring for request 2a7b79e3-4e91-42f1-9207-b97653f76a80 in 1979.24s
+2026-04-13 16:22:24,021 - monitor_middleware - INFO - Request 2a7b79e3-4e91-42f1-9207-b97653f76a80 completed successfully in 1979.24s
+2026-04-13 16:23:47,005 - monitor_db - INFO - Created request: 6d9cc00b-680e-48c9-a577-270c713067c9 - unknown
+2026-04-13 16:23:47,014 - monitor_service - INFO - Started monitoring request 6d9cc00b-680e-48c9-a577-270c713067c9
+2026-04-13 16:23:47,014 - monitor_middleware - INFO - Monitoring started for request 6d9cc00b-680e-48c9-a577-270c713067c9: unknown
+2026-04-13 16:23:47,089 - monitor_db - INFO - Updated request 6d9cc00b-680e-48c9-a577-270c713067c9 status to: processing
+2026-04-13 16:24:03,336 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 16:24:03,355 - monitor_db - INFO - Updated metadata for request 6d9cc00b-680e-48c9-a577-270c713067c9
+2026-04-13 16:24:03,355 - monitor_service - INFO - Recorded AI call for 6d9cc00b-680e-48c9-a577-270c713067c9: gpt-4o-mini, 180 tokens, $0.0000 total cost
+2026-04-13 16:24:53,272 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 16:40:25,355 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 16:40:31,388 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 16:40:31,435 - monitor_db - INFO - Updated request 6d9cc00b-680e-48c9-a577-270c713067c9 status to: completed
+2026-04-13 16:40:31,442 - monitor_db - INFO - Updated request 6d9cc00b-680e-48c9-a577-270c713067c9 status to: completed
+2026-04-13 16:40:31,448 - monitor_db - INFO - Added output files for request 6d9cc00b-680e-48c9-a577-270c713067c9: ['http://localhost:8007/api/download/extracted_schema.xlsx', 'http://localhost:8007/api/download/extracted_schema.json']
+2026-04-13 16:40:31,455 - monitor_db - INFO - Updated metadata for request 6d9cc00b-680e-48c9-a577-270c713067c9
+2026-04-13 16:40:31,455 - monitor_service - INFO - Completed monitoring for request 6d9cc00b-680e-48c9-a577-270c713067c9 in 1004.43s
+2026-04-13 16:40:31,455 - monitor_middleware - INFO - Request 6d9cc00b-680e-48c9-a577-270c713067c9 completed successfully in 1004.43s
+2026-04-13 16:49:17,318 - monitor_db - INFO - Created request: b7e43fa7-27e1-4327-80be-490fde6cc2c3 - unknown
+2026-04-13 16:49:17,325 - monitor_service - INFO - Started monitoring request b7e43fa7-27e1-4327-80be-490fde6cc2c3
+2026-04-13 16:49:17,326 - monitor_middleware - INFO - Monitoring started for request b7e43fa7-27e1-4327-80be-490fde6cc2c3: unknown
+2026-04-13 16:49:17,366 - monitor_db - INFO - Updated request b7e43fa7-27e1-4327-80be-490fde6cc2c3 status to: processing
+2026-04-13 16:49:18,884 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 16:49:18,898 - monitor_db - INFO - Updated metadata for request b7e43fa7-27e1-4327-80be-490fde6cc2c3
+2026-04-13 16:49:18,899 - monitor_service - INFO - Recorded AI call for b7e43fa7-27e1-4327-80be-490fde6cc2c3: gpt-4o-mini, 880 tokens, $0.0001 total cost
+2026-04-13 16:49:22,948 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 16:49:28,646 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 16:49:28,659 - monitor_db - INFO - Updated metadata for request b7e43fa7-27e1-4327-80be-490fde6cc2c3
+2026-04-13 16:49:28,659 - monitor_service - INFO - Recorded AI call for b7e43fa7-27e1-4327-80be-490fde6cc2c3: gpt-4o, 4271 tokens, $0.0133 total cost
+2026-04-13 16:49:31,036 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 16:49:31,047 - monitor_db - INFO - Updated metadata for request b7e43fa7-27e1-4327-80be-490fde6cc2c3
+2026-04-13 16:49:31,048 - monitor_service - INFO - Recorded AI call for b7e43fa7-27e1-4327-80be-490fde6cc2c3: gpt-4o, 6379 tokens, $0.0205 total cost
+2026-04-13 16:49:33,912 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 16:49:33,924 - monitor_db - INFO - Updated metadata for request b7e43fa7-27e1-4327-80be-490fde6cc2c3
+2026-04-13 16:49:33,924 - monitor_service - INFO - Recorded AI call for b7e43fa7-27e1-4327-80be-490fde6cc2c3: gpt-4o, 7518 tokens, $0.0247 total cost
+2026-04-13 16:49:35,482 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 16:49:35,506 - monitor_db - INFO - Updated metadata for request b7e43fa7-27e1-4327-80be-490fde6cc2c3
+2026-04-13 16:49:35,507 - monitor_service - INFO - Recorded AI call for b7e43fa7-27e1-4327-80be-490fde6cc2c3: gpt-4o, 10828 tokens, $0.0335 total cost
+2026-04-13 16:49:36,304 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 16:49:36,328 - monitor_db - INFO - Updated metadata for request b7e43fa7-27e1-4327-80be-490fde6cc2c3
+2026-04-13 16:49:36,328 - monitor_service - INFO - Recorded AI call for b7e43fa7-27e1-4327-80be-490fde6cc2c3: gpt-4o, 12362 tokens, $0.0376 total cost
+2026-04-13 16:49:39,332 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 16:49:39,343 - monitor_db - INFO - Updated metadata for request b7e43fa7-27e1-4327-80be-490fde6cc2c3
+2026-04-13 16:49:39,344 - monitor_service - INFO - Recorded AI call for b7e43fa7-27e1-4327-80be-490fde6cc2c3: gpt-4o, 13702 tokens, $0.0430 total cost
+2026-04-13 16:49:44,433 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 16:49:44,447 - monitor_db - INFO - Updated metadata for request b7e43fa7-27e1-4327-80be-490fde6cc2c3
+2026-04-13 16:49:44,448 - monitor_service - INFO - Recorded AI call for b7e43fa7-27e1-4327-80be-490fde6cc2c3: gpt-4o, 17846 tokens, $0.0574 total cost
+2026-04-13 16:49:47,195 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 16:49:47,215 - monitor_db - INFO - Updated metadata for request b7e43fa7-27e1-4327-80be-490fde6cc2c3
+2026-04-13 16:49:47,216 - monitor_service - INFO - Recorded AI call for b7e43fa7-27e1-4327-80be-490fde6cc2c3: gpt-4o, 19688 tokens, $0.0638 total cost
+2026-04-13 16:49:50,172 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 16:49:53,573 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 16:49:56,902 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 16:49:56,917 - monitor_db - INFO - Updated metadata for request b7e43fa7-27e1-4327-80be-490fde6cc2c3
+2026-04-13 16:49:56,918 - monitor_service - INFO - Recorded AI call for b7e43fa7-27e1-4327-80be-490fde6cc2c3: gpt-4o, 21352 tokens, $0.0701 total cost
+2026-04-13 16:50:04,853 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 16:50:04,867 - monitor_db - INFO - Updated metadata for request b7e43fa7-27e1-4327-80be-490fde6cc2c3
+2026-04-13 16:50:04,867 - monitor_service - INFO - Recorded AI call for b7e43fa7-27e1-4327-80be-490fde6cc2c3: gpt-4o, 26338 tokens, $0.0903 total cost
+2026-04-13 16:50:09,438 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 16:50:09,459 - monitor_db - INFO - Updated metadata for request b7e43fa7-27e1-4327-80be-490fde6cc2c3
+2026-04-13 16:50:09,460 - monitor_service - INFO - Recorded AI call for b7e43fa7-27e1-4327-80be-490fde6cc2c3: gpt-4o, 28649 tokens, $0.0991 total cost
+2026-04-13 16:50:11,369 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 16:50:14,416 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 16:50:18,178 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 16:50:18,200 - monitor_db - INFO - Updated metadata for request b7e43fa7-27e1-4327-80be-490fde6cc2c3
+2026-04-13 16:50:18,200 - monitor_service - INFO - Recorded AI call for b7e43fa7-27e1-4327-80be-490fde6cc2c3: gpt-4o, 30021 tokens, $0.1045 total cost
+2026-04-13 16:50:20,666 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 16:50:20,680 - monitor_db - INFO - Updated metadata for request b7e43fa7-27e1-4327-80be-490fde6cc2c3
+2026-04-13 16:50:20,680 - monitor_service - INFO - Recorded AI call for b7e43fa7-27e1-4327-80be-490fde6cc2c3: gpt-4o, 33924 tokens, $0.1163 total cost
+2026-04-13 16:50:22,362 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 16:50:22,376 - monitor_db - INFO - Updated metadata for request b7e43fa7-27e1-4327-80be-490fde6cc2c3
+2026-04-13 16:50:22,376 - monitor_service - INFO - Recorded AI call for b7e43fa7-27e1-4327-80be-490fde6cc2c3: gpt-4o, 35738 tokens, $0.1221 total cost
+2026-04-13 16:50:24,521 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 16:50:30,958 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 16:50:31,016 - monitor_db - INFO - Updated request b7e43fa7-27e1-4327-80be-490fde6cc2c3 status to: completed
+2026-04-13 16:50:31,024 - monitor_db - INFO - Updated request b7e43fa7-27e1-4327-80be-490fde6cc2c3 status to: completed
+2026-04-13 16:50:31,032 - monitor_db - INFO - Added output files for request b7e43fa7-27e1-4327-80be-490fde6cc2c3: ['http://localhost:8007/api/download/extracted_schema.xlsx', 'http://localhost:8007/api/download/extracted_schema.json']
+2026-04-13 16:50:31,041 - monitor_db - INFO - Updated metadata for request b7e43fa7-27e1-4327-80be-490fde6cc2c3
+2026-04-13 16:50:31,043 - monitor_service - INFO - Completed monitoring for request b7e43fa7-27e1-4327-80be-490fde6cc2c3 in 73.70s
+2026-04-13 16:50:31,043 - monitor_middleware - INFO - Request b7e43fa7-27e1-4327-80be-490fde6cc2c3 completed successfully in 73.70s
+2026-04-13 17:05:20,947 - monitor_db - INFO - Database initialized successfully
+2026-04-13 17:05:36,292 - monitor_middleware - INFO - Monitoring middleware added to FastAPI application
+2026-04-13 17:05:36,611 - monitor_middleware - INFO - Monitoring middleware added to FastAPI application
+2026-04-13 17:07:26,873 - monitor_db - INFO - Created request: 8a0cdd4f-8561-4871-919a-898e70e3a8c3 - unknown
+2026-04-13 17:07:26,880 - monitor_service - INFO - Started monitoring request 8a0cdd4f-8561-4871-919a-898e70e3a8c3
+2026-04-13 17:07:26,880 - monitor_middleware - INFO - Monitoring started for request 8a0cdd4f-8561-4871-919a-898e70e3a8c3: unknown
+2026-04-13 17:07:26,907 - monitor_db - INFO - Updated request 8a0cdd4f-8561-4871-919a-898e70e3a8c3 status to: processing
+2026-04-13 17:07:29,016 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 17:07:29,031 - monitor_db - INFO - Updated metadata for request 8a0cdd4f-8561-4871-919a-898e70e3a8c3
+2026-04-13 17:07:29,031 - monitor_service - INFO - Recorded AI call for 8a0cdd4f-8561-4871-919a-898e70e3a8c3: gpt-4o-mini, 880 tokens, $0.0001 total cost
+2026-04-13 17:07:33,024 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 17:07:40,553 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 17:07:40,567 - monitor_db - INFO - Updated metadata for request 8a0cdd4f-8561-4871-919a-898e70e3a8c3
+2026-04-13 17:07:40,567 - monitor_service - INFO - Recorded AI call for 8a0cdd4f-8561-4871-919a-898e70e3a8c3: gpt-4o, 4299 tokens, $0.0134 total cost
+2026-04-13 17:07:43,327 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 17:07:43,359 - monitor_db - INFO - Updated metadata for request 8a0cdd4f-8561-4871-919a-898e70e3a8c3
+2026-04-13 17:07:43,359 - monitor_service - INFO - Recorded AI call for 8a0cdd4f-8561-4871-919a-898e70e3a8c3: gpt-4o, 6435 tokens, $0.0206 total cost
+2026-04-13 17:07:45,723 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 17:07:45,733 - monitor_db - INFO - Updated metadata for request 8a0cdd4f-8561-4871-919a-898e70e3a8c3
+2026-04-13 17:07:45,733 - monitor_service - INFO - Recorded AI call for 8a0cdd4f-8561-4871-919a-898e70e3a8c3: gpt-4o, 7575 tokens, $0.0248 total cost
+2026-04-13 17:07:46,861 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 17:07:46,872 - monitor_db - INFO - Updated metadata for request 8a0cdd4f-8561-4871-919a-898e70e3a8c3
+2026-04-13 17:07:46,873 - monitor_service - INFO - Recorded AI call for 8a0cdd4f-8561-4871-919a-898e70e3a8c3: gpt-4o, 10886 tokens, $0.0336 total cost
+2026-04-13 17:07:48,043 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 17:07:48,060 - monitor_db - INFO - Updated metadata for request 8a0cdd4f-8561-4871-919a-898e70e3a8c3
+2026-04-13 17:07:48,061 - monitor_service - INFO - Recorded AI call for 8a0cdd4f-8561-4871-919a-898e70e3a8c3: gpt-4o, 12420 tokens, $0.0378 total cost
+2026-04-13 17:07:51,923 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 17:07:51,935 - monitor_db - INFO - Updated metadata for request 8a0cdd4f-8561-4871-919a-898e70e3a8c3
+2026-04-13 17:07:51,935 - monitor_service - INFO - Recorded AI call for 8a0cdd4f-8561-4871-919a-898e70e3a8c3: gpt-4o, 13758 tokens, $0.0432 total cost
+2026-04-13 17:07:58,802 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 17:07:58,823 - monitor_db - INFO - Updated metadata for request 8a0cdd4f-8561-4871-919a-898e70e3a8c3
+2026-04-13 17:07:58,823 - monitor_service - INFO - Recorded AI call for 8a0cdd4f-8561-4871-919a-898e70e3a8c3: gpt-4o, 17911 tokens, $0.0577 total cost
+2026-04-13 17:08:01,125 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 17:08:01,144 - monitor_db - INFO - Updated metadata for request 8a0cdd4f-8561-4871-919a-898e70e3a8c3
+2026-04-13 17:08:01,145 - monitor_service - INFO - Recorded AI call for 8a0cdd4f-8561-4871-919a-898e70e3a8c3: gpt-4o, 19753 tokens, $0.0641 total cost
+2026-04-13 17:08:03,754 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 17:08:07,926 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 17:08:12,236 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 17:08:12,246 - monitor_db - INFO - Updated metadata for request 8a0cdd4f-8561-4871-919a-898e70e3a8c3
+2026-04-13 17:08:12,247 - monitor_service - INFO - Recorded AI call for 8a0cdd4f-8561-4871-919a-898e70e3a8c3: gpt-4o, 21439 tokens, $0.0705 total cost
+2026-04-13 17:08:22,539 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 17:08:22,553 - monitor_db - INFO - Updated metadata for request 8a0cdd4f-8561-4871-919a-898e70e3a8c3
+2026-04-13 17:08:22,554 - monitor_service - INFO - Recorded AI call for 8a0cdd4f-8561-4871-919a-898e70e3a8c3: gpt-4o, 26461 tokens, $0.0908 total cost
+2026-04-13 17:08:27,255 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 17:08:27,264 - monitor_db - INFO - Updated metadata for request 8a0cdd4f-8561-4871-919a-898e70e3a8c3
+2026-04-13 17:08:27,266 - monitor_service - INFO - Recorded AI call for 8a0cdd4f-8561-4871-919a-898e70e3a8c3: gpt-4o, 28786 tokens, $0.0995 total cost
+2026-04-13 17:08:30,910 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 17:08:34,152 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 17:08:37,136 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 17:08:37,144 - monitor_db - INFO - Updated metadata for request 8a0cdd4f-8561-4871-919a-898e70e3a8c3
+2026-04-13 17:08:37,144 - monitor_service - INFO - Recorded AI call for 8a0cdd4f-8561-4871-919a-898e70e3a8c3: gpt-4o, 30197 tokens, $0.1050 total cost
+2026-04-13 17:08:41,481 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 400 Bad Request"
+2026-04-13 17:08:43,341 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 17:08:43,353 - monitor_db - INFO - Updated metadata for request 8a0cdd4f-8561-4871-919a-898e70e3a8c3
+2026-04-13 17:08:43,353 - monitor_service - INFO - Recorded AI call for 8a0cdd4f-8561-4871-919a-898e70e3a8c3: gpt-4o, 32051 tokens, $0.1109 total cost
+2026-04-13 17:08:45,397 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 17:08:48,220 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 17:08:51,536 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-13 17:08:51,738 - monitor_db - INFO - Updated request 8a0cdd4f-8561-4871-919a-898e70e3a8c3 status to: completed
+2026-04-13 17:08:51,746 - monitor_db - INFO - Updated request 8a0cdd4f-8561-4871-919a-898e70e3a8c3 status to: completed
+2026-04-13 17:08:51,753 - monitor_db - INFO - Added output files for request 8a0cdd4f-8561-4871-919a-898e70e3a8c3: ['http://localhost:8007/api/download/extracted_schema.xlsx', 'http://localhost:8007/api/download/extracted_schema.json']
+2026-04-13 17:08:51,760 - monitor_db - INFO - Updated metadata for request 8a0cdd4f-8561-4871-919a-898e70e3a8c3
+2026-04-13 17:08:51,761 - monitor_service - INFO - Completed monitoring for request 8a0cdd4f-8561-4871-919a-898e70e3a8c3 in 84.87s
+2026-04-13 17:08:51,761 - monitor_middleware - INFO - Request 8a0cdd4f-8561-4871-919a-898e70e3a8c3 completed successfully in 84.87s
+2026-04-13 17:27:41,428 - monitor_db - INFO - Database initialized successfully
+2026-04-13 17:27:54,454 - monitor_middleware - INFO - Monitoring middleware added to FastAPI application
+2026-04-13 17:27:54,728 - monitor_middleware - INFO - Monitoring middleware added to FastAPI application

@@ -20,6 +20,16 @@ class TextQualityVerifier:
             'claim', 'policy', 'insured', 'date', 'amount', 'paid', 'reserve', 'total'
         ]
 
+        self.reversed_keywords = [
+            "tropeR", "mialC", "ycailoP", "oitaR", "ssoL", "diap",
+            "redloHyciioP", "tnebmucnI", "enO", "emaN", "rebuN", "etaD",
+            # Scrambled/Scanned rotation markers
+            "7OSS", "GZOZ", "GCOC", "Ayjuwapu|", "wield", "sisAjeuy", "eyeq", "ebeg",
+            "OQUINN", "awWeN", "JUNODDY",
+            # New markers from noisy sample
+            "uonwaop", "uoniiep", "YOSBIA9S", "YOSOIAOS", "COCG", "ZOZG"
+        ]
+
     def analyze_quality(self, text: str, num_pages: int = 1) -> Dict:
         """
         Performs comprehensive quality analysis on extracted text.
@@ -49,6 +59,9 @@ class TextQualityVerifier:
         
         # 4. Keyword presence
         found_keywords = [k for k in self.critical_keywords if k.lower() in text.lower()]
+        
+        # 4b. Reversed/Scrambled keywords
+        found_reversed = [k for k in self.reversed_keywords if k in text or k.lower() in text.lower()]
         
         # 5. Gibberish Detection (Vowel ratio and nonsense word check)
         # Most English words have at least 20-30% vowels.
@@ -108,6 +121,9 @@ class TextQualityVerifier:
         if noisy_line_ratio > self.thresholds.get('max_noisy_line_ratio', 0.15):
             reasons.append(f"High ratio of noisy lines ({noisy_line_ratio:.2f})")
             
+        if len(found_reversed) >= 2:
+            reasons.append(f"Detected potential reversed/scrambled text encoding (found {len(found_reversed)} markers)")
+            
         is_acceptable = len(reasons) == 0
         
         return {
@@ -119,6 +135,7 @@ class TextQualityVerifier:
                 'vowel_ratio': round(vowel_ratio, 3),
                 'chars_per_page': int(chars_per_page),
                 'keyword_count': len(found_keywords),
+                'reversed_marker_count': len(found_reversed),
                 'nonsense_word_count': len(nonsense_words),
                 'noisy_line_ratio': round(noisy_line_ratio, 3)
             }
@@ -216,6 +233,12 @@ class TextQualityVerifier:
         """
         analysis = self.analyze_quality(page_text, num_pages=1)
         score = self.quality_score(page_text, num_pages=1)
+        recommendation = self.fallback_recommendation(page_text, num_pages=1)
+        return {
+            "analysis": analysis,
+            "score": score,
+            "recommendation": recommendation,
+        }
         recommendation = self.fallback_recommendation(page_text, num_pages=1)
         return {
             "analysis": analysis,

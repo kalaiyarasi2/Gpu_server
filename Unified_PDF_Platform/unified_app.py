@@ -82,6 +82,17 @@ async def monitor_dashboard():
         status_code=404,
     )
 
+@app.get("/ai-monitor", include_in_schema=False)
+async def ai_monitor_dashboard():
+    """Serve the AI usage monitoring dashboard HTML."""
+    dashboard_path = BASE_DIR.parent / "monitor" / "dashboard" / "ai_monitor.html"
+    if dashboard_path.exists():
+        return FileResponse(dashboard_path)
+    return HTMLResponse(
+        content="<h1>AI Monitor dashboard not found</h1><p>Expected <code>monitor/dashboard/ai_monitor.html</code>.</p>",
+        status_code=404,
+    )
+
 
 # Mount static and templates for the new React frontend
 frontend_dist_path = BASE_DIR / "frontend" / "dist"

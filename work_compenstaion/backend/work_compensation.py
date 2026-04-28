@@ -20,6 +20,12 @@ from pathlib import Path
 import subprocess
 import sys
 from io import BytesIO
+import time
+
+try:
+    from monitor.service import request_monitor
+except ImportError:
+    request_monitor = None
 
 try:
     import fitz  # PyMuPDF
@@ -178,9 +184,10 @@ WORKERS_COMP_SCHEMA = {
 class EnhancedInsuranceExtractor:
     """Enhanced extractor with layout awareness and verification"""
     
-    def __init__(self, api_key: Optional[str] = None, output_dir: Optional[str] = None):
+    def __init__(self, api_key: Optional[str] = None, output_dir: Optional[str] = None, request_id: Optional[str] = None):
         """Initialize with OpenAI API"""
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
+        self.request_id = request_id
         
         if self.api_key:
             self.client = OpenAI(api_key=self.api_key)
@@ -230,64 +237,103 @@ class EnhancedInsuranceExtractor:
             if form_data:
                 print(f"✅ Extracted data from fillable form fields/XFA.")
 
-            # 3. PAGE-LEVEL HYBRID EXTRACTION
+            # 3. PAGE-LEVEL HYBRID EXTRACTION (4-Stage Flow)
             all_text_parts = []
             if form_data:
                 all_text_parts.append(form_data)
             
             pages_metadata = []
             
-            # Initial digital extraction to get page count and base text
-            # We use pdfplumber for better layout
+            # Initial digital extraction
             digital_text, digital_metadata = extract_pdf_with_pdfplumber(pdf_path)
             total_pages = len(digital_metadata)
             
-            print(f"📄 Processing {total_pages} pages using Page-Level Hybrid Strategy...")
+            _verifier_mod = _load_wc_module("text_quality_verifier")
+            TextQualityVerifier = _verifier_mod.TextQualityVerifier
+            verifier = TextQualityVerifier()
             
+            print(f"📄 Processing {total_pages} pages using Unified 4-Stage Strategy...")
+            
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            from parallel_processor import ParallelPageProcessor
+            
+            # --- STAGE 1: Identify pages needing OCR ---
+            pages_to_ocr = []
             for i in range(total_pages):
-                page_num = i + 1
-                page_digital = digital_metadata[i]
-                page_text = page_digital.get("text", "")
+                page_meta = digital_metadata[i]
+                page_text = page_meta.get("text", "")
+                quality = verifier.analyze_quality(page_text, num_pages=1)
                 
-                # Check if this specific page needs OCR recovery
-                is_scanned_page = detector.is_page_scanned(i)
-                
-                # Text density check (Alphanumeric ratio)
-                alnum_text = re.sub(r'[^a-zA-Z0-9]', '', page_text)
-                is_low_density = len(alnum_text) < 100
-                
-                needs_ocr = is_scanned_page or is_low_density
-                
-                if needs_ocr:
-                    print(f"   Page {page_num}: {'Scanned/Unreadable' if is_scanned_page else 'Low Density'} -> Running OCR Recovery...")
-                    try:
-                        # Extract only this page via OCR
-                        ocr_extractor = OCRPDFExtractor(pdf_path)
-                        # We need a way to extract a specific page... 
-                        # For now, we'll use the existing extract() but we should optimize this soon
-                        # Since we want to be robust, we'll run OCR and pick the page
-                        # (Ideally OCRPDFExtractor should support page_index)
-                        ocr_text_full, ocr_meta = ocr_extractor.extract(
-                            dpi=config.OCR_DPI,
-                            psm_mode=config.OCR_PSM_MODE,
-                            verbose=False
-                        )
-                        
-                        if i < len(ocr_meta):
-                            ocr_page_text = ocr_meta[i].get("text", "")
-                            # Append OCR text to digital text for this page
-                            page_text += "\n\n--- OCR RECOVERY DATA (Page {page_num}) ---\n"
-                            page_text += ocr_page_text
-                            page_digital["extraction_method"] += "+ocr-recovery"
-                            page_digital["is_scanned"] = True
-                    except Exception as e:
-                        print(f"   ⚠️ OCR Recovery failed for page {page_num}: {e}")
-                
-                all_text_parts.append(page_text)
-                page_digital["text"] = page_text # Update with merged text
-                pages_metadata.append(page_digital)
+                if not quality['is_acceptable']:
+                    page_meta["rejection_reason"] = quality['reason']
+                    page_meta["quality_metrics"] = quality.get('metrics', {})
+                    pages_to_ocr.append(i + 1)
+                else:
+                    pages_metadata.append(page_meta)
+                    all_text_parts.append(page_text)
             
-            combined_text = "\n\n".join(all_text_parts)
+            # --- STAGE 2: Process low-quality pages in parallel ---
+            if pages_to_ocr:
+                print(f"   ⚡ Digital quality low for {len(pages_to_ocr)} pages. Parallel OCR start...")
+                processor = ParallelPageProcessor(pdf_path, api_key=self.api_key, max_workers=4)
+                
+                with ThreadPoolExecutor(max_workers=4) as executor:
+                    future_to_page = {executor.submit(processor.process_page, p_num): p_num for p_num in pages_to_ocr}
+                    
+                    ocr_results = {}
+                    for future in as_completed(future_to_page):
+                        p_num = future_to_page[future]
+                        try:
+                            ocr_results[p_num] = future.result()
+                        except Exception as e:
+                            print(f"   ⚠️ Parallel OCR failed for page {p_num}: {e}")
+
+                # Rebuild the final list in correct sequence
+                final_metadata = []
+                final_text_parts = [form_data] if form_data else []
+                
+                ocr_count = 0
+                for i in range(total_pages):
+                    p_num = i + 1
+                    if p_num in ocr_results:
+                        res = ocr_results[p_num]
+                        final_metadata.append({
+                            "page_number": p_num,
+                            "text": res.get("text", ""),
+                            "extraction_method": res.get("extraction_method"),
+                            "confidence": res.get("confidence"),
+                            "is_scanned": True
+                        })
+                        final_text_parts.append(res.get("text", ""))
+                        ocr_count += 1
+                    else:
+                        # Find the existing digital meta
+                        # (We need to be careful with ordering here)
+                        for dm in digital_metadata:
+                            if dm.get("page_number") == p_num:
+                                final_metadata.append(dm)
+                                final_text_parts.append(dm.get("text", ""))
+                                break
+                
+                pages_metadata = final_metadata
+                all_text_parts = final_text_parts
+                print(f"   ✓ Parallel OCR finished. {ocr_count} pages recovered.")
+            else:
+                # All pages were acceptable digitally
+                pages_metadata = digital_metadata
+                all_text_parts = [form_data] + [m.get("text", "") for m in digital_metadata] if form_data else [m.get("text", "") for m in digital_metadata]
+            
+            # Step 4: Logical Rearrangement (Rearrange correctly after extraction)
+            print(f"📊 Rearranging {len(pages_metadata)} pages logically based on content...")
+            pages_metadata = self._rearrange_pages_logically(pages_metadata)
+            
+            # Rebuild combined text from sorted metadata
+            # form_data always stays at the very top as it has no page number
+            final_parts = [form_data] if form_data else []
+            for m in pages_metadata:
+                final_parts.append(m.get("text", ""))
+            
+            combined_text = "\n\n".join(final_parts)
             return combined_text, pages_metadata
                 
         except Exception as e:
@@ -384,6 +430,7 @@ FORMAT YOUR RESPONSE AS:
 ```
 """
         try:
+            start_time = time.time()
             response = self.client.chat.completions.create(
                 model=config.VISION_MODEL,
                 messages=[{
@@ -401,6 +448,15 @@ FORMAT YOUR RESPONSE AS:
                 max_tokens=4000,
                 temperature=0.0
             )
+            elapsed = time.time() - start_time
+            if self.request_id and request_monitor:
+                request_monitor.record_ai_usage(
+                    request_id=self.request_id,
+                    prompt_tokens=response.usage.prompt_tokens,
+                    completion_tokens=response.usage.completion_tokens,
+                    processing_time=elapsed,
+                    model=config.VISION_MODEL
+                )
             
             response_text = response.choices[0].message.content
             
@@ -425,6 +481,35 @@ FORMAT YOUR RESPONSE AS:
         except Exception as e:
             print(f"❌ Vision error: {e}")
             return "", False, 0.0
+    
+    
+    def _rearrange_pages_logically(self, pages_metadata: List[Dict]) -> List[Dict]:
+        """
+        Sorts pages based on logical page numbers detected in the text.
+        """
+        import re
+        
+        def get_sort_key(p_meta):
+            text = p_meta.get("text", "")
+            # Remove synthetic "PAGE X" headers added by our extractors to find real markers
+            clean_text = re.sub(r'^={10,}\s*PAGE\s+\d+\s*={10,}', '', text, flags=re.IGNORECASE | re.DOTALL).strip()
+            
+            # Priority 1: "Page X of Y" or "Page X / Y"
+            match = re.search(r'Page\s*(\d+)\s*(?:of|/)\s*\d+', clean_text, re.IGNORECASE)
+            if match: return int(match.group(1))
+            
+            # Priority 2: "Page X" (usually at top or bottom)
+            sample = clean_text[:800] + "\n" + clean_text[-800:]
+            match = re.search(r'Page\s*(\d+)', sample, re.IGNORECASE)
+            if match: return int(match.group(1))
+            
+            # Priority 3: Simple digit at corners (REMOVED - TOO RISKY)
+            # We now require an explicit 'Page' or 'Pg' marker to avoid confusion with Loc numbers.
+
+            # Fallback: original physical page number
+            return p_meta.get("page_number", 999)
+
+        return sorted(pages_metadata, key=get_sort_key)
     
     
     def _detect_claim_numbers_ai(self, text: str) -> Dict:
@@ -554,6 +639,7 @@ Return ONLY the JSON. No explanations. Ensure you catch EVERY claim number, espe
 """
 
         try:
+            start_time = time.time()
             response = self.client.chat.completions.create(
                 model="gpt-4o",
                 messages=[{
@@ -564,6 +650,15 @@ Return ONLY the JSON. No explanations. Ensure you catch EVERY claim number, espe
                 max_tokens=8000,
                 temperature=0.0
             )
+            elapsed = time.time() - start_time
+            if self.request_id and request_monitor:
+                request_monitor.record_ai_usage(
+                    request_id=self.request_id,
+                    prompt_tokens=response.usage.prompt_tokens,
+                    completion_tokens=response.usage.completion_tokens,
+                    processing_time=elapsed,
+                    model="gpt-4o"
+                )
             
             result = json.loads(response.choices[0].message.content)
             
@@ -588,124 +683,7 @@ Return ONLY the JSON. No explanations. Ensure you catch EVERY claim number, espe
                 "confidence": 0.0
             }
     
-        image.save(buffered, format="PNG")
-        img_base64 = base64.b64encode(buffered.getvalue()).decode()
-        
-        prompt = """You are an expert OCR system that preserves document layout and structure.
 
-Your task: Extract ALL text from this document while preserving its EXACT layout.
-
-⚠️ CRITICAL: If this is a BLANK PAGE or ERROR MESSAGE, indicate that clearly in your response.
-
-CRITICAL REQUIREMENTS:
-1. **Preserve Tables**: Keep rows and columns aligned using spaces or tabs
-2. **Maintain Spacing**: Keep vertical spacing between sections
-3. **Column Alignment**: If document has multiple columns, keep them separate
-4. **Headers & Labels**: Clearly show all field labels and their values
-5. **Numbers**: Extract all numbers with exact precision (decimals, commas)
-6. **Handle Scans**: This may be a scanned document - extract carefully
-7. **Orientation**: Document may be landscape or portrait - extract accordingly
-8. **Blank Pages**: If page appears blank or contains only an error message, indicate this
-
-EXTRACT EVERYTHING including:
-- All headers and titles
-- Field labels and their values
-- Table contents (all rows and columns)
-- Financial amounts
-- Dates and times
-- Names and identifiers
-- Any footnotes or small text
-
-IF THIS PAGE IS BLANK OR CONTAINS ONLY AN ERROR:
-- Type: [BLANK PAGE] or [ERROR MESSAGE]
-- Description of what you see
-
-FORMAT YOUR RESPONSE AS:
-
-```
-[EXTRACTED TEXT - LAYOUT PRESERVED]
-<paste the full text here maintaining layout>
-
-[DOCUMENT ANALYSIS]
-- Is Scanned: <yes/no>
-- Quality: <excellent/good/fair/poor>
-- Confidence: <0.0-1.0>
-- Layout Type: <table/form/mixed/blank>
-- Orientation: <portrait/landscape/unknown>
-- Page Status: <content/blank/error>
-```
-
-IMPORTANT: 
-- Do NOT summarize. Extract the COMPLETE text exactly as it appears.
-- If page is blank or shows an error, still report the confidence as 0.0"""
-
-        try:
-            response = self.client.chat.completions.create(
-                model="gpt-4o",
-                messages=[{
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": prompt},
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/png;base64,{img_base64}"
-                            }
-                        }
-                    ]
-                }],
-                max_tokens=8000,
-                temperature=0.0  # Zero temperature for exact extraction
-            )
-            
-            response_text = response.choices[0].message.content
-            
-            # Parse response
-            extracted_text = ""
-            is_scanned = False
-            confidence = 0.9
-            page_status = "content"
-            
-            # Extract the text section
-            if "[EXTRACTED TEXT - LAYOUT PRESERVED]" in response_text:
-                parts = response_text.split("[DOCUMENT ANALYSIS]")
-                text_section = parts[0].replace("[EXTRACTED TEXT - LAYOUT PRESERVED]", "").strip()
-                extracted_text = text_section.strip('`').strip()
-                
-                # Parse analysis section
-                if len(parts) > 1:
-                    analysis = parts[1]
-                    if "Is Scanned: yes" in analysis.lower():
-                        is_scanned = True
-                    
-                    # Extract confidence score
-                    conf_match = re.search(r'Confidence:\s*([\d\.]+)', analysis)
-                    if conf_match:
-                        confidence = float(conf_match.group(1))
-                    
-                    # Check page status
-                    if "[BLANK PAGE]" in extracted_text or "[ERROR MESSAGE]" in extracted_text:
-                        page_status = "blank"
-                        confidence = 0.0
-                        extracted_text = "[BLANK PAGE - No extractable content]"
-                    elif "Page Status: blank" in analysis.lower():
-                        page_status = "blank"
-                        confidence = 0.0
-                        extracted_text = "[BLANK PAGE - No extractable content]"
-            else:
-                # Fallback: use entire response
-                extracted_text = response_text
-            
-            print(f"✓ Extracted {len(extracted_text)} characters")
-            print(f"  - Scanned: {is_scanned}")
-            print(f"  - Confidence: {confidence:.2f}")
-            print(f"  - Status: {page_status}")
-            
-            return extracted_text, is_scanned, confidence
-            
-        except Exception as e:
-            print(f"❌ Error extracting text: {e}")
-            return "", False, 0.0
     
     def _chunk_text_dynamically(self, text: str, max_tokens: int = 6000) -> List[Dict]:
         """
@@ -767,6 +745,7 @@ DOCUMENT SAMPLE:
 """
         
         try:
+            start_time = time.time()
             response = self.client.chat.completions.create(
                 model="gpt-4o",
                 messages=[{"role": "user", "content": prompt}],
@@ -774,6 +753,15 @@ DOCUMENT SAMPLE:
                 max_tokens=1500,
                 temperature=0.0
             )
+            elapsed = time.time() - start_time
+            if self.request_id and request_monitor:
+                request_monitor.record_ai_usage(
+                    request_id=self.request_id,
+                    prompt_tokens=response.usage.prompt_tokens,
+                    completion_tokens=response.usage.completion_tokens,
+                    processing_time=elapsed,
+                    model="gpt-4o"
+                )
             
             chunking_plan = json.loads(response.choices[0].message.content)
             splits = chunking_plan.get("suggested_splits", [])
@@ -899,6 +887,7 @@ DOCUMENT TEXT (first 8000 chars):
 Return ONLY the JSON."""
 
         try:
+            start_time = time.time()
             response = self.client.chat.completions.create(
                 model="gpt-4o",
                 messages=[{"role": "user", "content": prompt}],
@@ -906,6 +895,15 @@ Return ONLY the JSON."""
                 max_tokens=1500,
                 temperature=0.0
             )
+            elapsed = time.time() - start_time
+            if self.request_id and request_monitor:
+                request_monitor.record_ai_usage(
+                    request_id=self.request_id,
+                    prompt_tokens=response.usage.prompt_tokens,
+                    completion_tokens=response.usage.completion_tokens,
+                    processing_time=elapsed,
+                    model="gpt-4o"
+                )
             
             format_info = json.loads(response.choices[0].message.content)
             
@@ -942,60 +940,43 @@ ACORD FORM SPECIFIC RULES:
    - "m trust vor th America" -> "AmTrust North America"
    - "Altas" -> "Atlas"
    - "State Fund" -> "State Compensation Insurance Fund"
-5. **Rating Tables**: Look for "CLASS CODE", "REMUNERATION", "EST ANNUAL PAYROLL". If these headers are missing but you see 4-digit codes followed by large numbers and a rate, treat it as a rating row.
-6. **Prior Carriers**: Even if the layout is messy, extract the Carrier Name, Policy #, and Premium. Look for "PRIOR CARRIER INFORMATION" headers.
-7. **General Questions**: If you see fragments like "z", "x", "2", "|", or "9" in a check box area, interpret it as "Y" if context suggests a yes, but default to "N" if no explanation is provided.
+6. **Rating Table Precision**:
+   - **State-to-Value Alignment**: ALWAYS ensure the 'EST ANNUAL PAYROLL' (or REMUNERATION) matches the correct State (e.g., AR, CO, CA). Do NOT skip rows or shift values between states.
+   - **LOC# Confusion**: Ignore 'LOC#' or 'LOC' numbers (like 004, 005) when determining the State. The State code (AR, CO, etc.) is the primary key.
+   - **Multi-row Logic**: If a table has multiple rows for the same class code but different states, extract each one uniquely.
+7. **Prior Carriers**: Even if the layout is messy, extract the Carrier Name, Policy #, and Premium. Look for "PRIOR CARRIER INFORMATION" headers.
+8. **General Questions**: If you see fragments like "z", "x", "2", "|", or "9" in a check box area, interpret it as "Y" if context suggests a yes, but default to "N" if no explanation is provided.
 
 DOCUMENT FORMAT ANALYSIS:
 {json.dumps(format_info, indent=2)}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📋 EXTRACTION TASK
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Extract ALL available information from the application form into the requested JSON structure.
 
 === KEY SECTIONS TO EXTRACT ===
 
-=== ⚠️ ABSOLUTELY NO HALLUCINATION / NO GUESSING ===
-1. **Literal Extraction Only**: Return ONLY data that is explicitly and literally present in the text.
-2. **No Inferences**: DO NOT guess email addresses, websites, or phone numbers based on the applicant's name. (e.g., If the name is "ABC Corp", DO NOT extract "info@abccorp.com" unless it is explicitly typed in the document).
-3. **Missing Data**: If a field is not found, return "N/A" or null. NEVER leave a placeholder or a best guess.
-4. **Verification**: If you are not 100% sure a piece of text belongs to a field, do not extract it.
-
 1. DEMOGRAPHICS:
    - Applicant Name, Business Description, FEIN
-   - Contact Info (Email, Phone, Website):
-     - **Literal Only**: Do not guess.
-     - **Phone Numbers**: If a primary phone is not found on Page 1, check the "CONTACT INFORMATION" section (usually Page 2). Phone numbers for "Accounting", "Claims", or "Inspection" contacts ARE acceptable for `officePhone` as they are literal business contact numbers found in the document.
-     - **Email**: Only extract if explicitly found. Do not infer from business name.
+   - Business Description: Look for "NATURE OF BUSINESS / DESCRIPTION OF OPERATIONS" section.
+   - Contact Info (Email, Phone, Website)
    - Mailing Address
    - SIC/NAICS codes, Years in Business
    - Proposed Policy Dates and States
-   - Agency Customer ID (often found in headers like "Agency Customer ID" or "ABCDEF-01")
+   - wcStates: List ALL unique states found in the ratingByState table.
 
 2. GENERAL QUESTIONS:
    - Extract q1 through q24 as "Y" or "N".
-   - OCR often misreads checkmarks as fragments (z, 2, <, =, x, 9, |).
-   - If no explanation is provided for a question, it is usually "N".
 
 3. PRIOR CARRIERS:
-   - Extract a list of previous insurance carriers including year, carrier name, policy number, and financial history.
+   - Extract a list of previous insurance carriers.
 
 4. RATING BY STATE:
-   - Extract the rating information per state/class code, including employee counts and payroll.
-   - CLASS CODE is usually 4 digits (e.g., 8810, 8801).
+   - Extract rating information including payroll and class codes.
 
 5. INDIVIDUALS INCLUDED/EXCLUDED:
-   - Extract Officers, Owners, and Partners from the "INDIVIDUALS INCLUDED/EXCLUDED" table.
-   - Include Name, Title, Ownership %, and "Y" if included, "N" if excluded.
-
-6. PREMIUM CALCULATION:
-   - Extract the total estimated annual premium, experience modification factor, minimum premium, and deposit premium.
-   - Look for "TOTAL ESTIMATED ANNUAL PREMIUM", "EXPERIENCE MODIFICATION", "MINIMUM PREMIUM", "DEPOSIT".
+   - Extract Officers, Owners, and Partners.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📄 TEXT TO ANALYZE
+TEXT TO ANALYZE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 {all_text}
@@ -1008,6 +989,7 @@ Return ONLY the JSON object following the strict schema provided.
 """
 
         try:
+            start_time = time.time()
             response = self.client.chat.completions.create(
                 model="gpt-4o",
                 messages=[{
@@ -1021,12 +1003,21 @@ Return ONLY the JSON object following the strict schema provided.
                 max_tokens=8000,
                 temperature=0.0
             )
+            elapsed = time.time() - start_time
+            if self.request_id and request_monitor:
+                request_monitor.record_ai_usage(
+                    request_id=self.request_id,
+                    prompt_tokens=response.usage.prompt_tokens,
+                    completion_tokens=response.usage.completion_tokens,
+                    processing_time=elapsed,
+                    model="gpt-4o"
+                )
             
             response_text = response.choices[0].message.content
             data = json.loads(response_text)
             
             # Post-processing (simplified for the new schema)
-            return self._post_process_claims(data)
+            return self._post_process_claims(data, all_text)
                 
         except Exception as e:
             print(f"   ⚠️  Extraction failed: {e}")
@@ -1050,9 +1041,24 @@ Return ONLY the JSON object following the strict schema provided.
                 return 0.0
         return 0.0
 
-    def _post_process_claims(self, data: Dict) -> Dict:
+    def _extract_premiums_from_text(self, text: str) -> Dict:
         """
-        Post-process extracted application data.
+        Extract premium values using regex from text.
+        Sums 'Premium $X.XX' → totalEstimatedAnnualPremium.
+        """
+        premiums = re.findall(r'Premium \$([\d,]+\.?\d*)', text, re.IGNORECASE)
+        total_prem = sum(float(p.replace(',', '')) for p in premiums)
+        
+        return {
+            "totalEstimatedAnnualPremium": total_prem or 0.0,
+            "experienceModification": 0.0,  # Default if not found
+            "minimumPremium": 0.0,
+            "depositPremium": 0.0
+        }
+    
+    def _post_process_claims(self, data: Dict, all_text: str = "") -> Dict:
+        """
+        Post-process extracted application data + extract premiums from text.
         Performs numeric cleanup for financial fields in ratingByState and priorCarriers.
         """
         if "data" not in data:
@@ -1091,6 +1097,7 @@ Return ONLY the JSON object following the strict schema provided.
             calc = inner_data["premiumCalculation"]
             for field in ["totalEstimatedAnnualPremium", "experienceModification", "minimumPremium", "depositPremium"]:
                 calc[field] = self._to_float(calc.get(field))
+            inner_data["premiumCalculation"] = calc
                         
         return data
     
@@ -1201,6 +1208,7 @@ TEXT TO ANALYZE:
 Return ONLY the JSON."""
 
         try:
+            start_time = time.time()
             response = self.client.chat.completions.create(
                 model="gpt-4o",
                 messages=[{"role": "user", "content": retry_prompt}],
@@ -1208,6 +1216,15 @@ Return ONLY the JSON."""
                 max_tokens=8000,
                 temperature=0.0
             )
+            elapsed = time.time() - start_time
+            if self.request_id and request_monitor:
+                request_monitor.record_ai_usage(
+                    request_id=self.request_id,
+                    prompt_tokens=response.usage.prompt_tokens,
+                    completion_tokens=response.usage.completion_tokens,
+                    processing_time=elapsed,
+                    model="gpt-4o"
+                )
             
             retry_data = json.loads(response.choices[0].message.content)
             if "claims" in retry_data:
@@ -1262,6 +1279,7 @@ TEXT TO ANALYZE:
 Return ONLY the JSON object for claim {target_claim_number}."""
 
         try:
+            start_time = time.time()
             response = self.client.chat.completions.create(
                 model="gpt-4o",
                 messages=[{
@@ -1272,6 +1290,15 @@ Return ONLY the JSON object for claim {target_claim_number}."""
                 max_tokens=8000,
                 temperature=0.1
             )
+            elapsed = time.time() - start_time
+            if self.request_id and request_monitor:
+                request_monitor.record_ai_usage(
+                    request_id=self.request_id,
+                    prompt_tokens=response.usage.prompt_tokens,
+                    completion_tokens=response.usage.completion_tokens,
+                    processing_time=elapsed,
+                    model="gpt-4o"
+                )
             
             response_text = response.choices[0].message.content
             data = json.loads(response_text)

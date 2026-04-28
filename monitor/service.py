@@ -1,13 +1,14 @@
 import uuid
 import time
 import traceback
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Any, Callable
 from pathlib import Path
 import threading
 import logging
 
 from .monitor_db import monitor_db
+from .ai_metrics import compute_metrics
 
 logger = logging.getLogger('monitor_service')
 
@@ -28,7 +29,7 @@ class RequestMonitor:
                 'filename': filename,
                 'file_size': file_size,
                 'source_ip': source_ip,
-                'start_time': datetime.now(),
+                'start_time': datetime.now(timezone.utc),
                 'status': 'pending',
                 'steps': {}
             }
@@ -38,7 +39,7 @@ class RequestMonitor:
         if success:
             monitor_db.add_processing_step(
                 request_id, "request_received", "completed", 
-                start_time=datetime.now()
+                start_time=datetime.now(timezone.utc)
             )
             logger.info(f"Started monitoring request {request_id}")
         
@@ -74,7 +75,7 @@ class RequestMonitor:
     
     def start_processing_step(self, request_id: str, step_name: str) -> bool:
         """Start a processing step."""
-        start_time = datetime.now()
+        start_time = datetime.now(timezone.utc)
         
         with self.lock:
             if request_id in self.active_requests:
@@ -91,7 +92,7 @@ class RequestMonitor:
     def complete_processing_step(self, request_id: str, step_name: str, 
                                error_message: Optional[str] = None) -> bool:
         """Complete a processing step."""
-        end_time = datetime.now()
+        end_time = datetime.now(timezone.utc)
         
         with self.lock:
             if request_id in self.active_requests and step_name in self.active_requests[request_id]['steps']:
@@ -119,7 +120,7 @@ class RequestMonitor:
                        processing_time: Optional[float] = None,
                        metadata: Optional[Dict] = None) -> bool:
         """Complete a request successfully."""
-        end_time = datetime.now()
+        end_time = datetime.now(timezone.utc)
         
         with self.lock:
             if request_id in self.active_requests:
@@ -158,7 +159,7 @@ class RequestMonitor:
     def fail_request(self, request_id: str, error_details: str, 
                    processing_time: Optional[float] = None) -> bool:
         """Mark a request as failed."""
-        end_time = datetime.now()
+        end_time = datetime.now(timezone.utc)
         
         with self.lock:
             if request_id in self.active_requests:
@@ -188,6 +189,59 @@ class RequestMonitor:
             return True
         return False
     
+    def record_ai_usage(self, request_id: Optional[str], prompt_tokens: int, completion_tokens: int, 
+                       processing_time: float, model: str, pages: int = 1) -> bool:
+        """Record AI usage for a specific request using token_monitor metrics.
+        
+        If request_id is None, it will attempt to read from AI_MONITOR_REQUEST_ID env var.
+        """
+        import os
+        if not request_id:
+            request_id = os.environ.get("AI_MONITOR_REQUEST_ID")
+            
+        if not request_id:
+            # logger.warn("AI call recorded without request_id - metrics will be lost for this call.")
+            return False
+            
+        try:
+            # Calculate metrics using the ai_metrics module
+            metrics = compute_metrics(
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                processing_time_sec=processing_time,
+                pages=pages,
+                model=model
+            )
+            
+            # Store in database metadata
+            # We use a list because a single request might have multiple AI calls (e.g. classification + extraction)
+            ai_data = metrics.to_dict()
+            ai_data['recorded_at'] = datetime.now(timezone.utc).isoformat()
+            
+            # Get existing metadata to append to 'ai_calls' list
+            req_data = monitor_db.get_request(request_id)
+            metadata = (req_data.get('metadata') or {}) if req_data else {}
+            
+            ai_calls = metadata.get('ai_calls', [])
+            ai_calls.append(ai_data)
+            
+            # Update overall request AI stats for easier dashboard access
+            total_prompt = sum(call.get('prompt_tokens', 0) for call in ai_calls)
+            total_completion = sum(call.get('completion_tokens', 0) for call in ai_calls)
+            total_cost = sum(call.get('total_cost', 0) for call in ai_calls)
+            
+            metadata['ai_calls'] = ai_calls
+            metadata['total_ai_tokens'] = total_prompt + total_completion
+            metadata['total_ai_cost'] = total_cost
+            
+            success = monitor_db.add_metadata(request_id, metadata)
+            if success:
+                logger.info(f"Recorded AI call for {request_id}: {model}, {total_prompt+total_completion} tokens, ${total_cost:.4f} total cost")
+            return success
+        except Exception as e:
+            logger.error(f"Failed to record AI usage for {request_id}: {e}")
+            return False
+    
     def get_request_status(self, request_id: str) -> Optional[Dict]:
         """Get current status of a request."""
         # Check active requests first
@@ -206,6 +260,12 @@ class RequestMonitor:
     def get_request_history(self, limit: int = 100, status: Optional[str] = None) -> List[Dict]:
         """Get request history from database."""
         return monitor_db.get_requests(status=status, limit=limit)
+    
+    def filter_requests(self, filename: Optional[str] = None, 
+                        document_type: Optional[str] = None, 
+                        limit: int = 100) -> List[Dict]:
+        """Filter requests from database."""
+        return monitor_db.filter_requests(filename=filename, document_type=document_type, limit=limit)
     
     def get_processing_steps(self, request_id: str) -> List[Dict]:
         """Get processing steps for a request."""
@@ -232,12 +292,12 @@ class MonitoringContext:
         self.start_time = None
     
     def __enter__(self):
-        self.start_time = datetime.now()
+        self.start_time = datetime.now(timezone.utc)
         self.monitor.start_processing_step(self.request_id, self.step_name)
         return self
     
     def __exit__(self, exc_type, exc_val, exc_tb):
-        end_time = datetime.now()
+        end_time = datetime.now(timezone.utc)
         duration = (end_time - self.start_time).total_seconds()
         
         if exc_type is None:

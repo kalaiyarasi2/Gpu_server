@@ -11,9 +11,6 @@ import base64
 from io import BytesIO
 import pytesseract
 from pdf2image import convert_from_path
-import fitz # PyMuPDF
-from PIL import Image
-import io
 from openai import OpenAI
 from dotenv import load_dotenv
 
@@ -43,39 +40,6 @@ class OCRPDFExtractor:
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
         self.client = OpenAI(api_key=self.api_key) if self.api_key else None
         self.output_text = ""
-    
-    def _convert_pdf_to_images(self, dpi=600, first_page=None, last_page=None):
-        """
-        Helper to convert PDF to images with PyMuPDF fallback.
-        """
-        try:
-            # Primary: pdf2image (Poppler)
-            return convert_from_path(
-                str(self.pdf_path),
-                dpi=dpi,
-                fmt='jpeg',
-                first_page=first_page,
-                last_page=last_page
-            )
-        except Exception as e:
-            print(f"   ⚠️ pdf2image failed ({e}). Falling back to PyMuPDF (fitz)...")
-            images = []
-            try:
-                doc = fitz.open(str(self.pdf_path))
-                start = (first_page - 1) if first_page else 0
-                end = last_page if last_page else len(doc)
-                
-                for i in range(start, end):
-                    page = doc[i]
-                    pix = page.get_pixmap(dpi=dpi)
-                    img_data = pix.tobytes("jpeg")
-                    img = Image.open(io.BytesIO(img_data))
-                    images.append(img)
-                doc.close()
-                return images
-            except Exception as e2:
-                print(f"   ❌ PyMuPDF fallback also failed: {e2}")
-                raise e
     
     def extract(self, dpi=600, language='eng', psm_mode=1, verbose=True, engine='tesseract', **kwargs):
         """
@@ -114,7 +78,11 @@ class OCRPDFExtractor:
                 print("Converting PDF to images...")
             
             # Initial high-DPI render (default 600)
-            images = self._convert_pdf_to_images(dpi=dpi)
+            images = convert_from_path(
+                str(self.pdf_path),
+                dpi=dpi,
+                fmt='jpeg'
+            )
             
             total_pages = len(images)
             pages_metadata = []
@@ -137,23 +105,22 @@ class OCRPDFExtractor:
                     config=custom_config,
                     lang=language
                 )
+                page_text_hi = text_hi if text_hi.strip() else "[No text detected on this page]\n"
                 
-                # If Tesseract returns totally empty, force a low quality score to trigger fallback
-                if not text_hi.strip():
-                    page_text_hi = "[No text detected on this page]\n"
-                    score_hi = 0.0
-                    rec_hi = "full_vision"
-                else:
-                    page_text_hi = text_hi
-                    quality_hi = verifier.page_quality(page_text_hi)
-                    score_hi = quality_hi.get("score", 0.0)
-                    rec_hi = quality_hi.get("recommendation", "ok")
+                # Check for reversal early and correct if necessary
+                if verifier.analyze_quality(page_text_hi).get('metrics', {}).get('reversed_marker_count', 0) >= 2:
+                    if verbose: print(f"   ⚠️ Detected reversed text encoding at 600 DPI. Correcting...")
+                    page_text_hi = self._reverse_text_block(page_text_hi)
+                
+                quality_hi = verifier.page_quality(page_text_hi)
+                score_hi = quality_hi.get("score", 0.0)
+                rec_hi = quality_hi.get("recommendation", "ok")
                 
                 final_text = page_text_hi
                 extraction_method = "tesseract-ocr-600dpi"
                 final_score = score_hi
                 
-                # 2) Second attempt: lower-DPI Tesseract if needed
+                # 2) Second attempt: 300 DPI Tesseract if needed
                 if rec_hi in ("dpi_fallback", "full_vision"):
                     if verbose:
                         print(
@@ -161,40 +128,49 @@ class OCRPDFExtractor:
                             f"Retrying Tesseract at 300 DPI..."
                         )
                     try:
-                        low_images = self._convert_pdf_to_images(
+                        mid_images = convert_from_path(
+                            str(self.pdf_path),
                             dpi=300,
+                            fmt='jpeg',
                             first_page=page_num,
                             last_page=page_num
                         )
-                        if low_images:
-                            low_image = low_images[0]
-                            text_lo = pytesseract.image_to_string(
-                                low_image,
+                        if mid_images:
+                            mid_image = mid_images[0]
+                            text_mid = pytesseract.image_to_string(
+                                mid_image,
                                 config=custom_config,
                                 lang=language
                             )
-                            page_text_lo = text_lo if text_lo.strip() else "[No text detected on this page]\n"
-                            quality_lo = verifier.page_quality(page_text_lo)
-                            score_lo = quality_lo.get("score", 0.0)
-                            rec_lo = quality_lo.get("recommendation", "ok")
+                            page_text_mid = text_mid if text_mid.strip() else "[No text detected on this page]\n"
                             
-                            # Prefer the lower-DPI result if it scores better
-                            if score_lo > final_score or rec_lo == "ok":
+                            # Check for reversal and correct for re-verification
+                            if verifier.analyze_quality(page_text_mid).get('metrics', {}).get('reversed_marker_count', 0) >= 2:
+                                if verbose: print(f"   ⚠️ Detected reversed text encoding at 300 DPI. Correcting...")
+                                page_text_mid = self._reverse_text_block(page_text_mid)
+                                
+                            quality_mid = verifier.page_quality(page_text_mid)
+                            score_mid = quality_mid.get("score", 0.0)
+                            rec_mid = quality_mid.get("recommendation", "ok")
+                            
+                            # Prefer the 300 DPI result if it scores better
+                            if score_mid > final_score or rec_mid == "ok":
                                 if verbose:
                                     print(
                                         f"   ✓ 300 DPI OCR improved quality "
-                                        f"(score {score_lo:.3f}, rec '{rec_lo}')."
+                                        f"(score {score_mid:.3f}, rec '{rec_mid}')."
                                     )
-                                final_text = page_text_lo
+                                final_text = page_text_mid
                                 extraction_method = "tesseract-ocr-300dpi"
-                                final_score = score_lo
-                                quality_hi = quality_lo
-                                rec_hi = rec_lo
+                                final_score = score_mid
+                                quality_hi = quality_mid # Update quality info for metadata
+                                rec_hi = rec_mid
                     except Exception as e:
                         print(f"   ⚠️ 300 DPI fallback failed on page {page_num}: {e}")
                 
                 # 3) Final attempt: Vision OCR if still low quality and Vision is available
-                if rec_hi == "full_vision" and self.client is not None:
+                # FIX: Trigger Vision if STILL not acceptable after DPI fallback (even if score is > 0.4)
+                if rec_hi in ("dpi_fallback", "full_vision") and self.client is not None:
                     if verbose:
                         print(
                             f"   ↪ OCR still low quality after retries "
@@ -202,21 +178,33 @@ class OCRPDFExtractor:
                         )
                     try:
                         # Render just this page for Vision at moderate DPI
-                        vis_images = self._convert_pdf_to_images(
+                        vis_images = convert_from_path(
+                            str(self.pdf_path),
                             dpi=300,
+                            fmt='jpeg',
                             first_page=page_num,
                             last_page=page_num
                         )
                         if vis_images:
                             vis_image = vis_images[0]
                             vis_text, vis_conf = self._extract_page_with_vision(vis_image)
+                            
+                            # Vision text usually doesn't have reversal issues, but we check anyway for robustness
+                            if verifier.analyze_quality(vis_text).get('metrics', {}).get('reversed_marker_count', 0) >= 2:
+                                if verbose: print(f"   ⚠️ Detected reversed text encoding in Vision output. Correcting...")
+                                vis_text = self._reverse_text_block(vis_text)
+                                
                             if vis_text.strip():
                                 final_text = vis_text
                                 extraction_method = "gpt-4-vision-fallback"
                                 final_score = max(final_score, vis_conf)
+                                # For Vision, we assume it's acceptable if it returned something
+                                rec_hi = "ok" 
                     except Exception as e:
                         print(f"   ⚠️ Vision fallback failed on page {page_num}: {e}")
                 
+                # Removal of old redundant reversal check logic as it's now handled per-stage
+
                 extracted_text.append(final_text)
                 
                 pages_metadata.append({
@@ -288,7 +276,7 @@ class OCRPDFExtractor:
         """
         print("Converting PDF to images for detailed OCR...")
         
-        images = self._convert_pdf_to_images(dpi=dpi)
+        images = convert_from_path(str(self.pdf_path), dpi=dpi, fmt='jpeg')
         results = []
         
         for page_num, image in enumerate(images, 1):
@@ -326,7 +314,7 @@ class OCRPDFExtractor:
             raise ValueError("OpenAI API key is required for Vision OCR. Set OPENAI_API_KEY environment variable.")
             
         print("Converting PDF to images for Vision OCR...")
-        images = self._convert_pdf_to_images(dpi=dpi)
+        images = convert_from_path(str(self.pdf_path), dpi=dpi)
         
         full_text = []
         metadata = []
@@ -335,8 +323,17 @@ class OCRPDFExtractor:
             if verbose:
                 print(f"Vision processing page {i}/{len(images)}...")
             
+            verifier = TextQualityVerifier()
             page_text, conf = self._extract_page_with_vision(image)
             
+            if i == 1:
+                is_reversed = verifier.analyze_quality(page_text).get('metrics', {}).get('reversed_marker_count', 0) >= 2
+                if is_reversed:
+                    print(f"⚠️ Detected reversed text encoding in Vision OCR. Applying correction...")
+
+            if is_reversed:
+                page_text = self._reverse_text_block(page_text)
+
             header = f"\n{'='*80}\nPAGE {i}\n{'='*80}\n\n"
             full_text.append(header + page_text + "\n\n")
             
@@ -384,4 +381,21 @@ class OCRPDFExtractor:
         page_text = response.choices[0].message.content or ""
         confidence = 0.99 if page_text.strip() else 0.0
         return page_text, confidence
+
+    def _check_if_reversed(self, text: str) -> bool:
+        """Detect if text is likely reversed using centralized verifier."""
+        if not text: return False
+        try:
+            from text_quality_verifier import TextQualityVerifier
+            verifier = TextQualityVerifier()
+            return verifier.analyze_quality(text).get('metrics', {}).get('reversed_marker_count', 0) >= 2
+        except:
+            return False
+
+    def _reverse_text_block(self, text: str) -> str:
+        """Reverse each line of text."""
+        if not text: return ""
+        lines = text.split('\n')
+        reversed_lines = [line[::-1] for line in lines]
+        return '\n'.join(reversed_lines)
 

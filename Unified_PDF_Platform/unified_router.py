@@ -1,4 +1,3 @@
-
 import os
 import sys
 import subprocess
@@ -7,11 +6,14 @@ import re
 import threading
 from contextlib import contextmanager
 from pathlib import Path
+from typing import List, Dict, Optional, Any, Union
 import pandas as pd
 from openai import OpenAI
 from dotenv import load_dotenv
 import fitz  # PyMuPDF
 from PIL import Image, ImageEnhance
+import time
+from monitor.service import request_monitor
 
 # Fix for "Decompression Bomb" error in PIL
 Image.MAX_IMAGE_PIXELS = None
@@ -209,9 +211,10 @@ def backend_context(backend_dir):
 
 class ExcelExtractor:
     """Layer 4: Direct Excel extraction without OCR."""
-    def __init__(self, output_base):
+    def __init__(self, output_base, request_id=None):
         self.output_base = output_base
         self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        self.request_id = request_id
 
     def verify_table_structure(self, columns, provider_hint=""):
         """Phase 1: Structure Understanding. AI validates if it understands the layout."""
@@ -233,10 +236,20 @@ class ExcelExtractor:
         Return a brief summary for the user logs.
         """
         try:
+            start_time = time.time()
             response = self.client.chat.completions.create(
                 model="gpt-4o",
                 messages=[{"role": "user", "content": prompt}]
             )
+            elapsed = time.time() - start_time
+            if self.request_id:
+                request_monitor.record_ai_usage(
+                    request_id=self.request_id,
+                    prompt_tokens=response.usage.prompt_tokens,
+                    completion_tokens=response.usage.completion_tokens,
+                    processing_time=elapsed,
+                    model="gpt-4o"
+                )
             summary = response.choices[0].message.content
             print("-" * 40)
             print(f"AI STRUCTURE LOG:\n{summary}")
@@ -311,11 +324,21 @@ CRITICAL RULES:
 """
         
         try:
+            start_time = time.time()
             response = self.client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[{"role": "user", "content": prompt}],
                 response_format={ "type": "json_object" }
             )
+            elapsed = time.time() - start_time
+            if self.request_id:
+                request_monitor.record_ai_usage(
+                    request_id=self.request_id,
+                    prompt_tokens=response.usage.prompt_tokens,
+                    completion_tokens=response.usage.completion_tokens,
+                    processing_time=elapsed,
+                    model="gpt-4o-mini"
+                )
             mapping = json.loads(response.choices[0].message.content)
             print(f"  [OK] Mapping generated: {mapping}")
             return mapping
@@ -375,11 +398,21 @@ RULES:
 - Use null for any field not found
 """
         try:
+            start_time = time.time()
             response = self.client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[{"role": "user", "content": prompt}],
                 response_format={ "type": "json_object" }
             )
+            elapsed = time.time() - start_time
+            if self.request_id:
+                request_monitor.record_ai_usage(
+                    request_id=self.request_id,
+                    prompt_tokens=response.usage.prompt_tokens,
+                    completion_tokens=response.usage.completion_tokens,
+                    processing_time=elapsed,
+                    model="gpt-4o-mini"
+                )
             meta = json.loads(response.choices[0].message.content)
             print(f"[Metadata] AI extracted: {meta}")
             return meta
@@ -398,10 +431,20 @@ RULES:
         Return ONLY the integer index of the header row. If no header is found, return -1.
         """
         try:
+            start_time = time.time()
             response = self.client.chat.completions.create(
                 model="gpt-4o",
                 messages=[{"role": "user", "content": prompt}],
             )
+            elapsed = time.time() - start_time
+            if self.request_id:
+                request_monitor.record_ai_usage(
+                    request_id=self.request_id,
+                    prompt_tokens=response.usage.prompt_tokens,
+                    completion_tokens=response.usage.completion_tokens,
+                    processing_time=elapsed,
+                    model="gpt-4o"
+                )
             idx_str = response.choices[0].message.content.strip()
             match = re.search(r'-?\d+', idx_str)
             idx = int(match.group()) if match else -1
@@ -1174,7 +1217,7 @@ class UnifiedRouter:
 
         return None, None
 
-    def classify_document(self, pdf_path):
+    def classify_document(self, file_path, request_id=None):
         """Layer 1 & 2: Classify type and identify provider.
 
         Accuracy-first redesign:
@@ -1188,19 +1231,20 @@ class UnifiedRouter:
         print("[STEP 1] INTELLIGENT DOCUMENT CLASSIFICATION & PROVIDER DETECTION")
         print("="*70)
 
-        filename = Path(pdf_path).name
-        file_ext = Path(pdf_path).suffix.lower()
+        file_path = Path(file_path)
+        filename = file_path.name
+        file_ext = file_path.suffix.lower()
         print(f"[FILE] Processing: {filename} ({file_ext})")
 
         # ── STEP 0: Extract raw text from any format FIRST ────────────────────
         text = ""
         if file_ext == ".pdf":
             print("\n[STEP] Extracting text snippet for classification...")
-            text = self.extract_snippet(pdf_path)
+            text = self.extract_snippet(file_path)
         elif file_ext in [".xlsx", ".xls"]:
             print("\n[STEP] Extracting Excel metadata for classification...")
             try:
-                xl = pd.ExcelFile(pdf_path)
+                xl = pd.ExcelFile(file_path)
                 hint_parts = []
                 for sheet_name in xl.sheet_names[:3]:
                     df = pd.read_excel(xl, sheet_name=sheet_name, nrows=20, header=None)
@@ -1215,8 +1259,8 @@ class UnifiedRouter:
         elif file_ext == ".csv":
             print("\n[STEP] Extracting CSV metadata for classification...")
             try:
-                # Use names=list(range(500)) to handle variable column counts (same as ExcelExtractor)
-                df = pd.read_csv(pdf_path, nrows=20, header=None, engine='python', on_bad_lines='skip', names=list(range(500)), encoding='latin-1')
+                # Use names=list(range(500)) to handle variable column counts
+                df = pd.read_csv(file_path, nrows=20, header=None, engine='python', on_bad_lines='skip', names=list(range(500)), encoding='latin-1')
                 all_values = df.astype(str).values.flatten()
                 text = " ".join([v for v in all_values if v.lower() not in ["nan", "none", ""]][:200])
                 text = text or "CSV file appears to be empty"
@@ -1229,7 +1273,7 @@ class UnifiedRouter:
         if pre_type:
             print(f"[Pre-Classify] Deterministic rule fired → {pre_type} ({pre_reason})")
             # Still run provider ID (cheap, uses already-extracted text)
-            provider = self._identify_provider(filename, text[:2000])
+            provider = self._identify_provider(filename, text[:2000], request_id=request_id)
             print(f"\n[INFO] Classification Result: {pre_type} | Provider: {provider}")
             return pre_type, provider
 
@@ -1278,11 +1322,22 @@ Line 1: INSURANCE_CLAIMS | WORK_COMPENSATION | INVOICE | invoice_poc_extractor |
 Line 2: Carrier/vendor name or UNKNOWN
 
 OUTPUT:"""
+                start_time_fn = time.time()
                 fn_response = self.client.chat.completions.create(
                     model="gpt-4o-mini",
                     messages=[{"role": "user", "content": filename_prompt}],
                     temperature=0
                 )
+                elapsed_fn = time.time() - start_time_fn
+                if request_id and request_monitor:
+                    request_monitor.record_ai_usage(
+                        request_id=request_id,
+                        prompt_tokens=fn_response.usage.prompt_tokens,
+                        completion_tokens=fn_response.usage.completion_tokens,
+                        processing_time=elapsed_fn,
+                        model="gpt-4o-mini"
+                    )
+                    
                 fn_output = fn_response.choices[0].message.content.strip().split("\n")
                 fn_classification = fn_output[0].strip().upper()
                 fn_provider = fn_output[1].strip().upper() if len(fn_output) > 1 else "UNKNOWN"
@@ -1361,6 +1416,7 @@ OUTPUT:"""
 
         try:
             print("\n[AI] Sending to AI for full classification...")
+            start_time = time.time()
             response = self.client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[{"role": "user", "content": prompt}],
@@ -1368,6 +1424,15 @@ OUTPUT:"""
                 max_tokens=30,
                 timeout=30
             )
+            elapsed = time.time() - start_time
+            if request_id and request_monitor:
+                request_monitor.record_ai_usage(
+                    request_id=request_id,
+                    prompt_tokens=response.usage.prompt_tokens,
+                    completion_tokens=response.usage.completion_tokens,
+                    processing_time=elapsed,
+                    model="gpt-4o-mini"
+                )
             output = response.choices[0].message.content.strip().split("\n")
             classification = output[0].strip().upper()
             provider = output[1].strip().upper() if len(output) > 1 else "UNKNOWN"
@@ -1403,9 +1468,10 @@ OUTPUT:"""
             return "INVOICE"
         return None
 
-    def _identify_provider(self, filename: str, text_snippet: str) -> str:
+    def _identify_provider(self, filename: str, text_snippet: str, request_id=None) -> str:
         """Lightweight provider/carrier identification using the already-extracted snippet."""
         try:
+            start_time = time.time()
             prov_prompt = f"""From the document filename and text below, identify the primary company name.
 This could be an insurance CARRIER (e.g., Berkshire Hathaway, Travelers, Chesapeake Employers),
 a VENDOR (e.g., Zoho, Spectra, American Public Life), or a TPA.
@@ -1423,12 +1489,21 @@ Return ONLY the company name or UNKNOWN:"""
                 messages=[{"role": "user", "content": prov_prompt}],
                 temperature=0
             )
+            elapsed = time.time() - start_time
+            if request_id and request_monitor:
+                request_monitor.record_ai_usage(
+                    request_id=request_id,
+                    prompt_tokens=prov_response.usage.prompt_tokens,
+                    completion_tokens=prov_response.usage.completion_tokens,
+                    processing_time=elapsed,
+                    model="gpt-4o-mini"
+                )
             return prov_response.choices[0].message.content.strip().upper()
         except Exception as e:
             print(f"[Provider-ID] Failed: {e}")
             return "UNKNOWN"
 
-    def _run_with_logging(self, cmd, timeout_secs):
+    def _run_with_logging(self, cmd, timeout_secs, request_id=None):
         """Wrapper to run process with line-by-line output for debugging hangs."""
         print(f"  [Debug] Running command: {' '.join(cmd)}", flush=True)
         try:
@@ -1436,12 +1511,17 @@ Return ONLY the company name or UNKNOWN:"""
             import sys
             import threading
             
+            # Prepare environment
+            env = {"PYTHONIOENCODING": "utf-8", "PYTHONUNBUFFERED": "1", **os.environ}
+            if request_id:
+                env["AI_MONITOR_REQUEST_ID"] = str(request_id)
+            
             process = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
-                env={"PYTHONIOENCODING": "utf-8", "PYTHONUNBUFFERED": "1", **os.environ},
+                env=env,
                 encoding="utf-8",
                 bufsize=1,
                 universal_newlines=True
@@ -1697,7 +1777,7 @@ Return ONLY the company name or UNKNOWN:"""
             print(f"  [Merge] Error merging results: {e}")
             return False
 
-    def run_invoice_extractor(self, pdf_path, use_structural=False):
+    def run_invoice_extractor(self, pdf_path, use_structural=False, request_id=None):
         """Run the invoice extractor on the PDF.
         
         Args:
@@ -1743,7 +1823,7 @@ Return ONLY the company name or UNKNOWN:"""
             for i, chunk in enumerate(chunks):
                 print(f"\n  {'─'*10} Processing Chunk {i+1} of {len(chunks)} {'─'*10}")
                 # Process each small chunk using the standard pipeline
-                chunk_res = self.run_invoice_extractor(str(chunk), use_structural=use_structural)
+                chunk_res = self.run_invoice_extractor(str(chunk), use_structural=use_structural, request_id=request_id)
                 if "excel" in chunk_res:
                     processed_excels.append(chunk_res["excel"])
                 else:
@@ -1775,10 +1855,10 @@ Return ONLY the company name or UNKNOWN:"""
                 import asyncio
                 if output_xlsx.exists():
                     output_xlsx.unlink(missing_ok=True)
-                result = self._run_with_logging([sys.executable, str(script_to_use), str(pdf_path), str(output_xlsx)], 3600)
+                result = self._run_with_logging([sys.executable, str(script_to_use), str(pdf_path), str(output_xlsx)], 3600, request_id=request_id)
             else:
                 import asyncio
-                result = self._run_with_logging([sys.executable, str(script_to_use), str(pdf_path), str(output_xlsx)], 3600)
+                result = self._run_with_logging([sys.executable, str(script_to_use), str(pdf_path), str(output_xlsx)], 3600, request_id=request_id)
             
             if result.returncode != 0:
                 print(f"\n[ERR] Extraction Failed (Exit Code: {result.returncode})")
@@ -1819,7 +1899,7 @@ Return ONLY the company name or UNKNOWN:"""
             print(f"\n[ERR] Invoice Extraction Error: {e}")
             return {"error": str(e)}
 
-    def run_general_invoice_extractor(self, pdf_path):
+    def run_general_invoice_extractor(self, pdf_path, request_id=None):
         """Run the General Invoice (Vendor) extractor."""
         print("\n" + "="*70)
         print("[STEP 2] RUNNING GENERAL INVOICE EXTRACTOR")
@@ -1862,7 +1942,8 @@ Return ONLY the company name or UNKNOWN:"""
                 import asyncio
                 result = self._run_with_logging(
                     [sys.executable, str(GENERAL_INVOICE_SCRIPT), str(pdf_path)],
-                    3600
+                    3600,
+                    request_id=request_id
                 )
                 if result.returncode != 0:
                     print(f"\n[ERR] General Invoice Extraction Failed (Exit Code: {result.returncode})")
@@ -2024,7 +2105,7 @@ Return ONLY the company name or UNKNOWN:"""
             print(f"\n[ERR] General Invoice (Merged) Error: {e}")
             return {"error": str(e)}
 
-    def run_insurance_extractor(self, pdf_path):
+    def run_insurance_extractor(self, pdf_path, request_id=None):
         """Run the insurance extractor using direct module import (preferred) or subprocess fallback."""
         print("\n" + "="*70)
         print("[STEP 2] RUNNING INSURANCE EXTRACTOR")
@@ -2037,6 +2118,10 @@ Return ONLY the company name or UNKNOWN:"""
             print("\n[INFO] Processing... (this may take 1-2 minutes)\n")
             
             try:
+                # Inject request_id into the extractor instance if supported
+                if hasattr(self.insurance_extractor, 'request_id'):
+                    self.insurance_extractor.request_id = self.request_id
+                
                 # Call the main processing method within the correct backend context
                 with backend_context(INSURANCE_BACKEND_DIR):
                     result = self.insurance_extractor.process_pdf_with_verification(
@@ -2126,7 +2211,7 @@ Return ONLY the company name or UNKNOWN:"""
                 print(f"Error Details:\n{result.stderr}")
                 return {"error": result.stderr}
 
-    def run_work_compensation_extractor(self, pdf_path):
+    def run_work_compensation_extractor(self, pdf_path, request_id=None):
         """Run the work compensation extractor using direct module import."""
         print("\n" + "="*70)
         print("[STEP] RUNNING WORK COMPENSATION EXTRACTOR")
@@ -2138,6 +2223,10 @@ Return ONLY the company name or UNKNOWN:"""
             print("\n⏳ Processing... (this may take 1-2 minutes)\n")
             
             try:
+                # Inject request_id into the extractor instance if supported
+                if hasattr(self.work_comp_extractor, 'request_id'):
+                    self.work_comp_extractor.request_id = self.request_id
+                
                 # Call the main processing method within the correct backend context
                 with backend_context(WORK_COMP_BACKEND_DIR):
                     result = self.work_comp_extractor.process_pdf_with_verification(
@@ -2170,7 +2259,7 @@ Return ONLY the company name or UNKNOWN:"""
             print("\n[ERR] Error: Work Comp Extractor not initialized.")
             return {"error": "Work Comp Extractor not available"}
 
-    def run_bank_statement_extractor(self, pdf_path):
+    def run_bank_statement_extractor(self, pdf_path, request_id=None):
         """Run the bank statement extractor using direct module import."""
         print("\n" + "="*70)
         print("[STEP] RUNNING BANK STATEMENT EXTRACTOR")
@@ -2346,7 +2435,7 @@ Return ONLY the company name or UNKNOWN:"""
         print(f"[ID-OCR] Final snippet ready: {len(final)} chars")
         return final
 
-    def run_identification_extractor(self, pdf_path):
+    def run_identification_extractor(self, pdf_path, request_id=None):
         """Extract personal information from IDs (Passport, DL, SSN) using gpt-4.1-mini."""
         print("\n" + "="*70)
         print("[STEP] RUNNING IDENTIFICATION EXTRACTOR")
@@ -2377,12 +2466,22 @@ Return ONLY the company name or UNKNOWN:"""
             }}
             """
 
+            start_time = time.time()
             response = self.client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
                 temperature=0
             )
+            elapsed = time.time() - start_time
+            if request_id and request_monitor:
+                request_monitor.record_ai_usage(
+                    request_id=request_id,
+                    prompt_tokens=response.usage.prompt_tokens,
+                    completion_tokens=response.usage.completion_tokens,
+                    processing_time=elapsed,
+                    model="gpt-4o-mini"
+                )
             
             data = json.loads(response.choices[0].message.content)
             
@@ -2591,8 +2690,9 @@ Return ONLY the company name or UNKNOWN:"""
         except Exception as e:
             return False, str(e)
 
-    def process(self, file_path):
+    def process(self, file_path, request_id=None):
         """Main entry point: 7-Layer Processing Pipeline."""
+        self.request_id = request_id
         print("\n" + "="*70)
         print("[STEP] UNIFIED PDF INTELLIGENT ROUTER (7-LAYER VERSION)")
         print("="*70)
@@ -2606,8 +2706,19 @@ Return ONLY the company name or UNKNOWN:"""
         if file_ext not in [".pdf", ".xlsx", ".xls", ".csv"]:
             return {"error": f"Unsupported file format: {file_ext}"}
 
+        # Count pages for monitoring
+        num_pages = 0
+        if file_ext == ".pdf":
+            try:
+                import fitz
+                doc = fitz.open(str(file_path))
+                num_pages = len(doc)
+                doc.close()
+            except Exception:
+                pass
+
         # Step 1: Classify (Layer 1 & 2)
-        doc_type, provider = self.classify_document(file_path)
+        doc_type, provider = self.classify_document(file_path, request_id=request_id)
         
         if doc_type == "UNKNOWN":
             print("\n" + "="*70)
@@ -2629,7 +2740,7 @@ Return ONLY the company name or UNKNOWN:"""
         if doc_type == "INVOICE":
             # Layer 4: Format-Specific Extraction
             if file_ext in [".xlsx", ".xls", ".csv"]:
-                extractor = ExcelExtractor(output_base=OUTPUT_BASE)
+                extractor = ExcelExtractor(output_base=OUTPUT_BASE, request_id=self.request_id)
                 excel_path = extractor.process(file_path)
                 
                 if isinstance(excel_path, dict) and "error" in excel_path:
@@ -2645,7 +2756,7 @@ Return ONLY the company name or UNKNOWN:"""
                     result = {"error": "Excel/CSV extraction failed to yield structured data"}
             else:
                 # TRY 1: Standard Extractor (PDF)
-                result = self.run_invoice_extractor(file_path, use_structural=False)
+                result = self.run_invoice_extractor(file_path, use_structural=False, request_id=request_id)
                 
                 # FALLBACK: If standard extraction yielded no data or failed, try structural
                 should_fallback = False
@@ -2684,19 +2795,19 @@ Return ONLY the company name or UNKNOWN:"""
                 
                 if should_fallback:
                     print("\n[WARN] Standard extraction yielded insufficient results. Falling back to Structural Layer...")
-                    structural_result = self.run_invoice_extractor(file_path, use_structural=True)
+                    structural_result = self.run_invoice_extractor(file_path, use_structural=True, request_id=request_id)
                     if "error" not in structural_result:
                         result = structural_result
                     else:
                         print(f"[ERR] Structural fallback also failed: {structural_result.get('error')}")
 
         elif doc_type == "invoice_poc_extractor":
-            result = self.run_general_invoice_extractor(file_path)
+            result = self.run_general_invoice_extractor(file_path, request_id=request_id)
 
         elif doc_type == "INSURANCE_CLAIMS":
             if file_ext in [".xlsx", ".xls", ".csv"]:
                 print(f"[INFO] Routing Claim Spreadsheet to Structured Extractor...")
-                extractor = ExcelExtractor(output_base=OUTPUT_BASE)
+                extractor = ExcelExtractor(output_base=OUTPUT_BASE, request_id=self.request_id)
                 excel_path = extractor.process(file_path)
 
                 if excel_path:
@@ -2708,16 +2819,16 @@ Return ONLY the company name or UNKNOWN:"""
                 else:
                     result = {"error": "Excel/CSV claim extraction failed to yield structured data"}
             elif file_ext == ".pdf":
-                result = self.run_insurance_extractor(file_path)
+                result = self.run_insurance_extractor(file_path, request_id=request_id)
             else:
                  print(f"[ERR] Insurance extractor called for {file_ext} file. Not supported yet.")
                  return {"error": "Insurance extraction (Loss Runs/Claims) currently only supports PDF or common spreadsheet formats (XLSX, CSV)."}
         elif doc_type == "WORK_COMPENSATION":
-            result = self.run_work_compensation_extractor(file_path)
+            result = self.run_work_compensation_extractor(file_path, request_id=request_id)
         elif doc_type == "BANK_STATEMENT":
-            result = self.run_bank_statement_extractor(file_path)
+            result = self.run_bank_statement_extractor(file_path, request_id=request_id)
         elif doc_type == "IDENTIFICATION":
-            result = self.run_identification_extractor(file_path)
+            result = self.run_identification_extractor(file_path, request_id=request_id)
         else:
             return {"error": f"Unsupported document type: {doc_type}"}
         
@@ -2739,6 +2850,12 @@ Return ONLY the company name or UNKNOWN:"""
             print(f"Error: {result.get('error')}")
             print("="*70 + "\n")
         
+        # Ensure metadata is in the result for monitoring
+        if "error" not in result:
+            result.setdefault("type", doc_type)
+            result.setdefault("provider", provider)
+            result.setdefault("pages", num_pages)
+            
         return result
     
     

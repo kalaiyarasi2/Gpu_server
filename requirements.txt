@@ -1,0 +1,28 @@
+# Core API & Server
+flask
+flask-cors
+python-dotenv
+werkzeug
+gunicorn
+
+# AI & LLM
+openai>=1.0.0
+anthropic
+google-generativeai
+
+# PDF & OCR Processing (New Waterfall)
+rostaing-ocr
+pytesseract
+pdf2image
+pdfplumber
+pymupdf
+Pillow
+opencv-python
+
+# Data Processing
+pandas
+openpyxl
+
+# Monitoring & Database
+sqlite3  # Usually built-in
+httpx

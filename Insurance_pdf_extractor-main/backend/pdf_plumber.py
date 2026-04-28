@@ -266,10 +266,19 @@ def _check_if_reversed(text: str) -> bool:
     """Detect if text is likely reversed (e.g. 'tropeR' instead of 'Report')."""
     if not text: return False
     # Check for common keywords that might appear reversed
-    reversed_keywords = ["tropeR", "mialC", "ycailoP", "oitaR", "ssoL", "diap"]
+    # Syncing markers from UnifiedRouter for better coverage
+    reversed_keywords = [
+        "tropeR", "mialC", "ycailoP", "oitaR", "ssoL", "diap",
+        "redloHyciioP", "tnebmucnI", "enO", "emaN", "rebuN", "etaD",
+        # Scrambled/Scanned rotation markers
+        "7OSS", "GZOZ", "GCOC", "Ayjuwapu|", "wield", "sisAjeuy", "eyeq", "ebeg",
+        "OQUINN", "awWeN", "JUNODDY"
+    ]
     count = 0
+    # Use a chunk of text to avoid performance issues on huge docs
+    sample = text[:10000]
     for kw in reversed_keywords:
-        if kw in text or kw.lower() in text.lower():
+        if kw in sample or kw.lower() in sample.lower():
             count += 1
     return count >= 2
 
@@ -353,6 +362,17 @@ def extract_with_pymupdf(pdf_path: str) -> tuple[str, list[dict]]:
     
     doc = fitz.open(pdf_path)
     
+    # Heuristic: check first page for reversal
+    is_reversed = False
+    if len(doc) > 0:
+        try:
+            first_page_text = doc[0].get_text()
+            if _check_if_reversed(first_page_text):
+                is_reversed = True
+                print(f"⚠️ Detected reversed text encoding in PyMuPDF layer. Applying correction...")
+        except:
+            pass
+
     for page_num in range(len(doc)):
         page = doc[page_num]
         page_content = ""
@@ -366,6 +386,8 @@ def extract_with_pymupdf(pdf_path: str) -> tuple[str, list[dict]]:
         # Extract text
         text = page.get_text()
         if text:
+            if is_reversed:
+                text = _reverse_text_block(text)
             page_content += text
         
         all_text += page_content + "\n"

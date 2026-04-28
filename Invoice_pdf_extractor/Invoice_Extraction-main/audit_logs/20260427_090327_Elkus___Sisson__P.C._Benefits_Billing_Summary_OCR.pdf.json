@@ -1,0 +1,11 @@
+{
+  "timestamp": "2026-04-27T09:03:27.518118Z",
+  "source_file": "C:\\Users\\Intern\\server1\\pdf_extractor\\Unified_PDF_Platform\\uploads\\Elkus & Sisson, P.C. Benefits Billing Summary OCR.pdf",
+  "passes": 1,
+  "final_sum": 11623.49,
+  "target_total": 0.0,
+  "discrepancy": 11623.49,
+  "line_item_count": 30,
+  "validation_reason": "passed",
+  "outcome": "gap_remaining"
+}

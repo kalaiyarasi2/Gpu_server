@@ -352,6 +352,56 @@ class MonitorDatabase:
             except Exception as e:
                 logger.error(f"Failed to get requests: {e}")
                 return []
+
+    def filter_requests(self, filename: Optional[str] = None, 
+                       document_type: Optional[str] = None,
+                       limit: int = 100) -> List[Dict]:
+        """Filter requests by filename and/or document type."""
+        with self.lock:
+            try:
+                conn = sqlite3.connect(self.db_path)
+                cursor = conn.cursor()
+                
+                query = "SELECT * FROM requests"
+                where_clauses = []
+                params = []
+                
+                if filename:
+                    where_clauses.append("filename LIKE ?")
+                    params.append(f"%{filename}%")
+                
+                if document_type:
+                    where_clauses.append("document_type = ?")
+                    params.append(document_type)
+                
+                if where_clauses:
+                    query += " WHERE " + " AND ".join(where_clauses)
+                
+                query += " ORDER BY timestamp DESC LIMIT ?"
+                params.append(limit)
+                
+                cursor.execute(query, params)
+                rows = cursor.fetchall()
+                
+                columns = [description[0] for description in cursor.description]
+                requests = []
+                
+                for row in rows:
+                    request_data = dict(zip(columns, row))
+                    
+                    # Parse JSON fields
+                    if request_data.get('output_files'):
+                        request_data['output_files'] = json.loads(request_data['output_files'])
+                    if request_data.get('metadata'):
+                        request_data['metadata'] = json.loads(request_data['metadata'])
+                    
+                    requests.append(request_data)
+                
+                conn.close()
+                return requests
+            except Exception as e:
+                logger.error(f"Failed to filter requests: {e}")
+                return []
     
     def get_processing_steps(self, request_id: str) -> List[Dict]:
         """Get all processing steps for a request."""

@@ -210,7 +210,8 @@ def process_with_structural_layer(pdf_path, output_excel=None):
                 chunk_text, 
                 client, 
                 f"summary_page_{page_num}",
-                detected_carrier=carrier_name
+                detected_carrier=carrier_name,
+                request_id=os.environ.get("AI_MONITOR_REQUEST_ID")
             )
             # [FIX] Never extract line items from summary chunks (Page 1) to avoid mis-mapped wide-table values
             page_data["LINE_ITEMS"] = []
@@ -289,7 +290,8 @@ def process_with_structural_layer(pdf_path, output_excel=None):
                 chunk_text + prompt_hint, 
                 client, 
                 f"detail_page_{page_num}",
-                detected_carrier=carrier_name
+                detected_carrier=carrier_name,
+                request_id=os.environ.get("AI_MONITOR_REQUEST_ID")
             )
             
             # Vertical fallback for reports or details
@@ -327,7 +329,7 @@ def process_with_structural_layer(pdf_path, output_excel=None):
                     all_line_items = []
                     for j, ocr_chunk in enumerate(ocr_chunks):
                         print(f"    -> [Layer] Processing OCR Chunk {j+1}/{len(ocr_chunks)}...")
-                        ocr_data = v3.extract_fields_with_llm(ocr_chunk["text"] + prompt_hint, client, f"ocr_chunk_{j+1}", detected_carrier=carrier_name)
+                        ocr_data = v3.extract_fields_with_llm(ocr_chunk["text"] + prompt_hint, client, f"ocr_chunk_{j+1}", detected_carrier=carrier_name, request_id=os.environ.get("AI_MONITOR_REQUEST_ID"))
                         items = ocr_data.get("LINE_ITEMS", [])
                         
                         # [V5][FIX] VISION FALLBACK: If names are missing, use Vision OCR (near-perfect layout)
@@ -346,7 +348,7 @@ def process_with_structural_layer(pdf_path, output_excel=None):
                             all_line_items = [] # Reset for Vision
                             for k, vis_chunk in enumerate(vis_chunks):
                                 print(f"    -> [Layer] Processing Vision Chunk {k+1}/{len(vis_chunks)}...")
-                                vis_data = v3.extract_fields_with_llm(vis_chunk["text"] + prompt_hint, client, f"vis_chunk_{k+1}", detected_carrier=carrier_name)
+                                vis_data = v3.extract_fields_with_llm(vis_chunk["text"] + prompt_hint, client, f"vis_chunk_{k+1}", detected_carrier=carrier_name, request_id=os.environ.get("AI_MONITOR_REQUEST_ID"))
                                 if vis_data.get("LINE_ITEMS"):
                                     all_line_items.extend(vis_data["LINE_ITEMS"])
                             break # Out of OCR chunk loop, we have Vision items

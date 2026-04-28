@@ -31,7 +31,13 @@ import threading
 import learning_engine
 import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor
+import time
 from ocr_text import OCRPDFExtractor
+
+try:
+    from monitor.service import request_monitor
+except ImportError:
+    request_monitor = None
 
 
 
@@ -492,8 +498,9 @@ REQUIRED_FIELDS = [
 class InvoicePolicyChunker:
     """Helper class to split large invoices into logical chunks based on sections/headers."""
     
-    def __init__(self, client: OpenAI):
+    def __init__(self, client: OpenAI, request_id: Optional[str] = None):
         self.client = client
+        self.request_id = request_id
 
     def detect_logical_boundaries(self, text: str) -> List[Dict]:
         """
@@ -534,6 +541,7 @@ DOCUMENT TEXT:
 """
 
         try:
+            start_time = time.time()
             response = self.client.chat.completions.create(
                 model="gpt-4o",
                 messages=[{"role": "user", "content": prompt}],
@@ -541,6 +549,15 @@ DOCUMENT TEXT:
                 max_tokens=2000,
                 temperature=0.0
             )
+            elapsed = time.time() - start_time
+            if self.request_id and request_monitor:
+                request_monitor.record_ai_usage(
+                    request_id=self.request_id,
+                    prompt_tokens=response.usage.prompt_tokens,
+                    completion_tokens=response.usage.completion_tokens,
+                    processing_time=elapsed,
+                    model="gpt-4o"
+                )
             
             result = json.loads(response.choices[0].message.content)
             items = result.get("boundaries", [])
@@ -632,13 +649,18 @@ DOCUMENT TEXT:
 {block}
 """
         try:
+            start_time = time.time()
             response = client.chat.completions.create(
-                model="-gpt4o",
+                model="gpt-4o",
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
                 max_tokens=4000,
                 temperature=0.0
             )
+            elapsed = time.time() - start_time
+            # Note: _detect_member_ids_ai/recovery pass are often called without a formal request_id passed through every signature yet
+            # We'll expect request_id to be passed to high-level functions eventually.
+            # For now, we try to get it if available in context or similar.
             data = json.loads(response.choices[0].message.content)
             ids = data.get("member_ids", [])
             all_detected_ids.update([str(i).strip() for i in ids])
@@ -1232,7 +1254,7 @@ def extract_gis_header_direct(raw_text: str) -> dict:
     return header
 
 
-def extract_fields_with_llm(text: str, client: OpenAI, pdf_filename: str = "", mode: str = "standard", detected_carrier: Optional[str] = None, continuity_context: Optional[Dict] = None) -> Dict:
+def extract_fields_with_llm(text: str, client: OpenAI, pdf_filename: str = "", mode: str = "standard", detected_carrier: Optional[str] = None, continuity_context: Optional[Dict] = None, request_id: Optional[str] = None) -> Dict:
 
     """
     Extract fields using OpenAI with enhanced 'Discovery' logic and mirrored text awareness
@@ -1775,6 +1797,7 @@ JSON OUTPUT:"""
     try:
         print(f"  [AI] Calling OpenAI API to extract fields...")
         
+        start_time = time.time()
         chat_completion = client.chat.completions.create(
             messages=[
                 {
@@ -1790,6 +1813,15 @@ JSON OUTPUT:"""
             temperature=0,  # Zero temperature for maximum consistency
             max_tokens=16383,  # Increased for large-page robustness
         )
+        elapsed = time.time() - start_time
+        if request_id and request_monitor:
+            request_monitor.record_ai_usage(
+                request_id=request_id,
+                prompt_tokens=chat_completion.usage.prompt_tokens,
+                completion_tokens=chat_completion.usage.completion_tokens,
+                processing_time=elapsed,
+                model="gpt-4o"
+            )
         
         response_text = chat_completion.choices[0].message.content
         print(f"  [OK] Received response from OpenAI")

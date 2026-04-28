@@ -179,6 +179,87 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
     Extends EnhancedInsuranceExtractor to support policy-based chunking.
     This prevents token limit issues by splitting large documents into policy-specific chunks.
     """
+
+    @staticmethod
+    def _fix_ocr_split_lines(text: str) -> str:
+        """
+        Pre-process OCR text to stitch orphaned payroll/dollar amounts back onto
+        their rating table row BEFORE the text reaches the LLM.
+
+        OCR frequently produces layouts like:
+
+            $317371
+            012 7380 IN    0.000 $0.00
+
+        or:
+
+            011 8810 IL    0.000 $0.00
+            $710779
+
+        In both cases the dollar amount belongs to that row but sits on a
+        separate line. This function detects both patterns and merges them
+        so the LLM sees a clean, single-line representation:
+
+            012 7380 IN    $317371    0.000 $0.00
+        """
+        import re
+
+        lines = text.split('\n')
+        fixed = []
+        i = 0
+
+        # Pattern: a standalone dollar amount (orphaned payroll line)
+        # e.g.  "   $317371"  or  "$1,407,974"  or  "  317371  "
+        orphan_re = re.compile(r'^\s*\$?([\d,]+)\s*$')
+
+        # Pattern: a rating table data row (LOC# CLASS STATE ... or just CLASS STATE ...)
+        # Contains a 4-digit class code AND optional LOC# AND a state code
+        # Row has no substantial payroll already filled in
+        rating_row_re = re.compile(
+            r'^(.*?\b\d{4}\b.*?\b[A-Z]{2}\b.*)$'
+        )
+
+        while i < len(lines):
+            line = lines[i]
+            m_orphan = orphan_re.match(line)
+
+            if m_orphan:
+                amount_raw = m_orphan.group(0).strip()  # keep as-is for readability
+                amount_val = m_orphan.group(1).replace(',', '')
+
+                # Check if the NEXT line is a rating row missing a payroll
+                if i + 1 < len(lines):
+                    next_line = lines[i + 1]
+                    if rating_row_re.match(next_line.strip()):
+                        # Inject the amount into the next line before the rate column
+                        # Insert before the first occurrence of "0.000" or at end
+                        if '0.000' in next_line:
+                            merged = next_line.replace('0.000', f'{amount_raw}    0.000', 1)
+                        else:
+                            merged = next_line.rstrip() + f'    {amount_raw}'
+                        print(f"   🔧 OCR fix (amount-before-row): '{line.strip()}' + '{next_line.strip()}' → merged")
+                        fixed.append(merged)
+                        i += 2  # consumed both lines
+                        continue
+
+                # Check if the PREVIOUS fixed line was a rating row
+                if fixed:
+                    prev = fixed[-1]
+                    if rating_row_re.match(prev.strip()):
+                        # Inject the amount into the preceding line
+                        if '0.000' in prev:
+                            fixed[-1] = prev.replace('0.000', f'{amount_raw}    0.000', 1)
+                        else:
+                            fixed[-1] = prev.rstrip() + f'    {amount_raw}'
+                        print(f"   🔧 OCR fix (amount-after-row): merged '{line.strip()}' into previous row")
+                        i += 1
+                        continue
+
+            fixed.append(line)
+            i += 1
+
+        result = '\n'.join(fixed)
+        return result
     
     def process_pdf_with_verification(self, pdf_path: str, target_claim_number: Optional[str] = None) -> Dict:
         """
@@ -218,8 +299,13 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
         
         # Step 1: Extract text
         all_text, pages_metadata = self.extract_text_from_pdf(pdf_path)
-        
-        # Save combined text
+
+        # Step 1b: Fix OCR split-line payroll amounts BEFORE sending to LLM
+        print(f"\n🔧 Running OCR split-line fix...")
+        all_text = self._fix_ocr_split_lines(all_text)
+        print(f"   ✓ Split-line fix complete.")
+
+        # Save combined text (post-fix, so what LLM sees is what's saved)
         text_file = session_dir / "extracted_text.txt"
         with open(text_file, 'w', encoding='utf-8') as f:
             f.write(all_text)
@@ -314,22 +400,48 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
         if target_claim_number:
             return super().extract_schema_from_text(all_text, target_claim_number)
         
-        # Skip policy chunking for ACORD 130 single-policy application forms
-        if self._is_acord_130_single_policy(all_text):
-            print("   ℹ️ ACORD 130 / single-policy application detected. Skipping policy chunking.")
-            return super()._extract_all_claims(all_text)
-            
-        print(f"\n⭐ NEW STEP: POLICY DETECTION & CHUNKING ⭐")
+        # Decide chunking strategy
+        is_single_policy_form = self._is_acord_130_single_policy(all_text)
+        text_length = len(all_text)
         
+        print(f"\n⭐ NEW STEP: STRATEGIC CHUNKING (Form Type: {'Single' if is_single_policy_form else 'Multi'}, Length: {text_length}) ⭐")
+        
+        chunks = []
         chunker = PolicyChunker(self.client)
-        boundaries = chunker.detect_policy_boundaries(all_text)
         
-        if len(boundaries) <= 1:
-            print("   ℹ️ Single policy or no boundaries detected. Proceeding with single-shot extraction.")
+        if is_single_policy_form:
+            if text_length > 25000:
+                print(f"   ℹ️ Large ACORD 130/Single-policy detected ({text_length} chars). Splitting by PAGE headers.")
+                # Split by PAGE headers
+                page_splits = re.split(r'={20,}\s+PAGE \d+\s+={20,}', all_text)
+                # Filter empty and merge small ones
+                temp_chunks = []
+                current_txt = ""
+                for split in page_splits:
+                    if not split.strip(): continue
+                    if len(current_txt) + len(split) < 15000:
+                        current_txt += "\n" + split
+                    else:
+                        if current_txt: temp_chunks.append(current_txt)
+                        current_txt = split
+                if current_txt: temp_chunks.append(current_txt)
+                
+                for i, txt in enumerate(temp_chunks):
+                    chunks.append({"policy_number": f"PageChunk_{i+1}", "text": txt})
+            else:
+                print("   ℹ️ Small Single-policy application. Using single-shot extraction.")
+                return super()._extract_all_claims(all_text)
+        else:
+            boundaries = chunker.detect_policy_boundaries(all_text)
+            if len(boundaries) <= 1:
+                print("   ℹ️ No multiple policy sections detected. Proceeding with single-shot.")
+                return super()._extract_all_claims(all_text)
+            chunks = chunker.split_into_chunks(all_text, boundaries)
+
+        if not chunks:
             return super()._extract_all_claims(all_text)
-            
-        chunks = chunker.split_into_chunks(all_text, boundaries)
-        print(f"   ✂️ Split into {len(chunks)} chunks.")
+
+        print(f"   ✂️ Split into {len(chunks)} chunks for parallel processing.")
         
         # Generate Chunking Report
         report = {
@@ -356,12 +468,35 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
             print(f"   ✓ Chunking report saved: {report_file}")
         
         all_results = []
+        # Extract context from the first part of the document (Demographics + Locations)
+        # We look specifically for the Locations table which is crucial for mapping LOC# to State
+        doc_context = all_text[:2500] 
+        
+        # Try to find and include the full location list if it's nearby
+        # We need this to map LOC# (001, 002) back to State (CA, AK) on later pages
+        loc_start = re.search(r'LOCATIONS.*?\n', all_text, re.IGNORECASE)
+        if loc_start:
+            loc_block = all_text[loc_start.start():loc_start.start()+5000]
+            loc_block = re.split(r'POLICY INFORMATION|INDIVIDUALS INCLUDED|GENERAL INFORMATION', loc_block, flags=re.IGNORECASE)[0]
+            doc_context += "\n\n--- LOCATION MAPPING (PRIMARY) ---\n" + loc_block
+
+        ext_loc_start = re.search(r'Extended ACORD Locations.*?\n', all_text, re.IGNORECASE)
+        if ext_loc_start:
+            ext_loc_block = all_text[ext_loc_start.start():ext_loc_start.start()+8000]
+            ext_loc_block = re.split(r'Extended ACORD Individuals|Extended ACORD Class Codes', ext_loc_block, flags=re.IGNORECASE)[0]
+            doc_context += "\n\n--- LOCATION MAPPING (EXTENDED) ---\n" + ext_loc_block
+            
         for i, chunk in enumerate(chunks):
             print(f"\n{'='*40}")
-            print(f"📦 CHUNK {i+1}/{len(chunks)}: Policy {chunk['policy_number']}")
+            print(f"📦 CHUNK {i+1}/{len(chunks)}: {chunk['policy_number']}")
             print(f"{'='*40}")
             
-            chunk_result = super()._extract_all_claims(chunk["text"])
+            # Inject context if it's not the first chunk
+            extraction_text = chunk["text"]
+            if i > 0:
+                extraction_text = f"--- DOCUMENT CONTEXT (Demographics/Header) ---\n{doc_context}\n\n--- CONTENT TO EXTRACT FROM THIS CHUNK ---\n{chunk['text']}"
+            
+            chunk_result = super()._extract_all_claims(extraction_text)
             
             if "data" in chunk_result:
                 all_results.append(chunk_result)
@@ -369,11 +504,6 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
                 print(f"   ⚠️ No structured data found in chunk {i+1}")
                 
         merged_result = self._merge_chunks(all_results)
-        # Merge form field P3_GIO data from full text (authoritative for generalQuestions)
-        p3_gio = parse_p3_gio_from_text(all_text)
-        if p3_gio:
-            merged_result.setdefault("data", {})["generalQuestions"] = p3_gio
-            print("   ✓ Merged P3_GIO form field data into generalQuestions")
         return merged_result
 
     def _merge_general_questions(self, results_list: List[Dict]) -> Dict:
@@ -391,6 +521,57 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
                 if val and str(val).strip().upper() == "Y":
                     merged_gq[key] = "Y"
         return merged_gq
+
+    def _deduplicate_rating(self, rating_list: list) -> list:
+        """
+        Post-merge deduplication for ratingByState.
+        
+        Rules:
+        1. If a state+classCode combo has BOTH a non-zero payroll entry AND a zero-payroll entry,
+           remove the zero-payroll entry (it's a ghost from Extended ACORD Class Codes).
+        2. If a state+classCode combo has multiple non-zero payroll entries, keep all of them
+           (they represent different locations with distinct payroll values).
+        3. If a state+classCode combo has ONLY zero-payroll entries, keep exactly one.
+        """
+        from collections import defaultdict
+        
+        # Group entries by (state, classCode)
+        groups = defaultdict(list)
+        for entry in rating_list:
+            state = entry.get("state", "")
+            code = str(entry.get("classCode", ""))
+            payroll = self._to_float(entry.get("estAnnualPayroll"))
+            groups[(state, code)].append((payroll, entry))
+        
+        cleaned = []
+        removed_count = 0
+        for key, entries in groups.items():
+            non_zero = [(p, e) for p, e in entries if p > 0]
+            zero_entries = [(p, e) for p, e in entries if p <= 0]
+            
+            if non_zero:
+                # Keep all non-zero entries (distinct locations)
+                # Deduplicate among non-zero by exact payroll match
+                seen_payrolls = set()
+                for p, e in non_zero:
+                    p_rounded = round(p, 2)
+                    if p_rounded not in seen_payrolls:
+                        cleaned.append(e)
+                        seen_payrolls.add(p_rounded)
+                    else:
+                        removed_count += 1
+                # Drop ALL zero entries when non-zero exist
+                removed_count += len(zero_entries)
+            else:
+                # Only zero entries — keep exactly one
+                if zero_entries:
+                    cleaned.append(zero_entries[0][1])
+                    removed_count += len(zero_entries) - 1
+        
+        if removed_count > 0:
+            print(f"   🧹 Dedup: Removed {removed_count} zero-payroll / duplicate rating entries")
+        
+        return cleaned
 
     def _merge_chunks(self, results_list: List[Dict]) -> Dict:
         """Merges multiple extraction results into a single report."""
@@ -411,40 +592,60 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
             }
         }
         
-        seen_rating = set()
         seen_carriers = set()
         seen_individuals = set()
         
         for res in results_list:
             inner = res.get("data", {})
             
-            # Merge ratingByState
+            # Merge demographics (pick most complete, prefer non-N/A values)
+            demo = inner.get("demographics", {})
+            base_demo = merged["data"]["demographics"]
+            if len(str(demo.get("applicantName", ""))) > len(str(base_demo.get("applicantName", ""))):
+                base_demo.update(demo)
+            # Fill in N/A fields from later chunks
+            for dkey, dval in demo.items():
+                if str(base_demo.get(dkey, "N/A")).strip().upper() in ("N/A", "") and str(dval).strip().upper() not in ("N/A", ""):
+                    base_demo[dkey] = dval
+
+            # Merge ratingByState (collect all, deduplicate later)
             for entry in inner.get("ratingByState", []):
-                key = (entry.get("state"), entry.get("classCode"), entry.get("estAnnualPayroll"))
-                if key not in seen_rating:
-                    merged["data"]["ratingByState"].append(entry)
-                    seen_rating.add(key)
+                state = entry.get("state")
+                payroll = self._to_float(entry.get("estAnnualPayroll"))
+                
+                # Skip entries with no state or obviously invalid
+                if not state or state == "N/A":
+                    if payroll <= 0:
+                        continue
+                
+                merged["data"]["ratingByState"].append(entry)
             
             # Merge priorCarriers
             for carrier in inner.get("priorCarriers", []):
-                key = (carrier.get("carrierName"), carrier.get("year"), carrier.get("policyNumber"))
-                if key not in seen_carriers:
+                c_name = str(carrier.get("carrierName", "")).lower().strip()
+                c_year = str(carrier.get("year", ""))
+                key = (c_name, c_year)
+                
+                if key not in seen_carriers and c_name and c_name != "n/a":
                     merged["data"]["priorCarriers"].append(carrier)
                     seen_carriers.add(key)
             
             # Merge individuals
             for ind in inner.get("individuals", []):
-                key = (ind.get("name"), ind.get("title"))
-                if key not in seen_individuals:
+                key = (str(ind.get("name")).lower(), str(ind.get("title")).lower())
+                if key not in seen_individuals and ind.get("name") and ind.get("name") != "N/A":
                     merged["data"]["individuals"].append(ind)
                     seen_individuals.add(key)
             
-            # Update premiumCalculation (take the most complete one, or just the first if non-zero)
-            # For simplicity, if the baseline is empty/zero, and this one isn't, use this one
+            # Update premiumCalculation (take the ones with non-zero premium)
             current_premium = inner.get("premiumCalculation", {})
-            if current_premium.get("totalEstimatedAnnualPremium", 0.0) > 0 and \
-               merged["data"]["premiumCalculation"].get("totalEstimatedAnnualPremium", 0.0) == 0:
+            curr_val = self._to_float(current_premium.get("totalEstimatedAnnualPremium"))
+            base_val = self._to_float(merged["data"]["premiumCalculation"].get("totalEstimatedAnnualPremium"))
+            if curr_val > base_val:
                 merged["data"]["premiumCalculation"] = current_premium
+        
+        # DEDUPLICATION PASS: Clean ratingByState
+        merged["data"]["ratingByState"] = self._deduplicate_rating(merged["data"]["ratingByState"])
                     
         # FINAL PASS
         merged = self._post_process_claims(merged)

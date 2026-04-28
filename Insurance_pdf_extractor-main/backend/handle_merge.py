@@ -257,10 +257,18 @@ def process_any_pdf_with_merge(
     total_conf = 0.0
     conf_count = 0
 
+    total_last_5 = 0
+    total_older = 0
+
     for res in per_invoice_results:
         schema = res.get("extracted_schema", {}) or {}
         claims = schema.get("claims", []) or []
         all_claims.extend(claims)
+        
+        # Accumulate counts
+        count_obj = schema.get("claimsCount", {})
+        total_last_5 += count_obj.get("lastFiveYears", 0)
+        total_older += count_obj.get("olderThanFiveYears", 0)
 
         summary = res.get("summary") or res.get("extraction_summary") or {}
         avg_conf = summary.get("avg_confidence")
@@ -325,6 +333,11 @@ def process_any_pdf_with_merge(
     combined_schema = {
         "claims": all_claims,
         "SummaryLevel": summary_level,
+        "claimsCount": {
+            "lastFiveYears": total_last_5,
+            "olderThanFiveYears": total_older,
+            "total": total_last_5 + total_older
+        }
     }
 
     combined["extracted_schema"] = combined_schema
