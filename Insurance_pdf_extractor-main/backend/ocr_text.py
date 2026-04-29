@@ -85,91 +85,73 @@ class OCRPDFExtractor:
             )
             
             total_pages = len(images)
-            pages_metadata = []
-            
+            pages_metadata = [None] * total_pages  # Pre-sized to preserve order
+
             if verbose:
-                print(f"Processing {total_pages} pages with OCR (layered fallback)...\n")
-            
-            for page_num, image in enumerate(images, 1):
+                print(f"Processing {total_pages} pages with OCR (parallel - layered fallback)...\n")
+
+            def process_page(page_num, image):
+                """OCR a single page with layered Tesseract → Vision fallback."""
+                page_header = f"\n{'='*80}\nPAGE {page_num}\n{'='*80}\n\n"
+                custom_config = f'--oem 3 --psm {psm_mode}'
+                _verifier = TextQualityVerifier()
+
                 if verbose:
                     print(f"OCR processing page {page_num}/{total_pages} (DPI {dpi})...")
-                
-                # Add page separator
-                page_header = f"\n{'='*80}\nPAGE {page_num}\n{'='*80}\n\n"
-                extracted_text.append(page_header)
-                
+
                 # 1) First attempt: high-DPI Tesseract
-                custom_config = f'--oem 3 --psm {psm_mode}'
-                text_hi = pytesseract.image_to_string(
-                    image,
-                    config=custom_config,
-                    lang=language
-                )
+                text_hi = pytesseract.image_to_string(image, config=custom_config, lang=language)
                 page_text_hi = text_hi if text_hi.strip() else "[No text detected on this page]\n"
-                
-                # Check for reversal early and correct if necessary
-                if verifier.analyze_quality(page_text_hi).get('metrics', {}).get('reversed_marker_count', 0) >= 2:
-                    if verbose: print(f"   ⚠️ Detected reversed text encoding at 600 DPI. Correcting...")
+
+                if _verifier.analyze_quality(page_text_hi).get('metrics', {}).get('reversed_marker_count', 0) >= 2:
+                    if verbose: print(f"   ⚠️ Detected reversed text encoding at 600 DPI. Correcting (page {page_num})...")
                     page_text_hi = self._reverse_text_block(page_text_hi)
-                
-                quality_hi = verifier.page_quality(page_text_hi)
+
+                quality_hi = _verifier.page_quality(page_text_hi)
                 score_hi = quality_hi.get("score", 0.0)
                 rec_hi = quality_hi.get("recommendation", "ok")
-                
+
                 final_text = page_text_hi
                 extraction_method = "tesseract-ocr-600dpi"
                 final_score = score_hi
-                
+
                 # 2) Second attempt: 300 DPI Tesseract if needed
                 if rec_hi in ("dpi_fallback", "full_vision"):
                     if verbose:
                         print(
                             f"   ↪ High-DPI OCR quality low (score {score_hi:.3f}, rec '{rec_hi}'). "
-                            f"Retrying Tesseract at 300 DPI..."
+                            f"Retrying Tesseract at 300 DPI (page {page_num})..."
                         )
                     try:
                         mid_images = convert_from_path(
-                            str(self.pdf_path),
-                            dpi=300,
-                            fmt='jpeg',
-                            first_page=page_num,
-                            last_page=page_num
+                            str(self.pdf_path), dpi=300, fmt='jpeg',
+                            first_page=page_num, last_page=page_num
                         )
                         if mid_images:
                             mid_image = mid_images[0]
-                            text_mid = pytesseract.image_to_string(
-                                mid_image,
-                                config=custom_config,
-                                lang=language
-                            )
+                            text_mid = pytesseract.image_to_string(mid_image, config=custom_config, lang=language)
                             page_text_mid = text_mid if text_mid.strip() else "[No text detected on this page]\n"
-                            
-                            # Check for reversal and correct for re-verification
-                            if verifier.analyze_quality(page_text_mid).get('metrics', {}).get('reversed_marker_count', 0) >= 2:
-                                if verbose: print(f"   ⚠️ Detected reversed text encoding at 300 DPI. Correcting...")
+
+                            if _verifier.analyze_quality(page_text_mid).get('metrics', {}).get('reversed_marker_count', 0) >= 2:
+                                if verbose: print(f"   ⚠️ Detected reversed text encoding at 300 DPI. Correcting (page {page_num})...")
                                 page_text_mid = self._reverse_text_block(page_text_mid)
-                                
-                            quality_mid = verifier.page_quality(page_text_mid)
+
+                            quality_mid = _verifier.page_quality(page_text_mid)
                             score_mid = quality_mid.get("score", 0.0)
                             rec_mid = quality_mid.get("recommendation", "ok")
-                            
-                            # Prefer the 300 DPI result if it scores better
+
                             if score_mid > final_score or rec_mid == "ok":
                                 if verbose:
-                                    print(
-                                        f"   ✓ 300 DPI OCR improved quality "
-                                        f"(score {score_mid:.3f}, rec '{rec_mid}')."
-                                    )
+                                    print(f"   ✓ 300 DPI OCR improved quality (score {score_mid:.3f}, rec '{rec_mid}') on page {page_num}.")
                                 final_text = page_text_mid
                                 extraction_method = "tesseract-ocr-300dpi"
                                 final_score = score_mid
-                                quality_hi = quality_mid # Update quality info for metadata
+                                quality_hi = quality_mid
                                 rec_hi = rec_mid
                     except Exception as e:
                         print(f"   ⚠️ 300 DPI fallback failed on page {page_num}: {e}")
-                
-                # 3) Final attempt: Vision OCR if still low quality and Vision is available
-                # FIX: Trigger Vision if STILL not acceptable after DPI fallback (even if score is > 0.4)
+
+                # 3) Final attempt: Vision OCR if still low quality
                 if rec_hi in ("dpi_fallback", "full_vision") and self.client is not None:
                     if verbose:
                         print(
@@ -177,58 +159,80 @@ class OCRPDFExtractor:
                             f"(score {final_score:.3f}). Using Vision on page {page_num}..."
                         )
                     try:
-                        # Render just this page for Vision at moderate DPI
                         vis_images = convert_from_path(
-                            str(self.pdf_path),
-                            dpi=300,
-                            fmt='jpeg',
-                            first_page=page_num,
-                            last_page=page_num
+                            str(self.pdf_path), dpi=300, fmt='jpeg',
+                            first_page=page_num, last_page=page_num
                         )
                         if vis_images:
                             vis_image = vis_images[0]
                             vis_text, vis_conf = self._extract_page_with_vision(vis_image)
-                            
-                            # Vision text usually doesn't have reversal issues, but we check anyway for robustness
-                            if verifier.analyze_quality(vis_text).get('metrics', {}).get('reversed_marker_count', 0) >= 2:
-                                if verbose: print(f"   ⚠️ Detected reversed text encoding in Vision output. Correcting...")
+
+                            if _verifier.analyze_quality(vis_text).get('metrics', {}).get('reversed_marker_count', 0) >= 2:
+                                if verbose: print(f"   ⚠️ Detected reversed text encoding in Vision output. Correcting (page {page_num})...")
                                 vis_text = self._reverse_text_block(vis_text)
-                                
+
                             if vis_text.strip():
                                 final_text = vis_text
                                 extraction_method = "gpt-4-vision-fallback"
                                 final_score = max(final_score, vis_conf)
-                                # For Vision, we assume it's acceptable if it returned something
-                                rec_hi = "ok" 
+                                rec_hi = "ok"
                     except Exception as e:
                         print(f"   ⚠️ Vision fallback failed on page {page_num}: {e}")
-                
-                # Removal of old redundant reversal check logic as it's now handled per-stage
 
-                extracted_text.append(final_text)
-                
-                pages_metadata.append({
+                page_metadata = {
                     "page_number": page_num,
                     "text": page_header + final_text,
                     "is_scanned": True,
                     "extraction_method": extraction_method,
                     "confidence": final_score,
                     "quality_metrics": quality_hi.get("analysis", {}).get("metrics", {})
-                })
-                
-                extracted_text.append("\n\n")
-            
+                }
+                return page_num, page_header, final_text, page_metadata
+
+            # Process pages in parallel batches (max 8 workers to avoid overloading CPU/RAM)
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            print(f"🚀 Launching Parallel OCR Pool for {total_pages} pages (max 8 workers)...")
+            with ThreadPoolExecutor(max_workers=8) as executor:
+                future_to_page = {
+                    executor.submit(process_page, pg_num, img): pg_num
+                    for pg_num, img in enumerate(images, 1)
+                }
+                for future in as_completed(future_to_page):
+                    pg_num = future_to_page[future]
+                    try:
+                        page_num, page_header, final_text, page_metadata = future.result()
+                        # Store in pre-allocated slot (0-indexed: page 1 → slot 0)
+                        pages_metadata[page_num - 1] = page_metadata
+                        if verbose:
+                            print(f"   ✅ Finished OCR for page {page_num}/{total_pages} ({page_metadata['extraction_method']})")
+                    except Exception as exc:
+                        print(f"   ⚠️ OCR failed for page {pg_num}: {exc}")
+                        pages_metadata[pg_num - 1] = {
+                            "page_number": pg_num,
+                            "text": f"\n{'='*80}\nPAGE {pg_num}\n{'='*80}\n\n[OCR FAILED]\n\n",
+                            "is_scanned": True,
+                            "extraction_method": "failed",
+                            "confidence": 0.0,
+                            "quality_metrics": {}
+                        }
+
+            # Reassemble text in strict page order (1, 2, 3, ... N)
+            for pm in pages_metadata:
+                if pm:
+                    extracted_text.append(pm["text"])
+                    extracted_text.append("\n\n")
+
             self.output_text = "".join(extracted_text)
-            
+
             if verbose:
                 print(f"\n{'='*80}")
                 print(f"EXTRACTION COMPLETE")
                 print(f"{'='*80}")
                 print(f"Characters extracted: {len(self.output_text):,}")
                 print(f"Lines: {self.output_text.count(chr(10)):,}\n")
-            
+
             return self.output_text, pages_metadata
-            
+
         except Exception as e:
             print(f"OCR Error: {e}")
             raise

@@ -1715,12 +1715,27 @@ Follow the format-specific instructions above. Validate your extractions."""
             else:
                 existing_claim, old_score = seen_claim_numbers[claim_num]
                 # RC4 FIX: Only replace if new claim has STRICTLY better math.
-                # When scores are equal, keep the FIRST (existing) extraction.
-                # Replacing by field-count is dangerous — more non-zero fields
-                # can mean more wrong values from a boundary-truncated chunk.
                 if quality_score > old_score:
-                    seen_claim_numbers[claim_num] = (claim, quality_score)
-                # (equal score → keep existing — no replacement)
+                    winner, loser = claim, existing_claim
+                    seen_claim_numbers[claim_num] = (winner, quality_score)
+                else:
+                    winner, loser = existing_claim, claim
+
+                # SMART MERGE: Fill any null fields in the winner from the loser.
+                # This resolves the summary-table vs detail-page collision where
+                # the first chunk has amounts but null injury_description/body_part/claim_class,
+                # while a later chunk has the full detail but is not the math winner.
+                DETAIL_FIELDS = [
+                    "injury_description", "body_part", "claim_class",
+                    "injury_type", "employee_name", "carrier_name", "policy_number"
+                ]
+                for field in DETAIL_FIELDS:
+                    if (winner.get(field) is None or winner.get(field) == "null"
+                            or str(winner.get(field, "")).strip().lower() in ("", "none", "not provided", "n/a")):
+                        loser_val = loser.get(field)
+                        if loser_val and str(loser_val).strip().lower() not in ("", "none", "null", "not provided", "n/a"):
+                            winner[field] = loser_val
+                seen_claim_numbers[claim_num] = (winner, max(old_score, quality_score))
             
         # Rebuild claims list and apply global filters
         final_claims = []
