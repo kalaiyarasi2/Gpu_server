@@ -1,9 +1,13 @@
 {
+  "CARRIER_NAME": "MGSI LLC",
   "CARRIER_KEYWORDS": [
-    "DPS$$$PKG",
-    "UHS Billing",
+    "IMPORTANT NOTE",
+    "Coverage Period",
     "Bill Group No",
-    "Coverage Period"
+    "APL",
+    "UHS Billing",
+    "DPS$$$PKG",
+    "BRITTANY WAY"
   ],
   "EXAMPLES": [
     {
@@ -24,21 +28,72 @@
       }
     },
     {
-      "RAW_TEXT": "1166219 BYRD DIAZ, SARAH P5000i80LX21B - *****389300 E A $433.95 $699.81",
+      "RAW_TEXT": "2650611 BYRD, SARAH  ***-**- MEDLINK9 GROUP MED SUP $88.39 - $88.39",
       "MAPPING": {
-        "LASTNAME": "BYRD DIAZ",
+        "LASTNAME": "BYRD",
         "FIRSTNAME": "SARAH",
         "MIDDLENAME": null,
-        "SSN": null,
-        "POLICYID": "1166219",
-        "MEMBERID": "389300",
-        "PLAN_NAME": "P5000i80LX21B - Max Claims Liability",
-        "PLAN_TYPE": "MEDICAL",
+        "SSN": "6030",
+        "POLICYID": null,
+        "MEMBERID": "2650611",
+        "PLAN_NAME": "MEDLINK9 GROUP MED SUP",
+        "PLAN_TYPE": null,
         "COVERAGE": "EE",
-        "CURRENT_PREMIUM": 265.86,
+        "CURRENT_PREMIUM": 88.39,
         "ADJUSTMENT_PREMIUM": null,
-        "PRICING_ADJUSTMENT": null
+        "PRICING_ADJUSTMENT": null,
+        "BILLING_PERIOD": "202604",
+        "INV_DATE": "4/1/2026",
+        "INV_NUMBER": "6416807",
+        "AMOUNT_DUE": 1405.84
+      }
+    },
+    {
+      "RAW_TEXT": "2650594 CABRERA, BRINA ***-**- MEDLINK9 GROUP MED SUP $88.39 - $88.39",
+      "MAPPING": {
+        "LASTNAME": "CABRERA",
+        "FIRSTNAME": "BRINA",
+        "MIDDLENAME": null,
+        "SSN": "2032",
+        "POLICYID": null,
+        "MEMBERID": "2650594",
+        "PLAN_NAME": "MEDLINK9 GROUP MED SUP",
+        "PLAN_TYPE": null,
+        "COVERAGE": "EE",
+        "CURRENT_PREMIUM": 88.39,
+        "ADJUSTMENT_PREMIUM": null,
+        "PRICING_ADJUSTMENT": null,
+        "BILLING_PERIOD": "202604",
+        "INV_DATE": "4/1/2026",
+        "INV_NUMBER": "6416807",
+        "AMOUNT_DUE": 1405.84
+      }
+    },
+    {
+      "RAW_TEXT": "2739667 CLOKE, RACHEL ***-**- MEDLINK9 GROUP MED SUP $88.39 - $88.39",
+      "MAPPING": {
+        "LASTNAME": "CLOKE",
+        "FIRSTNAME": "RACHEL",
+        "MIDDLENAME": null,
+        "SSN": "1540",
+        "POLICYID": null,
+        "MEMBERID": "2739667",
+        "PLAN_NAME": "MEDLINK9 GROUP MED SUP",
+        "PLAN_TYPE": null,
+        "COVERAGE": "EE",
+        "CURRENT_PREMIUM": 88.39,
+        "ADJUSTMENT_PREMIUM": null,
+        "PRICING_ADJUSTMENT": null,
+        "BILLING_PERIOD": "202604",
+        "INV_DATE": "4/1/2026",
+        "INV_NUMBER": "6416807",
+        "AMOUNT_DUE": 1405.84
       }
     }
-  ]
+  ],
+  "DOCUMENT_FINGERPRINTS": [
+    "bb1ba6cf23dcfa7d"
+  ],
+  "LAST_UPDATED": "2026-04-29T09:53:39.409428Z",
+  "EXAMPLE_COUNT": 4
 }

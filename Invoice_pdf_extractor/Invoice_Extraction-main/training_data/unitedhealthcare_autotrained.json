@@ -1,9 +1,14 @@
 {
+  "CARRIER_NAME": "UnitedHealthcare",
   "CARRIER_KEYWORDS": [
+    "Coverage Period",
+    "Account Adjustments",
     "DPS$$$PKG",
+    "uhceservices.com",
+    "Bill Group No",
     "UHS Billing",
-    "Total Balance Due",
-    "Bill Group No"
+    "Account Summary",
+    "Total Balance Due"
   ],
   "EXAMPLES": [
     {
@@ -24,21 +29,99 @@
       }
     },
     {
-      "RAW_TEXT": "1327367 | BERWIG, MONICA E6000i6021 - Max Claims | *****303700",
+      "RAW_TEXT": "1326188   Adames, Kalhil                         Non-Contributory25K Flat  *****478800  E        A           25           $0.75 1/01-1/31/2026   ADD            $0.75          $15.00",
       "MAPPING": {
-        "LASTNAME": "BERWIG",
-        "FIRSTNAME": "MONICA",
+        "LASTNAME": "Adames",
+        "FIRSTNAME": "Kalhil",
         "MIDDLENAME": null,
         "SSN": null,
-        "POLICYID": "1327367",
-        "MEMBERID": "303700",
-        "PLAN_NAME": "E6000i6021 - Admin/Excess Loss",
-        "PLAN_TYPE": "MEDICAL",
+        "POLICYID": "1326188",
+        "MEMBERID": "*****478800",
+        "PLAN_NAME": "Non-Contributory25K Flat AD&D EE Only",
+        "PLAN_TYPE": "AD&D",
         "COVERAGE": "EE",
-        "CURRENT_PREMIUM": 950.85,
+        "CURRENT_PREMIUM": 0.75,
+        "ADJUSTMENT_PREMIUM": 0.75,
+        "PRICING_ADJUSTMENT": null
+      }
+    },
+    {
+      "RAW_TEXT": "1326188   Clemens, James C                       Vision 100% Voluntary     *****007600  E        A                          $5.89                                                $651.93",
+      "MAPPING": {
+        "LASTNAME": "Clemens",
+        "FIRSTNAME": "James C",
+        "MIDDLENAME": null,
+        "SSN": null,
+        "POLICYID": "1326188",
+        "MEMBERID": "*****007600",
+        "PLAN_NAME": "Vision 100% Voluntary SH501",
+        "PLAN_TYPE": "VISION",
+        "COVERAGE": "EE",
+        "CURRENT_PREMIUM": 5.89,
         "ADJUSTMENT_PREMIUM": null,
         "PRICING_ADJUSTMENT": null
       }
+    },
+    {
+      "RAW_TEXT": "1481563  BARKSDALE, DONNA M               Dental Voluntary P5424    *****4800    E        A                        $26.51                                                $900.03",
+      "MAPPING": {
+        "LASTNAME": "BARKSDALE",
+        "FIRSTNAME": "DONNA M",
+        "MIDDLENAME": null,
+        "SSN": null,
+        "POLICYID": "1481563",
+        "MEMBERID": "*****4800",
+        "PLAN_NAME": "Dental Voluntary P5424",
+        "PLAN_TYPE": "DENTAL",
+        "COVERAGE": "EE",
+        "CURRENT_PREMIUM": 26.51,
+        "ADJUSTMENT_PREMIUM": null,
+        "PRICING_ADJUSTMENT": null
+      }
+    },
+    {
+      "RAW_TEXT": "1481563  RIOS, CALEB                      POS 25 / EKX6             *****1122    E        A\n4/01-4/30/2026   ADD   $1,046.13                                                  $1,046.13\n2/01-2/28/2026   ADD                   $1,046.13                                  $1,046.13\n3/01-3/31/2026   ADD                   $1,046.13                                  $1,046.13",
+      "MAPPING": [
+        {
+          "LASTNAME": "RIOS",
+          "FIRSTNAME": "CALEB",
+          "MEMBERID": "*****1122",
+          "PLAN_NAME": "POS 25 / EKX6",
+          "PLAN_TYPE": "MEDICAL",
+          "COVERAGE": "EE",
+          "CURRENT_PREMIUM": 1046.13,
+          "ADJUSTMENT_PREMIUM": null,
+          "BILLING_PERIOD": "4/01-4/30/2026"
+        },
+        {
+          "LASTNAME": "RIOS",
+          "FIRSTNAME": "CALEB",
+          "MEMBERID": "*****1122",
+          "PLAN_NAME": "POS 25 / EKX6 (ADJUSTMENT)",
+          "PLAN_TYPE": "MEDICAL",
+          "COVERAGE": "EE",
+          "CURRENT_PREMIUM": null,
+          "ADJUSTMENT_PREMIUM": 1046.13,
+          "BILLING_PERIOD": "2/01-2/28/2026"
+        },
+        {
+          "LASTNAME": "RIOS",
+          "FIRSTNAME": "CALEB",
+          "MEMBERID": "*****1122",
+          "PLAN_NAME": "POS 25 / EKX6 (ADJUSTMENT)",
+          "PLAN_TYPE": "MEDICAL",
+          "COVERAGE": "EE",
+          "CURRENT_PREMIUM": null,
+          "ADJUSTMENT_PREMIUM": 1046.13,
+          "BILLING_PERIOD": "3/01-3/31/2026"
+        }
+      ]
     }
-  ]
+  ],
+  "DOCUMENT_FINGERPRINTS": [
+    "ab6a40469657e88e",
+    "4472b3a6b6f844f2"
+  ],
+  "LAST_UPDATED": "2026-04-06T15:01:00Z",
+  "EXAMPLE_COUNT": 5
 }

@@ -79,11 +79,11 @@ async def extract_invoice(file: UploadFile = File(...)):
         if not rows:
             print(f"[V3][API] No rows extracted from {file.filename}")
             # Still create an empty excel with headers
-            df = pd.DataFrame(columns=['SOURCE_FILE'] + extractor.REQUIRED_FIELDS)
+            df = pd.DataFrame(columns=extractor.REQUIRED_FIELDS)
         else:
             df = pd.DataFrame(rows)
             # Reorder columns
-            cols = ['SOURCE_FILE'] + extractor.REQUIRED_FIELDS
+            cols = extractor.REQUIRED_FIELDS
             # Ensure all required fields exist
             for col in extractor.REQUIRED_FIELDS:
                 if col not in df.columns:

@@ -1,9 +1,14 @@
 {
+  "CARRIER_NAME": "KCL GROUP BENEFITS",
   "CARRIER_KEYWORDS": [
-    "Group Number",
-    "Kansas City Life",
+    "PaymentDueDate",
+    "AmountDue",
     "Monthly Premium Statement Summary",
-    "EAP Fee"
+    "Kansas City Life",
+    "Group Number",
+    "AmountEnclosed",
+    "EAP Fee",
+    "PROVIDESCOVERAGEFROM"
   ],
   "EXAMPLES": [
     {
@@ -22,6 +27,29 @@
         "ADJUSTMENT_PREMIUM": null,
         "PRICING_ADJUSTMENT": null
       }
+    },
+    {
+      "RAW_TEXT": "BennettAndrew                     GacioTomas                        PauleyGlen",
+      "MAPPING": {
+        "LASTNAME": "Bennett",
+        "FIRSTNAME": "Andrew",
+        "MIDDLENAME": null,
+        "SSN": null,
+        "POLICYID": null,
+        "MEMBERID": null,
+        "PLAN_NAME": "TG Life",
+        "PLAN_TYPE": "LIFE",
+        "COVERAGE": "EE",
+        "CURRENT_PREMIUM": 2.99,
+        "ADJUSTMENT_PREMIUM": null,
+        "PRICING_ADJUSTMENT": null,
+        "BILLING_PERIOD": "4/1/2026-4/30/2026"
+      }
     }
-  ]
+  ],
+  "DOCUMENT_FINGERPRINTS": [
+    "71c116dc79e2fe48"
+  ],
+  "LAST_UPDATED": "2026-04-21T06:51:57.496454Z",
+  "EXAMPLE_COUNT": 2
 }
