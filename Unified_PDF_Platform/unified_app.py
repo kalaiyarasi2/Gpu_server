@@ -3,6 +3,7 @@ import shutil
 import logging
 import zipfile
 import tempfile
+import subprocess
 from typing import List, Dict
 from pathlib import Path
 from fastapi import FastAPI, File, UploadFile, HTTPException, Request
@@ -70,6 +71,43 @@ app.add_middleware(
 # BASE_DIR and UPLOAD_DIR are now defined at the top
 # Include summary_api router
 app.include_router(summary_router)
+
+# --- Background Email Pipeline Management ---
+email_process = None
+
+@app.on_event("startup")
+def startup_event():
+    global email_process
+    print("[SYSTEM] Starting Unified Application...")
+    email_pipeline_dir = os.path.join(parent_dir, "Email_pipeline")
+    script_path = os.path.join(email_pipeline_dir, "main.py")
+    
+    if os.path.exists(script_path):
+        print(f"[SYSTEM] Starting Email Pipeline Watcher from {email_pipeline_dir}...")
+        try:
+            email_process = subprocess.Popen(
+                [sys.executable, "main.py", "--interval", "60"],
+                cwd=email_pipeline_dir
+            )
+            print("[SYSTEM] Email Pipeline Watcher started successfully.")
+        except Exception as e:
+            print(f"[ERROR] Failed to start Email Pipeline Watcher: {e}")
+    else:
+        print(f"[WARNING] Email Pipeline script not found at {script_path}")
+
+@app.on_event("shutdown")
+def shutdown_event():
+    global email_process
+    print("[SYSTEM] Shutting down Unified Application...")
+    if email_process:
+        print("[SYSTEM] Terminating background Email Pipeline Watcher...")
+        email_process.terminate()
+        try:
+            email_process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            email_process.kill()
+        print("[SYSTEM] Email Pipeline Watcher terminated.")
+
 
 @app.get("/monitor", include_in_schema=False)
 async def monitor_dashboard():

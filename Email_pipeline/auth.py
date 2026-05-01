@@ -32,6 +32,7 @@ from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
+from google.auth.exceptions import RefreshError
 
 # ── Scopes ─────────────────────────────────────────────────────────────────────
 # readonly is enough for searching + downloading — change if you also want to label/delete
@@ -59,8 +60,15 @@ def get_gmail_service():
     # Refresh or re-authenticate if needed
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
+            try:
+                creds.refresh(Request())
+            except RefreshError:
+                print(f"[AUTH] Token refresh failed. Removing {TOKEN_FILE} to re-authenticate.")
+                if os.path.exists(TOKEN_FILE):
+                    os.remove(TOKEN_FILE)
+                creds = None
+
+        if not creds:
             if not os.path.exists(CREDENTIALS_FILE):
                 raise FileNotFoundError(
                     f"[FAIL] '{CREDENTIALS_FILE}' not found.\n"
