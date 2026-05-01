@@ -2,8 +2,10 @@ import os
 import zipfile
 import tempfile
 from pathlib import Path
-from fastapi import APIRouter, File, UploadFile, HTTPException, Request
-from fastapi.responses import JSONResponse, FileResponse, RedirectResponse
+from typing import Any, Dict, List, Optional
+from fastapi import APIRouter, File, UploadFile, HTTPException, Request, Query
+from fastapi.responses import JSONResponse, FileResponse, RedirectResponse, PlainTextResponse
+from pydantic import BaseModel, Field
 
 # Import shared resources
 from shared_configs import _perform_extraction, file_path_cache
@@ -19,7 +21,59 @@ from swagger_docs import (
 
 router = APIRouter()
 
+# ── Request model for /api/claim-summary ─────────────────────────────────────
+class ClaimSummaryRequest(BaseModel):
+    """
+    Pass your extracted claims array here to generate an AI Insurance Claims
+    Analysis Report — identical to the 'AI Summary' button in the UI.
+    """
+    claims: List[Dict[str, Any]] = Field(
+        ...,
+        description="Array of claim objects from the extracted JSON (the 'claims' array).",
+        example=[
+            {
+                "employee_name": "Gordon, Tina",
+                "carrier_name": "Redwood Fire and Casualty Insurance Company",
+                "policy_number": "STWC710881",
+                "claim_number": "44107873",
+                "injury_date_time": "2025-08-06",
+                "claim_year": 2025,
+                "status": "Open",
+                "reopen": "False",
+                "injury_description": "Glass bowl broke and cut foot.",
+                "body_part": "Foot right",
+                "injury_type": "Indemnity",
+                "claim_class": "8810",
+                "medical_paid": 27061.43,
+                "medical_reserve": 50553.27,
+                "indemnity_paid": 7972.84,
+                "indemnity_reserve": 22485.31,
+                "expense_paid": 7066.18,
+                "expense_reserve": 17539.11,
+                "total_paid": 42100.45,
+                "total_reserve": 90577.69,
+                "total_incurred": 132678.14,
+                "litigation": "No"
+            }
+        ]
+    )
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Request model for /api/merge-json ────────────────────────────────────────
+class MergeJsonRequest(BaseModel):
+    """
+    Provide the list of JSON filenames (from a previous extraction) to merge.
+    Use the exact filename returned in the extraction response (e.g. 'extracted_schema.json').
+    """
+    filenames: List[str] = Field(
+        ...,
+        description="List of extracted JSON filenames to merge together.",
+        example=["extracted_schema.json", "extracted_schema.json"]
+    )
+# ─────────────────────────────────────────────────────────────────────────────
+
 @router.get("/cognethro", include_in_schema=False)
+
 async def cognethro_trigger_docs():
     """Redirect human visitors from the trigger point to the 'Real' standard Swagger documentation."""
     return RedirectResponse(url="/docs")
@@ -117,34 +171,51 @@ async def bank_statement_trigger(request: Request, file: UploadFile = File(...))
     
     return result
 
-@router.post("/api/claim-summary")
-async def get_claim_summary(request: Request):
+@router.post(
+    "/api/claim-summary",
+    summary="Get Claim Summary",
+    description=(
+        "Generate an AI Insurance Claims Analysis Report from extracted claims data.\n\n"
+        "**How to use:**\n"
+        "1. Paste your `claims` array (from the extracted JSON output) into the request body below.\n"
+        "2. Click **Execute**.\n"
+        "3. The response contains a `summary` field with the full report text.\n\n"
+        "**Want a downloadable .txt file?** Add `?download=true` to the URL."
+    ),
+    tags=["AI Summary"]
+)
+async def get_claim_summary(
+    body: ClaimSummaryRequest,
+    download: bool = Query(False, description="Set to true to download the summary as a .txt file")
+):
     """
-    Generate an AI summary for provided data (Claims or Invoices)
+    Generate an AI summary for provided claims data.
     """
-    try:
-        data = await request.json()
-    except Exception:
-        return JSONResponse({"error": "Invalid JSON payload"}, status_code=400)
-
-    if not data or 'claims' not in data:
-        # Check if it's a list directly
-        if isinstance(data, list):
-            claims_data = {'claims': data}
-        else:
-            return JSONResponse({'error': 'No data provided (expected "claims" field)'}, status_code=400)
-    else:
-        claims_data = data
+    claims_data = {"claims": body.claims}
 
     try:
-        # Initialize analyzer with API key from environment
         analyzer = ClaimsAnalyzer(api_key=os.getenv("OPENAI_API_KEY"))
         summary = analyzer.generate_claim_summary(claims_data)
 
-        return {
+        if download:
+            # Write to a temp file and return as download
+            tmp = tempfile.NamedTemporaryFile(
+                mode='w', suffix='_claims_summary.txt',
+                delete=False, encoding='utf-8'
+            )
+            tmp.write(summary)
+            tmp.flush()
+            tmp.close()
+            return FileResponse(
+                path=tmp.name,
+                filename="claims_analysis_report.txt",
+                media_type="text/plain"
+            )
+
+        return JSONResponse({
             'success': True,
             'summary': summary
-        }
+        })
 
     except Exception as e:
         print(f"❌ Error generating summary: {e}")
@@ -153,19 +224,30 @@ async def get_claim_summary(request: Request):
             'success': False
         }, status_code=500)
 
-@router.post("/api/merge-json")
-async def merge_json_endpoint(request: Request):
+@router.post(
+    "/api/merge-json",
+    summary="Merge JSON Endpoint",
+    description=(
+        "Merge multiple extracted JSON files into a single combined dataset.\n\n"
+        "**How to use:**\n"
+        "1. Run an extraction on two or more PDFs first.\n"
+        "2. Copy the `output_json` filename from each extraction response "
+        "(e.g. `extracted_schema.json`).\n"
+        "3. Paste those filenames into the `filenames` array below.\n"
+        "4. Click **Execute** to get merged results."
+    ),
+    tags=["AI Summary"]
+)
+async def merge_json_endpoint(body: MergeJsonRequest):
     """
     Merge multiple JSON files by their filenames (cached paths).
-    Expected JSON: { "filenames": ["file1.json", "file2.json"] }
     """
+    filenames = body.filenames
+
+    if not filenames:
+        return JSONResponse({"error": "No filenames provided"}, status_code=400)
+
     try:
-        data = await request.json()
-        filenames = data.get("filenames", [])
-        
-        if not filenames:
-            return JSONResponse({"error": "No filenames provided"}, status_code=400)
-        
         # Resolve full paths from cache
         full_paths = []
         for fn in filenames:
@@ -180,12 +262,16 @@ async def merge_json_endpoint(request: Request):
                     print(f"[Merge-API][WARN] Filename not found in cache: {fn}")
 
         if not full_paths:
-            return JSONResponse({"error": "None of the provided files could be resolved"}, status_code=404)
+            return JSONResponse(
+                {"error": "None of the provided files could be resolved from cache. "
+                          "Make sure you extracted those PDFs in the current server session."},
+                status_code=404
+            )
 
         from merge_logic import DocumentMerger
         merger = DocumentMerger()
         merged_list = merger.merge_json_files(full_paths)
-        
+
         return {
             "success": True,
             "count": len(merged_list),

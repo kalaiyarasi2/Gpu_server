@@ -65,7 +65,7 @@ async def _perform_extraction(file: UploadFile, request: Request):
 
         # Run the unified router (async via threadpool)
         print(f"[Unified][API] Routing document...")
-        result = await run_in_threadpool(router_engine.process, str(file_path))
+        result = await run_in_threadpool(router_engine.process, str(file_path), request_id=request_id)
 
         if "error" in result:
             print(f"[Unified][WARN] Extraction returned error: {result['error']}")
@@ -100,7 +100,8 @@ async def _perform_extraction(file: UploadFile, request: Request):
             "output_file": excel_filename,
             "output_json": json_filename,
             "excel": f"{base_url}/api/download/{excel_filename}" if excel_filename else None,
-            "json": f"{base_url}/api/download/{json_filename}" if json_filename else None
+            "json": f"{base_url}/api/download/{json_filename}" if json_filename else None,
+            "pages": result.get("pages", 0)
         }
         
         # Add Vendor Invoice specific metadata (supports both single and merged outputs)

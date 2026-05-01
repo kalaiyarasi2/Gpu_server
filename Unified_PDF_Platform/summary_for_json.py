@@ -142,7 +142,7 @@ class UniversalDocumentAnalyzer:
     def generate_summary(
         self, 
         data_json: Any,
-        model: str = "gpt-4.1-mini",
+        model: str = "gpt-4o-mini",
         temperature: float = 0.2
     ) -> str:
         """

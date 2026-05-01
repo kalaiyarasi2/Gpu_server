@@ -325,7 +325,12 @@ def _check_if_reversed(text: str) -> bool:
     """Detect if text is likely reversed (e.g. 'tropeR' instead of 'Report')."""
     if not text: return False
     # Check for common keywords that might appear reversed
-    reversed_keywords = ["tropeR", "mialC", "ycailoP", "oitaR", "ssoL", "diap"]
+    reversed_keywords = [
+        "tropeR", "mialC", "ycailoP", "oitaR", "ssoL", "diap",
+        # Scrambled/Scanned rotation markers
+        "7OSS", "GZOZ", "GCOC", "Ayjuwapu|", "wield", "sisAjeuy", "eyeq", "ebeg",
+        "OQUINN", "awWeN", "JUNODDY"
+    ]
     count = 0
     for kw in reversed_keywords:
         if kw in text or kw.lower() in text.lower():

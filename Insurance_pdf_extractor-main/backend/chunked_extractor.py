@@ -25,12 +25,19 @@ class PolicyChunker:
         RC6 FIX: Removed hardcoded company-name examples that biased detection
         toward SKMGT-style documents. Now uses fully generic placeholders.
         """
-        print(f"\n🔍 Detecting policy boundaries in text ({len(text)} chars)...")
+        print(f"\n🔍 Detecting policy boundaries iteratively over text ({len(text)} chars)...")
         
-        text_preview = text if len(text) < 100000 else text[:100000]
+        chunk_window = 100000
+        overlap = 5000
+        items = []
         
-        # RC6: All examples now use generic placeholders – no real company names
-        prompt = f"""Analyze the following insurance document text and identify all UNIQUE policy sections.
+        start_pos = 0
+        while start_pos < len(text):
+            end_pos = start_pos + chunk_window
+            text_preview = text[start_pos:end_pos]
+            
+            # RC6: All examples now use generic placeholders – no real company names
+            prompt = f"""Analyze the following insurance document text and identify all UNIQUE policy sections.
 Look for "Policy Number", "Policy #", "Pol #", "NUMBER: [ID]" or similar headers that start a new section for a specific policy.
 Note: Policy numbers may be on the line BELOW the label "Policy Number".
 
@@ -64,53 +71,61 @@ Important:
 - Do NOT invent or paraphrase snippets.
 - Identify boundaries for ALL carriers, ANY company name format.
 
-DOCUMENT TEXT:
+DOCUMENT TEXT (Characters {start_pos} to {end_pos}):
 {text_preview}
 """
 
-        try:
-            response = self.client.chat.completions.create(
-                model="gpt-4o",
-                messages=[{"role": "user", "content": prompt}],
-                response_format={"type": "json_object"},
-                max_tokens=4000,
-                temperature=0.0
-            )
+            try:
+                print(f"   --> Scanning for policies from character {start_pos} to {end_pos}...")
+                response = self.client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=[{"role": "user", "content": prompt}],
+                    response_format={"type": "json_object"},
+                    max_tokens=4000,
+                    temperature=0.0
+                )
+                
+                result = json.loads(response.choices[0].message.content)
+                batch_items = result.get("boundaries", []) or result.get("policies", [])
+                items.extend(batch_items)
+            except Exception as e:
+                print(f"   ⚠️ Policy boundary detection failed at pos {start_pos}: {e}")
+                
+            # Break if we've processed the end of the text
+            if end_pos >= len(text):
+                break
+                
+            start_pos += (chunk_window - overlap)
             
-            result = json.loads(response.choices[0].message.content)
-            items = result.get("boundaries", []) or result.get("policies", [])
-            
-            # Find indices for each header snippet
-            boundaries = []
-            for p in items:
-                snippet = p.get("header_snippet")
-                if snippet:
-                    idx = text.find(snippet)
-                    if idx != -1:
-                        boundaries.append({
-                            "policy_number": p.get("identifier") or p.get("policy_number"),
-                            "carrier": p.get("carrier"),
-                            "start_index": idx,
-                            "header_snippet": snippet
-                        })
-            
-            # Sort by index
-            boundaries.sort(key=lambda x: x["start_index"])
-            
-            # Deduplicate by index
-            unique_boundaries = []
-            last_idx = -1
-            for b in boundaries:
-                if b["start_index"] != last_idx:
-                    unique_boundaries.append(b)
-                    last_idx = b["start_index"]
-            
-            print(f"✓ Detected {len(unique_boundaries)} policy boundaries")
-            return unique_boundaries
+        # Find indices for each header snippet
+        boundaries = []
+        for p in items:
+            snippet = p.get("header_snippet")
+            if snippet:
+                idx = text.find(snippet)
+                if idx != -1:
+                    boundaries.append({
+                        "policy_number": p.get("identifier") or p.get("policy_number"),
+                        "carrier": p.get("carrier"),
+                        "start_index": idx,
+                        "header_snippet": snippet
+                    })
+        
+        # Sort by index
+        boundaries.sort(key=lambda x: x["start_index"])
+        
+        # Deduplicate by index
+        unique_boundaries = []
+        last_idx = -1
+        for b in boundaries:
+            if b["start_index"] != last_idx:
+                unique_boundaries.append(b)
+                last_idx = b["start_index"]
+        
+        print(f"✓ Detected {len(unique_boundaries)} policy boundaries")
+        return unique_boundaries
 
-        except Exception as e:
-            print(f"⚠️ Policy boundary detection failed: {e}")
-            return []
+
 
     def split_into_chunks(self, text: str, boundaries: List[Dict], overlap: int = CHUNK_OVERLAP_CHARS) -> List[Dict]:
         """
@@ -163,9 +178,8 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
     
     def process_pdf_with_verification(self, pdf_path: str, target_claim_number: Optional[str] = None) -> Dict:
         """
-        OVERRIDE: Main entry point for chunked extraction.
+        Complete pipeline with verification steps - Overridden to support chunking report.
         """
-        self.current_pdf_path = pdf_path
         from datetime import datetime
         import os
         
@@ -344,6 +358,11 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
         schema_output = {
             "claims": claims_only,
             "SummaryLevel": summary_level,
+            "claimsCount": {
+                "lastFiveYears": len(included_claims),
+                "olderThanFiveYears": len(excluded_claims),
+                "total": len(included_claims) + len(excluded_claims)
+            }
         }
 
         schema_file = session_dir / "extracted_schema.json"
@@ -439,7 +458,7 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
         for chunk in chunks:
             if len(chunk["text"]) > 20000:
                 print(f"   ⚠️ Chunk '{chunk['policy_number']}' is too large ({len(chunk['text'])} chars). Splitting by pages...")
-                page_markers = list(re.finditer(r'(=+\nPAGE \d+\n=+|Page \d+ of \d+)', chunk["text"]))
+                page_markers = list(re.finditer(r'(?i)(=+\nPAGE\s+\d+\n=+|Page\s*\d+\s*(?:of|f|0f|o\s*f)?\s*\d+)', chunk["text"]))
                 
                 if page_markers:
                     last_pos = 0
@@ -494,8 +513,9 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
             "integrity_check": "Chunks include overlap — total may exceed original"
         }
         
-        for c in chunks:
+        for chunk_idx, c in enumerate(chunks):
             report["chunks"].append({
+                "chunk_id": chunk_idx + 1,
                 "policy": c["policy_number"],
                 "length": len(c["text"]),
                 "preview_start": c["text"][:100],
@@ -509,38 +529,72 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
                 json.dump(report, f, indent=2, ensure_ascii=False)
             print(f"   ✓ Chunking report saved: {report_file}")
         
-        all_results = []
-        for i, chunk in enumerate(chunks):
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        
+        # Pre-allocate array to preserve strictly identical order regardless of thread finish times
+        unordered_results = [None] * len(chunks)
+        _super_extract = super()._extract_all_claims
+
+        def process_chunk(idx, chunk):
             print(f"\n{'='*40}")
-            print(f"📦 CHUNK {i+1}/{len(chunks)}: Policy {chunk['policy_number']}")
+            print(f"📦 STARTING CHUNK {idx+1}/{len(chunks)}: Policy {chunk['policy_number']}")
             print(f"{'='*40}")
             
             # RC1: Pass global master list so each chunk filters against full ID universe.
-            # Per-chunk detection is skipped when global list is available.
-            chunk_result = super()._extract_all_claims(
+            chunk_res = _super_extract(
                 chunk["text"],
                 vision_pattern=vision_pattern,
                 pre_built_master_list=global_master_list or None
             )
-            
-            if "claims" in chunk_result:
-                # RC7: Use carrier detected at the boundary header if present.
-                # This works even if the carrier name is not repeated on every page.
-                chunk_carrier = chunk_result.get("carrier_name") or chunk.get("carrier_name")
-                
-                for c in chunk_result["claims"]:
-                    # Propagate carrier name from chunk header if claim doesn't have one
-                    if not c.get("carrier_name") and chunk_carrier:
-                        c["carrier_name"] = chunk_carrier
-                        
-                    if not c.get("policy_number") or c.get("policy_number") == "Multiple":
-                        # RC5: Strip (Part X) AND year suffix from policy label
-                        clean_policy = re.sub(r' \(Part \d+\)$', '', str(chunk.get("policy_number", "")))
-                        clean_policy = re.sub(r'\s*-\s*\d{4}$', '', clean_policy).strip()
-                        c["policy_number"] = clean_policy
-                all_results.append(chunk_result)
-            else:
+            # Inject internal tracking ID
+            if isinstance(chunk_res, dict):
+                chunk_res["_chunk_id"] = idx + 1
+            return idx, chunk_res
+
+        # Execute parallel AI API Calls (max 5 to protect OpenAI rate limits)
+        print(f"\n🚀 Launching Parallel Processing Pool for {len(chunks)} chunks (max 5 workers)...")
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            future_to_idx = {executor.submit(process_chunk, i, chunk): i for i, chunk in enumerate(chunks)}
+            for future in as_completed(future_to_idx):
+                idx = future_to_idx[future]
+                try:
+                    idx, chunk_result = future.result()
+                    unordered_results[idx] = chunk_result
+                    print(f"   ✅ Finished processing CHUNK {idx+1}/{len(chunks)}")
+                except Exception as exc:
+                    import traceback
+                    print(f"   ⚠️ Chunk {idx+1} generated an exception: {exc}")
+                    traceback.print_exc()
+                    unordered_results[idx] = {}
+
+        # Post-process results precisely in the original sequential order
+        all_results = []
+        for i, chunk_result in enumerate(unordered_results):
+            if not chunk_result or "claims" not in chunk_result:
                 print(f"   ⚠️ No claims found in chunk {i+1}")
+                continue
+                
+            # Grab the matching chunk context
+            chunk = chunks[i]
+            
+            # RC7: Use carrier detected at the boundary header if present.
+            chunk_carrier = chunk_result.get("carrier_name") or chunk.get("carrier_name")
+            
+            for c in chunk_result["claims"]:
+                # Propagate carrier name from chunk header if claim doesn't have one
+                if not c.get("carrier_name") and chunk_carrier:
+                    c["carrier_name"] = chunk_carrier
+                    
+                if not c.get("policy_number") or c.get("policy_number") == "Multiple":
+                    # RC5: Strip (Part X) AND year suffix from policy label
+                    clean_policy = re.sub(r' \(Part \d+\)$', '', str(chunk.get("policy_number", "")))
+                    clean_policy = re.sub(r'\s*-\s*\d{4}$', '', clean_policy).strip()
+                    c["policy_number"] = clean_policy
+                    
+                # NOTE: chunk_id is stored only in chunking_report.json (internal analysis).
+                # It is intentionally NOT added to claims here to keep extracted_schema.json and Excel clean.
+                
+            all_results.append(chunk_result)
                 
         merged_result = self._merge_chunks(all_results, all_text=all_text,
                                            global_master_list=global_master_list,
@@ -623,21 +677,9 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
                 merged["carrier_name"] = inferred_carrier
                 print(f"   ✓ Inferred global carrier_name: {inferred_carrier}")
             
-        # Build a mapping of clean_policy -> carrier for propagation
-        policy_carrier_map = {}
-        for res in results_list:
-            p = res.get("policy_number")
-            c = res.get("carrier_name")
-            if p and c and "," not in str(c):
-                # Clean the policy number if it has the suffix
-                if " - " in str(p):
-                    p = re.split(r'\s-\s\d{4}', str(p))[0].strip()
-                policy_carrier_map[p] = c
-        
         # Global post-processing + deduplication (RC4 tie-breaker is in _post_process_claims)
         print(f"   🔍 Performing global post-extraction audit...")
-        merged = self._post_process_claims(merged, master_claim_list=global_master_list or None,
-                                           policy_carrier_map=policy_carrier_map)
+        merged = self._post_process_claims(merged, master_claim_list=global_master_list or None)
         
         print(f"   ✅ After merge: {len(merged['claims'])} total claims.")
         
@@ -674,11 +716,6 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
             else:
                 print(f"   ✅ All {len(global_master_list)} global claim IDs accounted for.")
         # ─────────────────────────────────────────────────────────────────────
-        
-        # STAGE 4: Deep Repair Layer (Dynamic placeholder fixing)
-        # This is the final safety net for any claims that still have placeholders
-        # after both chunked extraction and global recovery.
-        merged = self._repair_degenerate_claims(all_text, merged, pdf_path=getattr(self, 'current_pdf_path', None))
         
         return merged
 

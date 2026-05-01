@@ -1,19 +1,56 @@
+# Environment files (NEVER PUSH THESE)
 .env
 *.env
 Unified_PDF_Platform/.env
-venv/
-__pycache__/
-unified_PDF_Platform/unified_outputs
-insurance_pdf_extractor-main/backend/outputs
-sources/
-Unified_PDF_Platform/uploads
-work_compenstaion/backend/outputs
-work_compenstaion/__pycache__
-work_compenstaion/sources
-outputs/
 
-unified_PDF_Platform/uploads/
-unified_PDF_Platform/unified_outputs
-
-monitor.log
+# Databases & Monitoring
 requests.db
+monitor.log
+*.db
+*.log
+monitor/requests.db
+
+# Python & System
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+pip-log.txt
+pip-delete-this-directory.txt
+.venv
+.vscode/
+.idea/
+
+# Output & Upload Folders (Data files that change constantly)
+outputs/
+uploads/
+Unified_PDF_Platform/unified_outputs/
+Unified_PDF_Platform/uploads/
+Insurance_pdf_extractor-main/backend/outputs/
+Insurance_pdf_extractor-main/backend/__pycache__/
+Invoice_pdf_extractor/Invoice_Extraction-main/training_data/
+Invoice_pdf_extractor/Invoice_Extraction-main/__pycache__/
+work_compenstaion/backend/outputs/
+work_compenstaion/__pycache__/
+work_compenstaion/sources/
+sources/
+
+# Debug & Temporary Extraction Files
+*.rostaing_layout.txt
+*.rostaing_temp.txt
+*_fixed.pdf
+*_raw_extracted.txt
+*_invoice_structural.xlsx
+*_invoice_structural.json
+
+# Specialized App Folders
+token_monitor/
+node_modules/
+.npm
+.cache
+Unified_PDF_Platform/monitor/monitor.log
+Unified_PDF_Platform/monitor/monitor.log
+Unified_PDF_Platform/monitor/monitor.log
