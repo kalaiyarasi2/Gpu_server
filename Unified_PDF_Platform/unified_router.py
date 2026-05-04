@@ -832,7 +832,8 @@ class UnifiedRouter:
                     rotated_any = True
                     print(f"[Rotation] Page {i+1}: geometry heuristic -> corrected 90 deg")
 
-            normalized_path = os.path.join(tmp_dir, "normalized_rotation.pdf")
+            original_stem = Path(pdf_path).stem
+            normalized_path = os.path.join(tmp_dir, f"{original_stem}.pdf")
             doc.save(normalized_path)
             doc.close()
             if rotated_any:

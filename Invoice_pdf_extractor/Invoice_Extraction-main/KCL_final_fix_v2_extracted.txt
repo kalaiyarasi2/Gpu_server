@@ -133,7 +133,7 @@ BAULLOSA ARIANNA                                    TG Life   EE          $2.90 
          TG AD&D   EE          $0.36   $10,000                                                                 Total                                   $3.26                  Total                                   $2.12
 Total                                   $3.26                                                       Reyes Cala Pedro Pablo                              Wagner Robert
 Castillo Jose                                            TG Life   EE          $2.90   $10,000               TG Life   EE          $2.90   $10,000
-           TG Life   EE          $2.90   $10,000             TG AD&D   EE          $0.36   $10,000             TG AD&D   EE          $0.36   $10,000
+           TG   Life EE          $2.90   $10,000             TG AD&D   EE          $0.36   $10,000             TG AD&D   EE          $0.36   $10,000
          TG AD&D   EE          $0.36   $10,000                                                                 Total                                   $3.26                  Total                                   $3.26
 Total                                   $3.26                                                         Valdes Jose                                                                                                Group TotalsCastillo Mario                                           TG Life   EE          $2.90   $10,000
            TG Life   EE          $2.90   $10,000             TG AD&D   EE          $0.36   $10,000      Product             Premium  Enrollees      Volume
@@ -145,7 +145,8 @@ Domingo Emilio                                         TG Life   EE          $2.
 Total                                   $1.47                                                         Valdes Nickolas                              VOL AD&D              $0.00        0           $0
 Fuentes Reyes Johel                                       TG Life   EE          $2.90   $10,000
                                                                                        STD                      $0.00        0           $0           TG Life   EE          $2.90   $10,000             TG AD&D   EE          $0.36   $10,000
-         TG AD&D   EE          $0.36   $10,000                                                                 Total                                   $3.26            LTD                     $0.00        0           $0
+         TG AD&D   EE          $
+         0.36   $10,000                                                                 Total                                   $3.26            LTD                     $0.00        0           $0
 Total                                   $3.26                                                         Valdes Rita                                                   Vision                    $0.00        0
 Gonzalez Jose                                           TG Life   EE          $2.90   $10,000                                                                                                                         Accident                  $0.00        0           TG Life   EE          $2.90   $10,000             TG AD&D   EE          $0.36   $10,000
          TG AD&D   EE          $0.36   $10,000                                                                 Total                                   $3.26                    Critical                   $0.00        0           $0
