@@ -88,6 +88,9 @@ except ImportError:
 # Fix for "Decompression Bomb" error in PIL
 Image.MAX_IMAGE_PIXELS = None
 
+from financial_data_validation import FinancialValidator
+from data_validation import GeneralDataValidator
+
 
 @dataclass
 class PageExtraction:
@@ -173,7 +176,7 @@ class EnhancedInsuranceExtractor:
         self.output_dir = Path(output_dir) if output_dir else Path("outputs")
         self.output_dir.mkdir(parents=True, exist_ok=True)
     
-    def extract_text_from_pdf(self, pdf_path: str) -> Tuple[str, List[Dict]]:
+    def extract_text_from_pdf(self, pdf_path: str, is_scanned: Optional[bool] = None) -> Tuple[str, List[Dict]]:
         """
         Extract text from PDF using detection and appropriate extraction method.
         """
@@ -181,9 +184,12 @@ class EnhancedInsuranceExtractor:
         from config import config
         
         try:
-            print(f"🔍 Detecting PDF type...")
-            detector = PDFDetector(pdf_path)
-            is_scanned = detector.is_scanned()
+            if is_scanned is None:
+                print(f"🔍 Detecting PDF type...")
+                detector = PDFDetector(pdf_path)
+                is_scanned = detector.is_scanned()
+            else:
+                print(f"🔍 PDF type already identified: {'Scanned' if is_scanned else 'Digital'}")
             
             # Check if we should use Vision for scanned PDFs
             use_vision = getattr(config, 'OCR_ENGINE', 'tesseract') == 'vision'
@@ -539,7 +545,7 @@ After detecting claim numbers, perform these checks:
    - Compare detected numbers against employee names
    - Each unique employee should have a unique claim number
    - If same number appears for multiple employees → POLICY number
-
+   
 5. **Header-Based Policy Identification**:
    - Look for alphanumeric identifiers (e.g., W610628) in the top header lines of each page.
    - These are often following the company name or "Location" label.
@@ -1098,14 +1104,14 @@ Return ONLY the JSON. Ensure the dynamic_rules is extremely precise."""
         if format_type == 'complex_multi_row':
             financial_instructions = f"""
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🔴 POLICY IDENTIFICATION (Critical) 🔴
+制 POLICY IDENTIFICATION (Critical) 制
 Look for the policy number (e.g., W610628) in the top header section of the page.
 It might be part of a string like: "Location - SKMGT LE BLEU CHATEAU, INC. - W610628"
 Select this as the policy_number even if it lacks a "Policy Number:" label.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🔴 FORMAT CALIBRATION (Mandatory) 🔴
+制 FORMAT CALIBRATION (Mandatory) 制
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 This document uses a complex block-based or multi-row structure. 
 
@@ -1202,7 +1208,7 @@ Return JSON:
       "reopen": "True or False",
       "injury_description": "description",
       "body_part": "body part or null",
-      "injury_type": "Indemnity or Medical Only or Expense",
+      "injury_type": "Indemnity or Medical Only or Expense",  if these three or not present gives as null,
       "claim_class": "STRICTLY NUMERIC class code ONLY (e.g. 882707). NO letters. Correct OCR typos (e.g. 34p -> 340). Null if valid number is missing",
       "medical_paid": "string (e.g. '1,973.00')",
       "medical_reserve": "string",
@@ -1267,6 +1273,8 @@ Return JSON:
    **VALIDATION:**
    - If you see the SAME number appearing for multiple different employees → It's a POLICY number, NOT a claim number
    - If each employee has a DIFFERENT number → Those are CLAIM numbers ✓
+   - If "Type of Injury" field is NOT present → return null
+    DO NOT infer from claim status or financials
    
    **GOLDEN RULE:** When in doubt, look for:
    - "Claim #:", "Claim No:", "Claim Number:", "Converted #" → These introduce CLAIM numbers
@@ -1309,6 +1317,8 @@ Return JSON:
    - Medical or MED or MEDI or "Medical Only" or "Record Only" → "Medical Only"
    - Indemnity or COMP or Compensation or TTD or TPD or PPD → "Indemnity"
    - Expense or LAE or Service → "Expense"
+   - If "Type of Injury" field is NOT present → return null
+   - DO NOT infer from claim status or financials
 
 6. BODY PART
    - Extract from "Nature of Injury", "Body Part", "Part Injured" fields
@@ -1876,7 +1886,7 @@ Return a JSON object with this structure:
   "status": "Open/Closed/Reopened",
   "injury_description": "description",
   "body_part": "body part or null",
-  "injury_type": "Indemnity or Medical Only or Expense",
+  "injury_type": "Indemnity or Medical Only or Expense" ,  if these three or not present gives as null,
   "claim_class": "STRICTLY NUMERIC class code ONLY. NO letters. Correct typos. Null if missing",
   "medical_paid": "string (e.g. '1,234.56')",
   "medical_reserve": "string",
@@ -2121,6 +2131,10 @@ Return ONLY the JSON object for claim {target_claim_number}."""
         except Exception as e:
             print(f"   ⚠️  Advanced validation encountered an issue: {e}")
         
+        # Step 3: Final Data Cleanup & Strict Filtering
+        if "claims" in schema_data:
+            schema_data["claims"] = self._apply_strict_filtering(schema_data["claims"])
+        
         # Validate extraction
         validation = self.validate_extraction(schema_data, all_text)
         
@@ -2322,6 +2336,66 @@ Return ONLY the JSON object for claim {target_claim_number}."""
             numeric_value = 0.0
         
         return numeric_value, display_value or None
+
+
+    def _apply_strict_filtering(self, claims: List[Dict]) -> List[Dict]:
+        """
+        Filters out common false-positive claims like headers misidentified as claims.
+        Safeguards are in place to ensure correct data is NOT filtered.
+        """
+        filtered_claims = []
+        # Corporate keywords that indicate a document header or summary row
+        corporate_keywords = {"LLC", "INC", "CORP", "CORPORATION", "LIMITED", "SERVICES", "PLC", "COMPANY", "INSURED"}
+        
+        print(f"🔍 Applying strict data filtering with safeguards...")
+        for claim in claims:
+            name = str(claim.get("employee_name", "")).upper()
+            description = str(claim.get("injury_description", "")).lower().strip()
+            
+            # --- Safeguard 1: Meaningful Description ---
+            # If there is a real injury description (not just "null" or "none"), 
+            # we keep the claim even if the name looks suspicious.
+            is_valid_description = (
+                description and 
+                description not in ("null", "none", "n/a", "unknown") and 
+                len(description) > 10
+            )
+
+            # --- Safeguard 2: Financial Activity ---
+            # If there is ANY financial movement, we keep the claim.
+            financial_fields = [
+                "medical_paid", "medical_reserve", "indemnity_paid", "indemnity_reserve", 
+                "expense_paid", "expense_reserve", "total_paid", "total_reserve", "total_incurred"
+            ]
+            has_financials = any(float(claim.get(field, 0) or 0) > 0 for field in financial_fields)
+            
+            # --- Safeguard 3: Word Boundary for Corporate Keywords ---
+            # We check for corporate keywords as separate words to avoid matching names like "Ince" or "Corporon"
+            is_corporate = False
+            for kw in corporate_keywords:
+                if re.search(rf'\b{kw}\b', name):
+                    is_corporate = True
+                    break
+
+            # --- FILTER LOGIC ---
+            # ONLY remove if:
+            # 1. It looks like a corporate entity (LLC, Inc, etc.)
+            # 2. AND it has NO financials (all 0.0)
+            # 3. AND it has NO meaningful description
+            
+            if is_corporate and not has_financials and not is_valid_description:
+                print(f"   🚫 Filtering out suspected header entry (Corporate Name & No Data): {claim.get('employee_name')}")
+                continue
+            
+            # Also filter out explicitly "null" names or numbers if they have no data
+            if (not name or name in ("NULL", "NONE", "UNKNOWN")) and not has_financials and not is_valid_description:
+                print(f"   🚫 Filtering out empty/null record")
+                continue
+
+            filtered_claims.append(claim)
+            
+        print(f"   ✓ Filtering complete: {len(filtered_claims)} claims remain")
+        return filtered_claims
 
 
 def main():
