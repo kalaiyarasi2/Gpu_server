@@ -861,23 +861,29 @@ DOCUMENT SAMPLE:
         """
         print(f"\n🔍 STAGE 1: Analyzing document format...")
         
-        prompt = f"""You are analyzing a Workers' Compensation application form to understand its structure.
+        prompt = f"""You are analyzing a Workers' Compensation application form (ACORD 130) to understand its structure.
 
-Your task: Describe HOW the data is organized in this document so we can extract it accurately.
+Your task: Describe HOW the data is organized in this document and identify the key parties.
+
+CRITICAL ROLE DISTINCTION (The "Anchor" Rules):
+1. **AGENCY**: This is the insurance broker/agent. They are usually located in the TOP-LEFT box. (Common examples: "Thomas & Thomas", "Insurance Services").
+2. **APPLICANT**: This is the actual business being insured. They are usually located in the MIDDLE-LEFT or TOP-RIGHT box, often explicitly labeled "APPLICANT NAME" or "INSURED".
 
 Answer these questions:
-1. What is the business/applicant name?
-2. Are there tables for "Rating by State" or "Class Codes"?
-3. Is there a section for "Prior Carriers" or "Loss History"?
-4. Are there "General Questions" with Y/N answers?
+1. What is the Agency name? (Check top-left)
+2. What is the Applicant/Insured name? (Check middle-left or top-right; Look for labels like 'APPLICANT NAME')
+3. Are there tables for "Rating by State" or "Class Codes"?
+4. Is there a section for "Prior Carriers" or "Loss History"?
+5. Are there "General Questions" with Y/N answers?
 
 Return JSON:
 {{
+  "agency": "agency name",
   "applicant": "business name",
   "has_rating_table": true/false,
   "has_prior_carriers": true/false,
   "has_questions": true/false,
-  "special_notes": "any quirks or unusual formatting",
+  "special_notes": "e.g. Applicant is Macias, Agency is Thomas & Thomas",
   "confidence": 0.0-1.0
 }}
 
@@ -933,7 +939,12 @@ Return ONLY the JSON."""
         prompt = f"""You are an expert at extracting structured data from Workers' Compensation application forms (ACORD 130).
         
 ACORD FORM SPECIFIC RULES:
-1. **Applicant Name**: Often labeled as "APPLICANT NAME" or "INSURED". Handle OCR noise like "A1" becoming "A" or "A 1". Do not guess the name based on other fields; extract only what is written.
+1. **Applicant Name vs Agency**: 
+   - **DO NOT** use the Agency name (usually top-left) as the Applicant Name. 
+   - The **Agency** (e.g., "Thomas & Thomas") is the broker.
+   - The **Applicant** (e.g., "Macias Sheet Metal") is the client.
+   - Extract only the **Applicant** name into the `applicantName` field.
+   - Use the **MAILING ADDRESS** and Zip Code associated with the Applicant, not the Agency.
 2. **Zip Codes**: Zip codes in DE/MD often start with 19 or 21. If you see "1980%", it is "19801". Use the **MAILING ADDRESS** zip code for demographics, not the Location addresses found lower in the form.
 3. **Fuzzy Date Correction**: OCR often misreads years (e.g., "3024" for "2024", "1900" for "2026"). If a year is logically impossible (like 3024) or a placeholder (like 1900), look for the surrounding context or use the current year as a baseline.
 4. **Fuzzy Carrier Correction**: Misread carrier names should be corrected to their most likely official name. Examples: 

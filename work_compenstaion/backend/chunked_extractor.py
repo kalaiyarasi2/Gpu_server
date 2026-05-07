@@ -388,10 +388,19 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
         These have form field data (P3_GIO) and prior carrier policy numbers that
         are NOT separate policy sections. Policy chunking would incorrectly split them.
         """
-        text_snip = text[:8000] if len(text) > 8000 else text
+        # Search a wider window — ACORD 130 footers often appear on page 1 bottom
+        text_snip = text[:30000] if len(text) > 30000 else text
+        text_upper = text_snip.upper()
+        
         has_form_fields = "FORM FIELD DATA" in text_snip and "P3_GIO_" in text_snip
-        has_acord_130 = "ACORD 130" in text_snip or "ACORD130" in text_snip
-        return bool(has_form_fields or has_acord_130)
+        has_acord_130 = "ACORD 130" in text_upper or "ACORD130" in text_upper
+        has_wc_app = "WORKERS COMPENSATION APPLICATION" in text_upper or "WORKERS' COMPENSATION APPLICATION" in text_upper
+        has_applicant_block = "APPLICANT NAME" in text_upper and "AGENCY NAME" in text_upper
+        
+        is_single = bool(has_form_fields or has_acord_130 or has_wc_app or has_applicant_block)
+        if is_single:
+            print(f"   ✓ Detected single-policy form (ACORD 130/WC Application)")
+        return is_single
 
     def extract_schema_from_text(self, all_text: str, target_claim_number: Optional[str] = None) -> Dict:
         """
@@ -410,7 +419,7 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
         chunker = PolicyChunker(self.client)
         
         if is_single_policy_form:
-            if text_length > 25000:
+            if text_length > 200000:
                 print(f"   ℹ️ Large ACORD 130/Single-policy detected ({text_length} chars). Splitting by PAGE headers.")
                 # Split by PAGE headers
                 page_splits = re.split(r'={20,}\s+PAGE \d+\s+={20,}', all_text)
