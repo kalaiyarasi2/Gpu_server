@@ -119,8 +119,8 @@ class StructuredExcelExtractor:
 
         # 1. Find the header row
         header_idx = -1
-        primary_keywords = ["participant name", "member name", "subscriber name", "employee name", "enrollee name", "enrollee last name"]
-        secondary_keywords = ["member id", "participant id", "employee id", "enrollee id", "ssn", "dob"]
+        primary_keywords = ["participant name", "member name", "subscriber name", "employee name", "enrollee name", "enrollee last name", "last name", "first name"]
+        secondary_keywords = ["member id", "participant id", "employee id", "enrollee id", "ssn", "dob", "member no", "member no."]
 
         # Pass 1: Look for primary anchors
         for i, row in df.iterrows():
