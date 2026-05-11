@@ -3,6 +3,8 @@ import re
 from typing import Dict, List, Optional, Tuple
 from insurance_extractor import EnhancedInsuranceExtractor, filter_claims_by_claim_year, MIN_INCLUDED_CLAIM_YEAR
 from pdf_rotation import auto_rotate_pdf_content
+from auto_rotation_ocr import run_pipeline_preserve_layout
+from pdf_detector import PDFDetector
 import tempfile
 import shutil
 
@@ -21,21 +23,23 @@ class PolicyChunker:
         """
         Use AI to detect policy headers and their approximate locations.
         Returns a list of dicts: {"policy_number": "...", "start_index": int}
-        
+
         RC6 FIX: Removed hardcoded company-name examples that biased detection
         toward SKMGT-style documents. Now uses fully generic placeholders.
+        SLIDING WINDOW FIX: Iterates over full document in 100k-char windows
+        with 5k overlap so no boundaries are missed in large documents.
         """
         print(f"\n🔍 Detecting policy boundaries iteratively over text ({len(text)} chars)...")
-        
+
         chunk_window = 100000
         overlap = 5000
         items = []
-        
+
         start_pos = 0
         while start_pos < len(text):
             end_pos = start_pos + chunk_window
             text_preview = text[start_pos:end_pos]
-            
+
             # RC6: All examples now use generic placeholders – no real company names
             prompt = f"""Analyze the following insurance document text and identify all UNIQUE policy sections.
 Look for "Policy Number", "Policy #", "Pol #", "NUMBER: [ID]" or similar headers that start a new section for a specific policy.
@@ -84,20 +88,19 @@ DOCUMENT TEXT (Characters {start_pos} to {end_pos}):
                     max_tokens=4000,
                     temperature=0.0
                 )
-                
                 result = json.loads(response.choices[0].message.content)
                 batch_items = result.get("boundaries", []) or result.get("policies", [])
                 items.extend(batch_items)
             except Exception as e:
                 print(f"   ⚠️ Policy boundary detection failed at pos {start_pos}: {e}")
-                
+
             # Break if we've processed the end of the text
             if end_pos >= len(text):
                 break
-                
+
             start_pos += (chunk_window - overlap)
-            
-        # Find indices for each header snippet
+
+        # Find indices for each header snippet (outside the loop)
         boundaries = []
         for p in items:
             snippet = p.get("header_snippet")
@@ -110,10 +113,10 @@ DOCUMENT TEXT (Characters {start_pos} to {end_pos}):
                         "start_index": idx,
                         "header_snippet": snippet
                     })
-        
+
         # Sort by index
         boundaries.sort(key=lambda x: x["start_index"])
-        
+
         # Deduplicate by index
         unique_boundaries = []
         last_idx = -1
@@ -121,11 +124,9 @@ DOCUMENT TEXT (Characters {start_pos} to {end_pos}):
             if b["start_index"] != last_idx:
                 unique_boundaries.append(b)
                 last_idx = b["start_index"]
-        
+
         print(f"✓ Detected {len(unique_boundaries)} policy boundaries")
         return unique_boundaries
-
-
 
     def split_into_chunks(self, text: str, boundaries: List[Dict], overlap: int = CHUNK_OVERLAP_CHARS) -> List[Dict]:
         """
@@ -191,12 +192,31 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
         temp_rotated_pdf = os.path.join(temp_rotated_dir, "rotated_temp.pdf")
         original_pdf_path = pdf_path
         
+        is_scanned = None
         try:
-            print(f"🔄 Checking for rotation...")
-            was_rotated = auto_rotate_pdf_content(pdf_path, temp_rotated_pdf)
+            print(f"🔍 Identifying PDF type (Digital vs Scanned)...")
+            detector = PDFDetector(pdf_path)
+            is_scanned = detector.is_scanned()
+            
+            if is_scanned:
+                print(f"📸 SCANNED PDF DETECTED. Applying high-accuracy OSD rotation...")
+                # Use the new scanned-specific rotation module
+                # Pass temp_rotated_dir as work_dir to ensure isolation
+                rotated_pdf, reports = run_pipeline_preserve_layout(
+                    pdf_path, 
+                    work_dir=temp_rotated_dir,
+                    output_pdf=temp_rotated_pdf,
+                    dpi=200, 
+                    osd_min_conf=0.3
+                )
+                was_rotated = any(r.get('applied_rotate', 0) != 0 for r in reports)
+            else:
+                print(f"📄 DIGITAL PDF DETECTED. Applying standard text-based rotation...")
+                # Use existing digital-specific rotation module
+                was_rotated = auto_rotate_pdf_content(pdf_path, temp_rotated_pdf)
             
             if was_rotated:
-                print(f"   ✓ Document rotated. Processing corrected version.")
+                print(f"   ✓ Document rotated/corrected. Processing updated version.")
                 pdf_path = temp_rotated_pdf
             else:
                 print(f"   ✓ Document orientation correct.")
@@ -205,15 +225,25 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
             
         # Create session output directory
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:20]
-        file_slug = os.path.basename(pdf_path).replace(" ", "_").replace(".", "_")[:20]
+        # Use original filename for slug to avoid 'rotated_temp_pdf' in folder names
+        file_slug = os.path.basename(original_pdf_path).replace(" ", "_").replace(".", "_")[:20]
         session_id = f"{timestamp}_{file_slug}"
         session_dir = self.output_dir / f"extraction_{session_id}"
         session_dir.mkdir(parents=True, exist_ok=True)
         
         self.current_session_dir = session_dir
+
+        # Save the processed PDF to the output directory for reference
+        processed_pdf_name = f"processed_{os.path.basename(original_pdf_path)}"
+        processed_pdf_path = session_dir / processed_pdf_name
+        try:
+            shutil.copy2(pdf_path, processed_pdf_path)
+            print(f"📄 Processed PDF saved for reference: {processed_pdf_path}")
+        except Exception as e:
+            print(f"⚠️ Failed to save processed PDF: {e}")
         
         # Step 1: Extract text
-        all_text, pages_metadata = self.extract_text_from_pdf(pdf_path)
+        all_text, pages_metadata = self.extract_text_from_pdf(pdf_path, is_scanned=is_scanned)
         
         # Save combined text
         text_file = session_dir / "extracted_text.txt"
@@ -530,7 +560,7 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
             print(f"   ✓ Chunking report saved: {report_file}")
         
         from concurrent.futures import ThreadPoolExecutor, as_completed
-        
+
         # Pre-allocate array to preserve strictly identical order regardless of thread finish times
         unordered_results = [None] * len(chunks)
         _super_extract = super()._extract_all_claims
@@ -539,14 +569,13 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
             print(f"\n{'='*40}")
             print(f"📦 STARTING CHUNK {idx+1}/{len(chunks)}: Policy {chunk['policy_number']}")
             print(f"{'='*40}")
-            
             # RC1: Pass global master list so each chunk filters against full ID universe.
             chunk_res = _super_extract(
                 chunk["text"],
                 vision_pattern=vision_pattern,
                 pre_built_master_list=global_master_list or None
             )
-            # Inject internal tracking ID
+            # Inject internal tracking ID (used only in chunking_report, not in claims)
             if isinstance(chunk_res, dict):
                 chunk_res["_chunk_id"] = idx + 1
             return idx, chunk_res
@@ -573,29 +602,26 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
             if not chunk_result or "claims" not in chunk_result:
                 print(f"   ⚠️ No claims found in chunk {i+1}")
                 continue
-                
-            # Grab the matching chunk context
+
             chunk = chunks[i]
-            
             # RC7: Use carrier detected at the boundary header if present.
             chunk_carrier = chunk_result.get("carrier_name") or chunk.get("carrier_name")
-            
+
             for c in chunk_result["claims"]:
                 # Propagate carrier name from chunk header if claim doesn't have one
                 if not c.get("carrier_name") and chunk_carrier:
                     c["carrier_name"] = chunk_carrier
-                    
+
                 if not c.get("policy_number") or c.get("policy_number") == "Multiple":
                     # RC5: Strip (Part X) AND year suffix from policy label
                     clean_policy = re.sub(r' \(Part \d+\)$', '', str(chunk.get("policy_number", "")))
                     clean_policy = re.sub(r'\s*-\s*\d{4}$', '', clean_policy).strip()
                     c["policy_number"] = clean_policy
-                    
-                # NOTE: chunk_id is stored only in chunking_report.json (internal analysis).
-                # It is intentionally NOT added to claims here to keep extracted_schema.json and Excel clean.
-                
+
+                # NOTE: chunk_id stored only in chunking_report.json — NOT added to claims.
+
             all_results.append(chunk_result)
-                
+
         merged_result = self._merge_chunks(all_results, all_text=all_text,
                                            global_master_list=global_master_list,
                                            vision_pattern=vision_pattern)

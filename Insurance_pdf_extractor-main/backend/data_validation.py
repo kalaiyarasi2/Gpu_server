@@ -81,7 +81,7 @@ class GeneralDataValidator:
 
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4.1", # Use gpt-4.1 for vision support
+                model="gpt-4o", # Use gpt-4o for semantic auditing
                 messages=messages,
                 response_format={"type": "json_object"},
                 temperature=0.0
