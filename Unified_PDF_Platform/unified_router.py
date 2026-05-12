@@ -1050,17 +1050,13 @@ class UnifiedRouter:
             print("[Pre-Classify] Loss run filename → INSURANCE_CLAIMS")
             return "INSURANCE_CLAIMS", "Filename loss run keyword"
 
-        # RULE F3: Explicit insurance billing keywords in filename
-        insurance_fn_kw = ["medlink", "medsupp", "cobra", "group benefit", "beneficiary", "uhc", "unitedhealthcare", "bcbs", "bluecross", "blueshield", "anthem", "humana", "aetna", "cigna", "angle", "angle health", "principal"]
-        if any(kw in filename_lower for kw in insurance_fn_kw):
-            # If it's an insurance carrier keyword and ALSO contains an invoice keyword (including dollar signs), it's very likely an INVOICE
-            if any(ik in filename_lower for ik in ["inv", "invoice", "bill", "billing", "benefit", "master", "$", "premium"]):
-                print(f"[Pre-Classify] Insurance carrier + Invoice keyword in filename → INVOICE")
-                return "INVOICE", "Filename insurance + invoice keyword"
-            
-            # If it has carrier name but NO invoice keyword, it MIGHT be a claim report,
-            # but we usually prefer sticking to INVOICE if it's not explicitly a loss run.
-            # However, for now, let's just make sure "Anthem...Inv" works.
+        # RULE F3: Explicit insurance billing / health carrier keywords in filename
+        health_carrier_fn_kw = ["medlink", "medsupp", "cobra", "group benefit", "beneficiary", "uhc", "unitedhealthcare", "bcbs", "bluecross", "blue cross", "blueshield", "anthem", "humana", "aetna", "cigna", "angle", "angle health", "principal", "guardian", "metlife"]
+        if any(kw in filename_lower for kw in health_carrier_fn_kw):
+            # Health carriers / group benefits usually mean INVOICE (premium billing), unless explicitly a loss run
+            # Since F2 already catches loss runs, we can safely assume these are invoices
+            print(f"[Pre-Classify] Health carrier / benefit keyword in filename → INVOICE")
+            return "INVOICE", "Filename health carrier/benefit keyword"
         
         # RULE F4: Bank statement filenames (common bank names + account/statement keywords)
         bank_fn_kw = [
@@ -1302,7 +1298,8 @@ CRITICAL RULES (apply in order, first match wins):
 5. "Invoice", "Inv", "Bill", "Billing", "Benefit", "Legal Shield", "Master" in filename -> INVOICE
    NOTE: Even if an insurance carrier name (like Anthem or Legal Shield) is present, if "Inv", "Invoice", or "Benefit" is also there, pick INVOICE.
 6. "Passport", "Driver License", "ID Card", "SSN" in filename -> IDENTIFICATION
-7. Any insurance CARRIER or TPA name (Accident Fund, CCMSI, BerkleyNet, KeyRisk, Travelers,
+7. Any health/dental/vision insurance CARRIER name (e.g., UHC, UnitedHealthcare, BCBS, Blue Cross, Anthem, Humana, Aetna, Cigna, Principal, Guardian, MetLife) -> INVOICE
+8. Any Property & Casualty / Workers Comp CARRIER or TPA name (Accident Fund, CCMSI, BerkleyNet, KeyRisk, Travelers,
    Zurich, CNA, AmTrust, Liberty Mutual, Markel, Stonetrust, FCBI, State Fund, Clear Springs,
    Chesapeake Employers, Berkshire Hathaway) paired with no invoice or benefit keywords -> INSURANCE_CLAIMS
 
@@ -1391,12 +1388,13 @@ PRIORITY TIEBREAKER RULES:
 - "Account Summary" + "Balance" -> BANK_STATEMENT (Only if NO insurance carrier or benefit keywords present)
 - "Loss Run" keyword ALWAYS -> INSURANCE_CLAIMS (overrides WC context)
 - "Amount Billed / Amount Due / Premium Period" -> INVOICE (even if carrier name present)
+- Health/dental/vision insurance CARRIER name (UHC, BCBS, Anthem, etc.) -> INVOICE
 - ACORD 130/133 form -> WORK_COMPENSATION
 - Claimant + date of loss + incurred amounts -> INSURANCE_CLAIMS
 
 Return EXACTLY TWO lines:
 Line 1: INSURANCE_CLAIMS | WORK_COMPENSATION | BENEFIT_INVOICE | VENDOR_INVOICE | IDENTIFICATION | BANK_STATEMENT
-Line 2: Primary carrier, vendor, or company name (e.g., Berkshire Hathaway, Zoho, APL) or UNKNOWN
+Line 2: Primary carrier, vendor, or company name (e.g., Berkshire Hathaway, Zoho, APL, BCBS) or UNKNOWN
 
 - USE VENDOR_INVOICE for software (Avanquest, Zoho, Adobe), utilities, and SaaS.
 - USE BENEFIT_INVOICE for group medical, cobra, medsupp, and insurance premiums.
