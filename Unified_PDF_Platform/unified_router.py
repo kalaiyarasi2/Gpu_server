@@ -1589,7 +1589,7 @@ Return ONLY the company name or UNKNOWN:"""
                 if f_path.exists():
                     print(f"  [Merge] Adding: {f_path.name} ({f_path.stat().st_size} bytes)")
                     try:
-                        df = pd.read_excel(f_path)
+                        df = pd.read_excel(f_path, dtype={'INV_NUMBER': str, 'MEMBERID': str, 'SSN': str, 'POLICYID': str})
                         if not df.empty:
                             # Add an internal index to track the physical position within this chunk
                             df['_CHUNK_ROW_INDEX'] = range(len(df))
@@ -1757,6 +1757,11 @@ Return ONLY the company name or UNKNOWN:"""
             except Exception as sum_err:
                 print(f"  [Merge] Warning: Could not append grand total row: {sum_err}")
                 
+            # Prevent scientific notation by forcing ID columns to strings
+            for id_col in ['INV_NUMBER', 'MEMBERID', 'POLICYID', 'SSN']:
+                if id_col in combined_df.columns:
+                    combined_df[id_col] = combined_df[id_col].apply(lambda x: str(x).replace('.0', '') if pd.notna(x) and str(x).strip().lower() not in ['nan', 'none', ''] else None)
+
             combined_df.to_excel(final_output, index=False)
             print(f"  [Merge] Successfully merged results into {final_output.name} ({final_output.stat().st_size} bytes)")
             return True

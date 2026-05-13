@@ -3246,9 +3246,14 @@ def process_single_pdf_to_excel(pdf_path: str, output_excel: str):
             
     # Reorder columns - STRICTLY use REQUIRED_FIELDS for Excel (Include SOURCE_FILE as first column)
     cols = REQUIRED_FIELDS
-    # Only pick columns that actually exist to avoid KeyError
     cols = [c for c in cols if c in df.columns]
     df = df[cols]
+    
+    # Prevent scientific notation by forcing ID columns to strings without trailing .0
+    for id_col in ['INV_NUMBER', 'MEMBERID', 'POLICYID', 'SSN']:
+        if id_col in df.columns:
+            df[id_col] = df[id_col].apply(lambda x: str(x).replace('.0', '') if pd.notna(x) and str(x).strip().lower() not in ['nan', 'none', ''] else None)
+
     
     # Group outputs by Invoice Number and name so they are separated cleanly in the list
     sort_cols = [c for c in ['INV_NUMBER', 'LASTNAME', 'FIRSTNAME'] if c in df.columns]
@@ -3309,9 +3314,14 @@ def process_multiple_pdfs(pdf_directory: str, output_excel: str):
     
     # Reorder columns - STRICTLY use REQUIRED_FIELDS for Excel (Include SOURCE_FILE as first column)
     cols = REQUIRED_FIELDS
-    # Only pick columns that actually exist to avoid KeyError
     cols = [c for c in cols if c in df.columns]
     df = df[cols]
+    
+    # Prevent scientific notation by forcing ID columns to strings without trailing .0
+    for id_col in ['INV_NUMBER', 'MEMBERID', 'POLICYID', 'SSN']:
+        if id_col in df.columns:
+            df[id_col] = df[id_col].apply(lambda x: str(x).replace('.0', '') if pd.notna(x) and str(x).strip().lower() not in ['nan', 'none', ''] else None)
+
     
     # Group outputs by Invoice Number and name so they are separated cleanly in the list
     sort_cols = [c for c in ['INV_NUMBER', 'LASTNAME', 'FIRSTNAME'] if c in df.columns]

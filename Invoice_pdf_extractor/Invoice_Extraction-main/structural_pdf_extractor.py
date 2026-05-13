@@ -390,13 +390,13 @@ def process_with_structural_layer(pdf_path, output_excel=None):
             df['SOURCE_FILE'] = os.path.basename(pdf_path)
 
         # Sort or filter columns if needed (Layer 5/7 alignment)
-        cols = ['SOURCE_FILE'] + [f for f in v3.REQUIRED_FIELDS if f in df.columns]
-        # Ensure all 15 fields are present
+        # Ensure all required fields are present
         for field in v3.REQUIRED_FIELDS:
-            if field not in cols:
+            if field not in df.columns:
                 df[field] = None
         
-        df = df[['SOURCE_FILE'] + v3.REQUIRED_FIELDS]
+        # Use REQUIRED_FIELDS directly, as it already includes SOURCE_FILE
+        df = df[v3.REQUIRED_FIELDS]
         
         # FIXED: Keep all rows - each benefit type should be a separate row
         # unless it is the specialized "TOTAL" row
@@ -410,6 +410,11 @@ def process_with_structural_layer(pdf_path, output_excel=None):
         
         print(f"    -> [Layer] Preserved {len(df)} benefit line items (NO consolidation applied).")
         
+        # Prevent scientific notation by forcing ID columns to strings without trailing .0
+        for id_col in ['INV_NUMBER', 'MEMBERID', 'POLICYID', 'SSN']:
+            if id_col in df.columns:
+                df[id_col] = df[id_col].apply(lambda x: str(x).replace('.0', '') if pd.notna(x) and str(x).strip().lower() not in ['nan', 'none', ''] else None)
+
         df.to_excel(output_excel, index=False)
         print(f"\n[SUCCESS] Structural Extraction Complete: {output_excel}")
         print(f"  Total Rows: {len(df)}")
