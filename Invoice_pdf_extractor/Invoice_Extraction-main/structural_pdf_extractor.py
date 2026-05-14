@@ -282,6 +282,14 @@ def process_with_structural_layer(pdf_path, output_excel=None):
                     "\n6. **MULTI-BLOCK LAYOUT**: If labels (Name, ID, SSN) are at the top and amounts are at the bottom, carefully match them by sequence. The first Name/ID corresponds to the first amount, the second to the second, etc."
                     "\n7. Ensure FIRSTNAME and LASTNAME are captured on every single row."
                 )
+            elif "Covered California" in pdf_path or "Covered California" in chunk_text:
+                carrier_name = "covered_california"
+                prompt_hint = (
+                    "\n[CRITICAL INSTRUCTIONS FOR COVERED CALIFORNIA EXTRACTION]"
+                    "\n1. You MUST capture the Invoice date and Invoice # from the document header."
+                    "\n2. Ensure the Billing period is captured correctly."
+                    "\n3. Format all dates, including the Invoice date and Billing period, strictly as M/D/Y."
+                )
 
         
             

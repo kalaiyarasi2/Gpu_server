@@ -2046,6 +2046,7 @@ def extract_text_to_file(pdf_path: str, output_txt: Optional[str] = None, use_oc
     # Extract text from PDF
     if use_ocr:
         text = extract_text_from_pdf_ocr(pdf_path)
+        if isinstance(text, tuple): text = text[0]
         # Apply noise cleaning for OCR text
         text = clean_ocr_noise(text)
     else:
@@ -2059,6 +2060,7 @@ def extract_text_to_file(pdf_path: str, output_txt: Optional[str] = None, use_oc
         print(f"  [WARNING] Text quality is low ({quality_score:.2f}). Attempting OCR fallback...")
         try:
             text = extract_text_from_pdf_ocr(pdf_path)
+            if isinstance(text, tuple): text = text[0]
             text = clean_ocr_noise(text)
             new_score = check_text_quality(text)
             print(f"  [INFO] OCR text quality score: {new_score:.2f}")
@@ -2476,6 +2478,7 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
         print(f"  [WARNING] Text quality is low ({quality_score:.2f}). Attempting OCR fallback...")
         try:
             text = extract_text_from_pdf_ocr(pdf_path)
+            if isinstance(text, tuple): text = text[0]
             # Apply noise cleaning for OCR text
             text = clean_ocr_noise(text)
             new_score = check_text_quality(text)
