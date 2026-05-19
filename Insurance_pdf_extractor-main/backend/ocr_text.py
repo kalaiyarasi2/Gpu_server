@@ -15,6 +15,7 @@ from openai import OpenAI
 from dotenv import load_dotenv
 
 from text_quality_verifier import TextQualityVerifier
+from gpu_config import gpu_manager, gpu_concurrency_config
 
 load_dotenv()
 
@@ -189,10 +190,11 @@ class OCRPDFExtractor:
                 }
                 return page_num, page_header, final_text, page_metadata
 
-            # Process pages in parallel batches (max 8 workers to avoid overloading CPU/RAM)
+            # Process pages in parallel batches (dynamically scaled for GPU VRAM vs CPU fallback)
             from concurrent.futures import ThreadPoolExecutor, as_completed
-            print(f"🚀 Launching Parallel OCR Pool for {total_pages} pages (max 8 workers)...")
-            with ThreadPoolExecutor(max_workers=8) as executor:
+            ocr_workers = gpu_concurrency_config["rostaing_ocr"]["max_workers"]
+            print(f"🚀 Launching Parallel OCR Pool for {total_pages} pages (Hardware Mode: {gpu_concurrency_config['mode']}, max {ocr_workers} workers)...")
+            with ThreadPoolExecutor(max_workers=ocr_workers) as executor:
                 future_to_page = {
                     executor.submit(process_page, pg_num, img): pg_num
                     for pg_num, img in enumerate(images, 1)

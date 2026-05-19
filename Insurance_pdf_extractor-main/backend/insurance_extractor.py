@@ -19,6 +19,7 @@ from pathlib import Path
 import subprocess
 import sys
 from io import BytesIO
+from gpu_config import gpu_manager, gpu_concurrency_config
 
 # Dynamic year filter: Only include claims from the last 5 years (inclusive)
 # e.g., if 2026, include 2022, 2023, 2024, 2025, 2026
@@ -545,7 +546,7 @@ After detecting claim numbers, perform these checks:
    - Compare detected numbers against employee names
    - Each unique employee should have a unique claim number
    - If same number appears for multiple employees → POLICY number
-   
+
 5. **Header-Based Policy Identification**:
    - Look for alphanumeric identifiers (e.g., W610628) in the top header lines of each page.
    - These are often following the company name or "Location" label.
@@ -878,7 +879,10 @@ DOCUMENT SAMPLE:
             # Fallback: Simple chunking with fixed overlap
             chunks = []
             chunk_size = max_tokens * 4  # Convert tokens to chars
-            overlap = 500
+            # FIX-3: Increased overlap from 500→800 chars so the "Claimant Name:"
+            # line (which appears AFTER financial rows in many layouts) is never
+            # cut off between two adjacent chunks.
+            overlap = 800
             current_pos = 0
             chunk_id = 0
             
@@ -1099,19 +1103,27 @@ Return ONLY the JSON. Ensure the dynamic_rules is extremely precise."""
 8. 🛑 POLICY NUMBER FORMAT: A valid policy_number MUST contain at least one digit.
    - Allowed formats: purely numeric (e.g., "64536") or mixed alphanumeric (e.g., "SWC1364773").
    - If a candidate policy value contains NO digits (letters/spaces only), treat it as invalid and use null instead.
+9. 🛑 SUMMARY / GROUP TOTAL ROWS — NEVER assign to a claim:
+   - Rows labeled "Policy Number PWC...", "Group Totals", "Report Totals", "Open:", "Closed:",
+     or any row that shows aggregate numbers across multiple employees are SUMMARY ROWS.
+   - They are NOT individual claims and MUST NOT be used to populate any claim's financial fields.
+   - If you see a block like: "Policy Number PWC1088963   LT Med Total   Reserves ... Payments 14,021 26,039 ..."
+     that is a group summary — skip it entirely.
+   - Individual claim rows ALWAYS have: a Claim Number (Converted #), a Claimant Name, and a specific DOL date.
+   - If a row has NO individual claimant name or NO specific DOL, it is a summary row — ignore it.
 """
         
         if format_type == 'complex_multi_row':
             financial_instructions = f"""
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-制 POLICY IDENTIFICATION (Critical) 制
+🔴 POLICY IDENTIFICATION (Critical) 🔴
 Look for the policy number (e.g., W610628) in the top header section of the page.
 It might be part of a string like: "Location - SKMGT LE BLEU CHATEAU, INC. - W610628"
 Select this as the policy_number even if it lacks a "Policy Number:" label.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-制 FORMAT CALIBRATION (Mandatory) 制
+🔴 FORMAT CALIBRATION (Mandatory) 🔴
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 This document uses a complex block-based or multi-row structure. 
 
@@ -1388,7 +1400,9 @@ Follow the format-specific instructions above. Validate your extractions."""
                     "content": prompt
                 }],
                 response_format={"type": "json_object"},
-                max_tokens=8000,
+                # FIX-1: Raised from 8000→16000 so GPT-4o never truncates mid-JSON
+                # when a chunk contains many claims (36-chunk docs need ~12k+ output tokens).
+                max_tokens=16000,
                 temperature=0.0
             )
             
@@ -1508,10 +1522,110 @@ Follow the format-specific instructions above. Validate your extractions."""
             import traceback
             traceback.print_exc()
 
+        # FIX-4: Regex-based name recovery pass.
+        # After all LLM extraction and merging is done, sweep the raw OCR text
+        # for "Claimant Name: <NAME>" lines and backfill any claim that still
+        # has a null/missing employee_name.  This catches cases where the LLM
+        # truncated mid-JSON or where chunk boundaries split the name from its
+        # financial rows.
+        data = self._backfill_names_from_text(data, all_text)
+
         return data
             
 
     
+    def _backfill_names_from_text(self, data: Dict, all_text: str) -> Dict:
+        """
+        FIX-4: Regex-based name-recovery sweep.
+
+        Scans the raw OCR text for all ``Claimant Name: <NAME>`` occurrences
+        and ``Claim #: <NUMBER>`` anchors, then backfills any claim in *data*
+        whose ``employee_name`` is null/empty/sentinel by matching it to the
+        nearest preceding claim number in the text.
+
+        This is a read-only fallback — it NEVER overwrites an existing valid name.
+        """
+        if not all_text or not data.get("claims"):
+            return data
+
+        _SENTINELS = {"not provided", "unknown", "n/a", "null", "none", "not available", ""}
+
+        # --- Step 1: Build a position-ordered map of claim_number -> char_offset ---
+        # Matches "Claim #: 000010212022" or "Claim#: 20825" etc.
+        claim_num_pattern = re.compile(
+            r"Claim\s*#\s*:\s*([A-Z0-9/\-]{4,20})",
+            re.IGNORECASE,
+        )
+        # List of (char_pos, claim_number) sorted by position
+        claim_positions = [
+            (m.start(), m.group(1).strip())
+            for m in claim_num_pattern.finditer(all_text)
+        ]
+
+        # --- Step 2: Build a position-ordered map of char_offset -> claimant_name ---
+        # Matches "Claimant Name: LUCY WAWERU"
+        claimant_pattern = re.compile(
+            r"Claimant\s+Name\s*:\s*([A-Z][A-Z\s'\-\.]{2,50}?)(?=\s{2,}|\t|\n|Last\s+Closed|Loss\s+Loc)",
+            re.IGNORECASE,
+        )
+        name_positions = [
+            (m.start(), m.group(1).strip())
+            for m in claimant_pattern.finditer(all_text)
+        ]
+
+        if not claim_positions or not name_positions:
+            return data  # Nothing to work with
+
+        # --- Step 3: For each name occurrence, find the closest preceding claim number ---
+        # We walk name_positions and find the last claim_num_position <= name_pos.
+        pos_to_claim_num: dict = {}
+        ci = 0  # index into claim_positions
+        for name_pos, name_val in name_positions:
+            # Advance ci while the next claim position is still before name_pos
+            while ci + 1 < len(claim_positions) and claim_positions[ci + 1][0] <= name_pos:
+                ci += 1
+            # claim_positions[ci] is the last claim anchor before this name
+            if claim_positions[ci][0] <= name_pos:
+                anchor_claim_num = claim_positions[ci][1]
+                # Only keep the first (closest) name for each claim number
+                if anchor_claim_num not in pos_to_claim_num:
+                    pos_to_claim_num[anchor_claim_num] = name_val
+
+        if not pos_to_claim_num:
+            return data
+
+        # Build a set of canonical keys from the regex map (stripped, upper)
+        regex_lookup = {
+            k.strip().lstrip("0").upper(): v
+            for k, v in pos_to_claim_num.items()
+        }
+
+        # --- Step 4: Backfill any claim with a missing name ---
+        recovered = 0
+        for claim in data.get("claims", []):
+            current_name = str(claim.get("employee_name") or "").strip()
+            if current_name.lower() not in _SENTINELS and current_name:
+                continue  # Already has a valid name
+
+            cn = str(claim.get("claim_number", "")).strip()
+            # Try exact match first, then leading-zero-stripped match
+            recovered_name = (
+                pos_to_claim_num.get(cn)
+                or regex_lookup.get(cn.lstrip("0").upper())
+            )
+            if recovered_name:
+                # Basic sanity: must look like a name (letters only, reasonable length)
+                cleaned = recovered_name.strip()
+                if len(cleaned) >= 3 and re.search(r"[A-Za-z]", cleaned):
+                    print(f"   🔄 Name recovered from OCR text for claim {cn}: {cleaned}")
+                    claim["employee_name"] = cleaned
+                    recovered += 1
+
+        if recovered:
+            print(f"   ✅ Regex name-recovery: backfilled {recovered} missing employee name(s)")
+
+        return data
+
     def _post_process_claims(self, data: Dict, master_claim_list: Optional[List[str]] = None) -> Dict:
         """
         Post-process extracted claims to fix formatting and field mapping
@@ -1683,8 +1797,11 @@ Follow the format-specific instructions above. Validate your extractions."""
             
             # 5. Name Normalization (Last, First)
             # If name is "First Last", convert to "Last, First"
+            # FIX-2/5: Guard against sentinel placeholder strings like "Not provided"
+            # being reordered into "provided, Not" by the normalizer.
+            _NAME_SENTINELS = {"not provided", "unknown", "n/a", "null", "none", "not available"}
             raw_name = str(claim.get("employee_name", "")).strip()
-            if raw_name and "," not in raw_name:
+            if raw_name and raw_name.lower() not in _NAME_SENTINELS and "," not in raw_name:
                 name_parts = raw_name.split()
                 if len(name_parts) >= 2:
                     # Heuristic: Assume last word is surname for simple cases
@@ -1693,6 +1810,10 @@ Follow the format-specific instructions above. Validate your extractions."""
                     last = name_parts[-1]
                     first = " ".join(name_parts[:-1])
                     claim["employee_name"] = f"{last}, {first}"
+            # Sanitize: if the name is a known sentinel, set to None so SMART MERGE
+            # can potentially fill it from the duplicate chunk.
+            elif raw_name and raw_name.lower() in _NAME_SENTINELS:
+                claim["employee_name"] = None
             
             # 7. Deduplicate using Seen dictionary
             claim_num_raw = claim.get("claim_number")
@@ -1724,10 +1845,33 @@ Follow the format-specific instructions above. Validate your extractions."""
                 seen_claim_numbers[claim_num] = (claim, quality_score)
             else:
                 existing_claim, old_score = seen_claim_numbers[claim_num]
+
+                # --- DATE-PRESENCE TIEBREAKER (FIX for AmTrust group-total collision) ---
+                # A version with a valid DOL (Date of Loss) ALWAYS beats a version without one,
+                # even if the dateless version scored better on math. This prevents a group-total
+                # summary row (which has no DOL) from overwriting the real individual claim record.
+                existing_has_date = bool(
+                    existing_claim.get("injury_date_time")
+                    and str(existing_claim.get("injury_date_time", "")).strip().lower()
+                    not in ("", "null", "none", "not provided", "n/a")
+                )
+                new_has_date = bool(
+                    claim.get("injury_date_time")
+                    and str(claim.get("injury_date_time", "")).strip().lower()
+                    not in ("", "null", "none", "not provided", "n/a")
+                )
+
                 # RC4 FIX: Only replace if new claim has STRICTLY better math.
-                if quality_score > old_score:
+                # DATE TIEBREAKER: if math is equal/worse but new version has a date and existing doesn't,
+                # still prefer the dated version.
+                if quality_score > old_score and (new_has_date or not existing_has_date):
+                    # New is strictly better on math AND either has a date or existing also lacks one
                     winner, loser = claim, existing_claim
                     seen_claim_numbers[claim_num] = (winner, quality_score)
+                elif not existing_has_date and new_has_date:
+                    # Math is equal or worse, but only the new version has a DOL — prefer it.
+                    winner, loser = claim, existing_claim
+                    seen_claim_numbers[claim_num] = (winner, max(old_score, quality_score))
                 else:
                     winner, loser = existing_claim, claim
 
@@ -1735,9 +1879,12 @@ Follow the format-specific instructions above. Validate your extractions."""
                 # This resolves the summary-table vs detail-page collision where
                 # the first chunk has amounts but null injury_description/body_part/claim_class,
                 # while a later chunk has the full detail but is not the math winner.
+                # FIX: Added injury_date_time and claim_year so a dateless group-total winner
+                # always rescues the real DOL from the individual-claim loser copy.
                 DETAIL_FIELDS = [
                     "injury_description", "body_part", "claim_class",
-                    "injury_type", "employee_name", "carrier_name", "policy_number"
+                    "injury_type", "employee_name", "carrier_name", "policy_number",
+                    "injury_date_time", "claim_year",  # ADDED: prevent date loss from group-total collision
                 ]
                 for field in DETAIL_FIELDS:
                     if (winner.get(field) is None or winner.get(field) == "null"
@@ -1774,13 +1921,18 @@ Follow the format-specific instructions above. Validate your extractions."""
                 continue
                 
             # GLOBAL NAME NORMALIZATION (Ensure Last, First)
+            # FIX-2/5: Same sentinel guard as the per-claim normalizer above.
+            _NAME_SENTINELS_GLOBAL = {"not provided", "unknown", "n/a", "null", "none", "not available"}
             raw_name = str(claim.get("employee_name", "")).strip()
-            if raw_name and "," not in raw_name:
+            if raw_name and raw_name.lower() not in _NAME_SENTINELS_GLOBAL and "," not in raw_name:
                 name_parts = raw_name.split()
                 if len(name_parts) >= 2:
                     last = name_parts[-1]
                     first = " ".join(name_parts[:-1])
                     claim["employee_name"] = f"{last}, {first}"
+            elif raw_name and raw_name.lower() in _NAME_SENTINELS_GLOBAL:
+                # Sentinel placeholder — clear it so downstream can detect it as missing
+                claim["employee_name"] = None
                     
             final_claims.append(claim)
             

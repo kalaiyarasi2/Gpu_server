@@ -11,6 +11,7 @@ import json
 import re
 from openai import OpenAI
 from dotenv import load_dotenv
+from gpu_config import gpu_manager, gpu_concurrency_config
 
 try:
     import rostaing_ocr
@@ -50,33 +51,37 @@ class SchemaOCRExtractor:
         Extract the layout-preserved text using rostaing-ocr.
         It uses deep learning to preserve tables and columns natively.
         """
-        print(f"\n[Rostaing OCR] Starting structured extraction for: {self.pdf_path.name}")
+        print(f"\n[Rostaing OCR] Starting structured extraction for: {self.pdf_path.name} (Hardware Mode: {gpu_concurrency_config['mode']})")
         
         if not self.ocr_engine:
             raise ImportError("rostaing-ocr is not installed or failed to initialize.")
             
-        try:
+        def _run_rostaing_extraction(pdf_path_str):
             # Most OCR libraries use one of these standard method names
             if hasattr(self.ocr_engine, 'ocr_extractor'):
                 temp_output = self.pdf_path.with_suffix('.rostaing_temp.txt')
                 self.ocr_engine.ocr_extractor(str(self.pdf_path), output_file=str(temp_output))
                 if temp_output.exists():
                     with open(temp_output, 'r', encoding='utf-8') as temp_f:
-                        self.output_text = temp_f.read()
+                        res_text = temp_f.read()
                     temp_output.unlink()  # Clean up temp file
+                    return res_text
                 else:
-                    self.output_text = ""
+                    return ""
             elif hasattr(self.ocr_engine, 'process_document'):
-                self.output_text = self.ocr_engine.process_document(str(self.pdf_path))
+                return self.ocr_engine.process_document(str(self.pdf_path))
             elif hasattr(self.ocr_engine, 'extract'):
-                self.output_text = self.ocr_engine.extract(str(self.pdf_path))
+                return self.ocr_engine.extract(str(self.pdf_path))
             elif hasattr(self.ocr_engine, 'ocr'):
-                self.output_text = self.ocr_engine.ocr(str(self.pdf_path))
+                return self.ocr_engine.ocr(str(self.pdf_path))
             else:
-                # Fallback wrapper if it has a non-standard API
-                self.output_text = "Rostaing OCR extraction completed."
                 print("Warning: Could not identify exact extraction method in rostaing_ocr.")
-                
+                return "Rostaing OCR extraction completed."
+
+        try:
+            # Execute with automated GPU VRAM optimization and CPU fallback protection
+            self.output_text = gpu_manager.execute_with_rostaing(str(self.pdf_path), _run_rostaing_extraction)
+            
             print(f"[Rostaing OCR] Finished extracting. Text length: {len(self.output_text)} characters.")
             
             # Save the raw text to verify the table/column layout was preserved correctly

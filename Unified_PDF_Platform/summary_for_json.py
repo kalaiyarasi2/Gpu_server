@@ -201,6 +201,12 @@ Use the following statistics as the primary source of truth:
 Structure your report:
 1. **Executive Summary** (Key totals and overview)
 2. **Detailed Breakdown** (Patterns, vendor/carrier specifics, categories)
+   - Must include a "Payment Breakdown" subsection formatted EXACTLY like this for Medical, Expense, and Indemnity payments:
+     - **[Payment Type] Payments**:
+       - Total: $[Amount]
+       - Breakdown:
+         - Claim [Number]: $[Amount]
+   - If a payment type is $0.00 for all claims, format it as: `- **[Payment Type] Payments**: $0.00 for all claims.`
 3. **Observations & Risk Flags** (High value items, anomalies, missing data)
 4. **Action Items / Recommendations**
 

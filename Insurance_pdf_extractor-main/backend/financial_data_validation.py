@@ -104,7 +104,7 @@ Return ONLY a JSON object:
             if vision_pattern:
                 return vision_pattern
         prompt = f"""Analyze the following text from an insurance loss run report. 
-Identifies the mathematical relationship between the financial columns (Paid, Reserved, Incurred, Recovery, etc.).
+Identify the mathematical relationship between the financial columns (Paid, Reserved, Incurred, Recovery, etc.).
 
 Look for a pattern like:
 - Total Incurred = (Medical Paid + Medical Reserve) + (Indemnity Paid + Indemnity Reserve) + (Expense Paid + Expense Reserve)

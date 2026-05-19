@@ -239,9 +239,3 @@ class TextQualityVerifier:
             "score": score,
             "recommendation": recommendation,
         }
-        recommendation = self.fallback_recommendation(page_text, num_pages=1)
-        return {
-            "analysis": analysis,
-            "score": score,
-            "recommendation": recommendation,
-        }
