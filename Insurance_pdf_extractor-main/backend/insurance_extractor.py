@@ -86,6 +86,19 @@ except ImportError:
     from openai import OpenAI
     from pdf2image import convert_from_path
 
+from dotenv import load_dotenv
+load_dotenv()
+
+# Configure Tesseract path if provided in environment
+TESSERACT_PATH = os.getenv("TESSERACT_PATH")
+if TESSERACT_PATH:
+    if os.path.isdir(TESSERACT_PATH):
+        tess_exe = os.path.join(TESSERACT_PATH, "tesseract.exe")
+        if os.path.exists(tess_exe):
+            pytesseract.pytesseract.tesseract_cmd = tess_exe
+    elif os.path.exists(TESSERACT_PATH):
+        pytesseract.pytesseract.tesseract_cmd = TESSERACT_PATH
+
 # Fix for "Decompression Bomb" error in PIL
 Image.MAX_IMAGE_PIXELS = None
 
@@ -256,6 +269,9 @@ class EnhancedInsuranceExtractor:
                 # Re-verify quality after potential correction
                 quality = verifier.analyze_quality(text, num_pages)
                 
+                # RC: Force Rostaing-OCR if extraction quality is acceptable but claims are still missing
+                # (Heuristic: extract_text_from_pdf is the bottleneck)
+                
                 if not quality['is_acceptable']:
                     print(f"   ⚠️ Native extraction quality low: {quality['reason']}")
                     print(f"   🚀 Falling back to OCR Pipeline...")
@@ -293,6 +309,25 @@ class EnhancedInsuranceExtractor:
                         psm_mode=getattr(config, 'OCR_PSM_MODE', 3)
                     )
                 
+                # Final Check: If quality is fine but we suspect text is empty, force Rostaing
+                if len(text.strip()) < 100:
+                    print(f"   ⚠️ Native extraction text is sparse ({len(text.strip())} chars). Forcing high-accuracy OCR...")
+                    try:
+                        from schema_ocr import SchemaOCRExtractor
+                        schema_extractor = SchemaOCRExtractor(str(pdf_path), api_key=self.api_key)
+                        rostaing_text = schema_extractor.extract_layout_text(save_debug_output=True)
+                        if rostaing_text and len(rostaing_text.strip()) > 50:
+                             mock_metadata = [{
+                                "page_number": 1,
+                                "text": rostaing_text,
+                                "is_scanned": False,
+                                "extraction_method": "schema-ocr-rostaing-force",
+                                "confidence": 0.95
+                            }]
+                             return rostaing_text, mock_metadata
+                    except Exception as e:
+                        print(f"   ⚠️ Force OCR failed: {e}")
+
                 print(f"   ✅ Native extraction quality acceptable (Score: {verifier.quality_score(text, num_pages):.2f}).")
                 
                 # STAGE 1.5: Patch individual bad pages if needed
@@ -1006,14 +1041,73 @@ Return ONLY the JSON. Ensure the dynamic_rules is extremely precise."""
                 "format_type": "unknown",
                 "confidence": 0.0
             }
+
+    def _smart_verify_format(self, text: str, cached_format: Dict) -> Dict:
+        """
+        RC8: Smart Format Validation.
+        Instead of re-analyzing the layout for every chunk, we check if the 
+        current chunk still matches the previously identified layout.
+        
+        This saves significant time while preserving accuracy for multi-format files.
+        """
+        if not cached_format or cached_format.get("format_type") == "unknown":
+            return self._analyze_document_format(text)
+
+        print(f"\n🔍 STAGE 1: Verifying cached format ({cached_format.get('insurer', 'unknown')})...")
+        
+        # We'll do a quick check to see if the carrier or specific layout markers are present
+        # This is MUCH cheaper than a full format analysis
+        prompt = f"""You are validating if an insurance document layout still matches a previously identified format.
+
+PREVIOUS FORMAT:
+- Insurer: {cached_format.get('insurer')}
+- Type: {cached_format.get('format_type')}
+- Layout: {cached_format.get('claim_layout')}
+- Financial mapping: {json.dumps(cached_format.get('financial_mapping', {}))}
+
+Does the following document text STILL follow this exact same layout? 
+If the carrier name has changed, or if the column headers for financial data are different, it is NOT a match.
+
+Return JSON:
+{{
+  "is_match": true/false,
+  "reason": "short explanation",
+  "detected_insurer": "name if different"
+}}
+
+DOCUMENT TEXT (first 4000 chars):
+{text[:4000]}
+"""
+        try:
+            response = self.client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "user", "content": prompt}],
+                response_format={"type": "json_object"},
+                max_tokens=200,
+                temperature=0.0
+            )
+            result = json.loads(response.choices[0].message.content)
+            
+            if result.get("is_match"):
+                print(f"   ✓ Layout match confirmed ({result.get('reason', 'verified')}). Reusing cached schema.")
+                return cached_format
+            else:
+                print(f"   🔄 Layout changed or mismatched: {result.get('reason', 're-analyzing')}...")
+                return self._analyze_document_format(text)
+                
+        except Exception as e:
+            print(f"   ⚠️ Format verification failed: {e}. Falling back to full analysis.")
+            return self._analyze_document_format(text)
     
     def _extract_all_claims(self, all_text: str, vision_pattern: Optional[Dict] = None,
-                             pre_built_master_list: Optional[List[str]] = None) -> Dict:
+                             pre_built_master_list: Optional[List[str]] = None,
+                             cached_format_info: Optional[Dict] = None,
+                             pre_built_detected_info: Optional[Dict] = None) -> Dict:
         """
         UNIVERSAL EXTRACTION: Works with ANY format
         Uses a three-stage approach:
         1. Pre-Discovery: Detect all valid Claim IDs (Master List)
-        2. Format Analysis: Understand the layout
+        2. Format Analysis: Understand the layout (Supports caching)
         3. Constrained Extraction: Extract only those IDs
 
         RC1b: When called from ChunkedInsuranceExtractor, `pre_built_master_list`
@@ -1022,16 +1116,20 @@ Return ONLY the JSON. Ensure the dynamic_rules is extremely precise."""
         """
         # STAGE 0: Pre-Discovery (Master List)
         # RC1b: use the pre-built global list if provided, else detect locally
+        detected_claims_info = pre_built_detected_info
+        
         if pre_built_master_list is not None:
             master_claim_list = pre_built_master_list
             if master_claim_list:
                 print(f"   ✓ Using pre-built global master list ({len(master_claim_list)} IDs).")
             else:
                 print("   ℹ️ Pre-built master list is empty — falling back to per-chunk detection.")
-                detected_claims_info = self._detect_claim_numbers_ai(all_text)
+                if detected_claims_info is None:
+                    detected_claims_info = self._detect_claim_numbers_ai(all_text)
                 master_claim_list = [c["claim_number"] for c in detected_claims_info.get("claim_numbers", [])]
         else:
-            detected_claims_info = self._detect_claim_numbers_ai(all_text)
+            if detected_claims_info is None:
+                detected_claims_info = self._detect_claim_numbers_ai(all_text)
             master_claim_list = [c["claim_number"] for c in detected_claims_info.get("claim_numbers", [])]
 
         # Dynamic fallback carrier that we will propagate if the model doesn't set one
@@ -1044,8 +1142,11 @@ Return ONLY the JSON. Ensure the dynamic_rules is extremely precise."""
             print(f"   ✓ Pre-discovered {len(master_claim_list)} valid claim IDs.")
             master_list_str = ", ".join(master_claim_list)
             
-        # STAGE 1: Analyze document format
-        format_info = self._analyze_document_format(all_text)
+        # STAGE 1: Analyze document format (Supports RC8 Smart Caching)
+        if cached_format_info:
+            format_info = self._smart_verify_format(all_text, cached_format_info)
+        else:
+            format_info = self._analyze_document_format(all_text)
 
         # Prefer model-detected insurer/carrier; if missing, infer dynamically from text
         if isinstance(format_info, dict):
@@ -1449,8 +1550,13 @@ Follow the format-specific instructions above. Validate your extractions."""
 
         # Step 2: Verification & Recovery (ALWAYS RUNS)
         try:
-            # VALIDATION CHECK: Use AI to detect claim numbers
-            detected_claims_info = self._detect_claim_numbers_ai(all_text)
+            # VALIDATION CHECK: Reuse previously detected info if available
+            if not detected_claims_info:
+                print("   🔄 Running discovery for verification...")
+                detected_claims_info = self._detect_claim_numbers_ai(all_text)
+            else:
+                print("   ✓ Reusing discovery info for verification.")
+                
             claims_in_text = detected_claims_info.get('total_unique_claims', 0)
             claims_extracted = len(data.get("claims", []))
 
@@ -1759,14 +1865,23 @@ Follow the format-specific instructions above. Validate your extractions."""
                 claim["indemnity_paid"] = 0.0
                 claim["indemnity_reserve"] = 0.0
 
-            # 3c. Extract Claim Year from Injury Date
+            # 3c. Extract Claim Year from Injury Date (STRICTLY FROM DATE)
+            # RC-FIX: Ignore LLM-provided claim_year; derive it directly from injury_date_time
+            # to prevent hallucinations.
             injury_date = str(claim.get("injury_date_time", "")).strip()
             claim["claim_year"] = None
             if injury_date:
-                # Expecting YYYY-MM-DD or MM/DD/YYYY
-                # Try finding 4 digits that start with 19 or 20
-                match = re.search(r'(?:19|20)\d{2}', injury_date)
-                if match:
+                # Expecting YYYY-MM-DD format as normalized by previous steps
+                if len(injury_date) >= 4:
+                    try:
+                        claim["claim_year"] = int(injury_date[:4])
+                    except (ValueError, TypeError):
+                        pass
+            
+            # If still None, attempt to fallback from legacy formats if present
+            if claim["claim_year"] is None:
+                 match = re.search(r'(?:19|20)\d{2}', injury_date)
+                 if match:
                     try:
                         claim["claim_year"] = int(match.group(0))
                     except:
@@ -2105,7 +2220,7 @@ Return a JSON object with this structure:
   "injury_description": "cause of injury",
   "body_part": "injured body part",
   "injury_type": "COMP/MEDI/etc",
-  "claim_class": "STRICTLY NUMERIC class code ONLY (NO letters/descriptions). Correct typos. Null if missing",
+  "claim_class": "STRICTLY NUMERIC class code ONLY (e.g. 882707). Return null UNLESS there is an explicit column or field labeled 'Class', 'Class Code', or 'Class Cd' in the document. DO NOT guess this value from other numbers (like dates, years, or policy segments) in the row.",
   "medical_paid": 0.0,
   "medical_reserve": 0.0,
   "indemnity_paid": 0.0,
@@ -2250,7 +2365,8 @@ Return ONLY the JSON object for claim {target_claim_number}."""
         text_file = session_dir / "extracted_text.txt"
         with open(text_file, 'w', encoding='utf-8') as f:
             f.write(all_text)
-        print(f"\n✓ Combined text saved: {text_file}")
+        #print(f"\n✓ Combined text saved: {text_file}")
+        print(f"\n✓ Combined text saved: {text_file} - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         
         # Step 2: Extract schema from combined text
         print(f"\n{'='*60}")
@@ -2442,8 +2558,9 @@ Return ONLY the JSON object for claim {target_claim_number}."""
         with open(verification_file, 'w', encoding='utf-8') as f:
             json.dump(verification_data, f, indent=2, ensure_ascii=False, default=str)
         
+        extraction_completed_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         print(f"\n{'='*60}")
-        print(f"✅ EXTRACTION COMPLETE")
+        print(f"✅ EXTRACTION COMPLETE - {extraction_completed_at}")
         print(f"{'='*60}")
         print(f"Session: {session_id}")
         print(f"Output: {session_dir}")

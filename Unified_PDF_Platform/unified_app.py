@@ -1,4 +1,5 @@
 import os
+import sys
 import shutil
 import logging
 import zipfile
@@ -19,6 +20,13 @@ from dotenv import load_dotenv
 from PIL import Image
 Image.MAX_IMAGE_PIXELS = None
 
+# Ensure stdout can handle UTF-8 for emojis
+if hasattr(sys.stdout, 'reconfigure'):
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
+
 
 # Add project root to Python path so 'monitor' package can be imported
 import sys
@@ -27,6 +35,8 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)  # pdf_extractor root
 if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
 # Import summary router
 from summary_api import router as summary_router
 
@@ -41,6 +51,9 @@ from swagger_docs import (
     WORK_COMP_SUMMARY, WORK_COMP_SWAGGER_JS
 )
 from shared_configs import BASE_DIR, _perform_extraction, file_path_cache
+
+# Initialize logger
+logger = logging.getLogger("unified_app")
 
 # Load environment variables from parent directory
 load_dotenv(BASE_DIR.parent / ".env")
@@ -138,7 +151,7 @@ if frontend_dist_path.exists():
     app.mount("/assets", StaticFiles(directory=str(frontend_dist_path / "assets")), name="assets")
     print(f"[OK] Mounted frontend assets from {frontend_dist_path / 'assets'}")
 else:
-    print(f"⚠️ Warning: Frontend dist folder not found at {frontend_dist_path}. Run build first.")
+    print(f"[WARNING] Frontend dist folder not found at {frontend_dist_path}. Run build first.")
 
 
 
@@ -159,7 +172,7 @@ async def health_check():
         "version": API_VERSION,
         "supported_types": ["PDF", "XLSX", "XLS", "CSV"],
         "extract_endpoint": "POST /api/extract  (multipart/form-data, field name: 'file')",
-        "example_curl": 'curl -X POST http://<host>:8007/api/extract -F "file=@yourfile.pdf"'
+        "example_curl": 'curl -X POST http://drive1.cognethro.com/api/extract -F "file=@yourfile.pdf"'
     }
 
 @app.get("/docs", include_in_schema=False)
@@ -198,7 +211,7 @@ async def work_comp_swagger_ui():
 @app.get("/api/download/{filepath:path}", include_in_schema=False)
 async def download_file(filepath: str):
     """Download endpoint that handles both absolute and relative paths."""
-    print(f"[Download] Requested file: {filepath}")
+    logger.info(f"[Download] Requested file: {filepath}")
     
     # First, check the cache for the full path
     if filepath in file_path_cache:
@@ -207,11 +220,11 @@ async def download_file(filepath: str):
         # Safety: If the path contains a URL (e.g. from a bad frontend call), strip it
         if "://" in filepath:
             filepath = filepath.split("/")[-1]
-            print(f"[Download] Stripped URL from path, now: {filepath}")
+            logger.info(f"[Download] Stripped URL from path, now: {filepath}")
             
     if filepath in file_path_cache:
         file_path = Path(file_path_cache[filepath])
-        print(f"[Download] Found in cache: {file_path}")
+        logger.info(f"[Download] Found in cache: {file_path}")
         if file_path.exists():
             filename = file_path.name
             if filename.endswith(".xlsx"):
@@ -223,39 +236,59 @@ async def download_file(filepath: str):
             return FileResponse(path=file_path, filename=filename, media_type=media_type)
     
     # Fallback: Try to find the file manually
+    original_filepath = filepath
     file_path = Path(filepath)
     
+    # If the filepath contains a slash (requestId/filename), try stripping the ID for fallback search
+    filename_only = filepath
+    if "/" in filepath:
+        parts = filepath.split("/")
+        filename_only = parts[-1]
+        request_id_prefix = parts[0]
+        
     if not file_path.exists():
         # Try as just the filename in unified_outputs
-        file_path = BASE_DIR / "unified_outputs" / filepath
+        file_path = BASE_DIR / "unified_outputs" / filename_only
         
     if not file_path.exists():
         # Try relative to BASE_DIR
-        file_path = BASE_DIR / filepath
+        file_path = BASE_DIR / filename_only
     
-    # Try searching in the insurance outputs directory
-    if not file_path.exists() and filepath.endswith('.json'):
-        insurance_outputs = Path("c:/Main_project/Insurance_pdf_extractor-main/backend/outputs")
-        for session_dir in insurance_outputs.glob("extraction_*"):
-            potential_file = session_dir / filepath
-            if potential_file.exists():
-                file_path = potential_file
-                break
+    # Try searching in the insurance outputs directory (searching by filename)
+    if not file_path.exists():
+        insurance_outputs = Path("c:/Users/Administrator/pdf_extractor/work_compenstaion/backend/outputs")
+        # Try to find a directory that matches the requestId if possible
+        if "/" in original_filepath:
+            req_id = original_filepath.split("/")[0]
+            for session_dir in insurance_outputs.glob(f"extraction_*_{req_id[:4]}*"):
+                potential_file = session_dir / filename_only
+                if potential_file.exists():
+                    file_path = potential_file
+                    break
+        
+        # If still not found, just find the first matching filename
+        if not file_path.exists():
+            for session_dir in insurance_outputs.glob("extraction_*"):
+                potential_file = session_dir / filename_only
+                if potential_file.exists():
+                    file_path = potential_file
+                    break
     
     # Try searching in unified_outputs for any matching filename
     if not file_path.exists():
         unified_out = BASE_DIR / "unified_outputs"
         if unified_out.exists():
-            for potential_file in unified_out.glob(f"**/{filepath}"):
+            for potential_file in unified_out.glob(f"**/{filename_only}"):
                 file_path = potential_file
                 break
         
     if not file_path.exists():
-        print(f"[Download] File not found: {filepath}")
-        print(f"[Download] Cache contents: {list(file_path_cache.keys())}")
-        raise HTTPException(status_code=404, detail=f"File not found: {filepath}")
+        logger.error(f"[Download] File not found: {original_filepath}")
+        logger.error(f"[Download] Cache contents: {list(file_path_cache.keys())}")
+        raise HTTPException(status_code=404, detail=f"File not found: {original_filepath}")
     
     filename = file_path.name
+    logger.info(f"[Download] Serving file from fallback path: {file_path}")
     if filename.endswith(".xlsx"):
         media_type = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     elif filename.endswith(".json"):

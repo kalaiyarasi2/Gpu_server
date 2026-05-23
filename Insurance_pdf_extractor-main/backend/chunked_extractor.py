@@ -7,6 +7,7 @@ from auto_rotation_ocr import run_pipeline_preserve_layout
 from pdf_detector import PDFDetector
 import tempfile
 import shutil
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Overlap added to each chunk boundary so claim rows straddling a boundary
 # are fully visible in both chunks (RC2 / RC2b fix).
@@ -21,7 +22,7 @@ class PolicyChunker:
 
     def detect_policy_boundaries(self, text: str) -> List[Dict]:
         """
-        Use AI to detect policy headers and their approximate locations.
+        Use AI to detect policy headers and their approximate locations in parallel.
         Returns a list of dicts: {"policy_number": "...", "start_index": int}
 
         RC6 FIX: Removed hardcoded company-name examples that biased detection
@@ -29,16 +30,32 @@ class PolicyChunker:
         SLIDING WINDOW FIX: Iterates over full document in 100k-char windows
         with 5k overlap so no boundaries are missed in large documents.
         """
-        print(f"\n🔍 Detecting policy boundaries iteratively over text ({len(text)} chars)...")
+        print(f"\n🔍 Detecting policy boundaries in parallel over text ({len(text)} chars)...")
 
         chunk_window = 100000
         overlap = 5000
-        items = []
+        all_results = []
 
+        # Prepare sliding window windows
+        previews = []
         start_pos = 0
         while start_pos < len(text):
             end_pos = start_pos + chunk_window
             text_preview = text[start_pos:end_pos]
+            previews.append({
+                "start": start_pos,
+                "end": end_pos,
+                "text": text_preview
+            })
+            if end_pos >= len(text):
+                break
+            start_pos += (chunk_window - overlap)
+
+        def scan_window(window):
+            """Worker function to scan a single text window for boundaries."""
+            start_pos = window["start"]
+            end_pos = window["end"]
+            text_preview = window["text"]
 
             # RC6: All examples now use generic placeholders – no real company names
             prompt = f"""Analyze the following insurance document text and identify all UNIQUE policy sections.
@@ -61,26 +78,19 @@ Example Response:
       "identifier": "[POLICY_NUMBER] - [YEAR]",
       "carrier": "[INSURANCE_COMPANY_NAME]",
       "header_snippet": "[EXACT TEXT FROM DOCUMENT THAT MARKS A NEW SECTION]"
-    }},
-    {{
-      "identifier": "[POLICY_NUMBER_2] - [YEAR]",
-      "carrier": "[INSURANCE_COMPANY_NAME_2]",
-      "header_snippet": "[EXACT TEXT FROM DOCUMENT THAT MARKS NEXT SECTION]"
     }}
   ]
 }}
 
 Important:
 - The "header_snippet" MUST be EXACT text copied verbatim from the document below.
-- Do NOT invent or paraphrase snippets.
 - Identify boundaries for ALL carriers, ANY company name format.
 
 DOCUMENT TEXT (Characters {start_pos} to {end_pos}):
 {text_preview}
 """
-
             try:
-                print(f"   --> Scanning for policies from character {start_pos} to {end_pos}...")
+                # print(f"   --> Scanning for policies from character {start_pos} to {end_pos}...")
                 response = self.client.chat.completions.create(
                     model="gpt-4o",
                     messages=[{"role": "user", "content": prompt}],
@@ -89,20 +99,27 @@ DOCUMENT TEXT (Characters {start_pos} to {end_pos}):
                     temperature=0.0
                 )
                 result = json.loads(response.choices[0].message.content)
-                batch_items = result.get("boundaries", []) or result.get("policies", [])
-                items.extend(batch_items)
+                return result.get("boundaries", []) or result.get("policies", []) or []
             except Exception as e:
                 print(f"   ⚠️ Policy boundary detection failed at pos {start_pos}: {e}")
+                return []
 
-            # Break if we've processed the end of the text
-            if end_pos >= len(text):
-                break
-
-            start_pos += (chunk_window - overlap)
+        # Execute parallel AI API Calls
+        num_windows = len(previews)
+        max_workers = min(5, num_windows) if num_windows > 0 else 1
+        print(f"   🚀 Launching Parallel Boundary Scan ({num_windows} windows, {max_workers} workers)...")
+        
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_window = {executor.submit(scan_window, w): w for w in previews}
+            for future in as_completed(future_to_window):
+                window = future_to_window[future]
+                window_items = future.result()
+                all_results.extend(window_items)
+                print(f"   ✓ Finished scanning window {window['start']} to {window['end']}")
 
         # Find indices for each header snippet (outside the loop)
         boundaries = []
-        for p in items:
+        for p in all_results:
             snippet = p.get("header_snippet")
             if snippet:
                 idx = text.find(snippet)
@@ -249,7 +266,8 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
         text_file = session_dir / "extracted_text.txt"
         with open(text_file, 'w', encoding='utf-8') as f:
             f.write(all_text)
-        print(f"\n✓ Combined text saved: {text_file}")
+        #print(f"\n✓ Combined text saved: {text_file}")
+        print(f"\n✓ Combined text saved: {text_file} - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         
         # Step 2: Extract schema
         print(f"\n{'='*60}")
@@ -419,8 +437,10 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
         with open(verification_file, 'w', encoding='utf-8') as f:
             json.dump(verification_data, f, indent=2, ensure_ascii=False, default=str)
             
+        extraction_completed_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')    
         print(f"\n{'='*60}")
-        print(f"✅ EXTRACTION COMPLETE")
+        #print(f"✅ EXTRACTION COMPLETE")
+        print(f"✅ EXTRACTION COMPLETE - {extraction_completed_at}")
         print(f"{'='*60}")
         print(f"Output: {session_dir}")
         
@@ -455,6 +475,12 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
         else:
             print(f"   ⚠️ No global claim IDs detected — will use per-chunk detection.")
         # ──────────────────────────────────────────────────────────────────────
+
+        # ── RC8: Seed document format cache ONCE for the full document ────────
+        print(f"\n📋 Seeding document format cache...")
+        # Use first 15k characters which usually contain the layout definitions
+        master_format_info = self._analyze_document_format(all_text[:15000])
+        # ──────────────────────────────────────────────────────────────────────
         
         chunker = PolicyChunker(self.client)
         boundaries = chunker.detect_policy_boundaries(all_text)
@@ -478,7 +504,8 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
             else:
                 print("   ℹ️ Single policy or no boundaries detected. Proceeding with single-shot extraction.")
                 return super()._extract_all_claims(all_text, vision_pattern=vision_pattern,
-                                                   pre_built_master_list=global_master_list or None)
+                                                   pre_built_master_list=global_master_list or None,
+                                                   cached_format_info=master_format_info)
         else:
             # RC2: split_into_chunks now adds CHUNK_OVERLAP_CHARS boundary overlap
             chunks = chunker.split_into_chunks(all_text, boundaries, overlap=CHUNK_OVERLAP_CHARS)
@@ -570,10 +597,12 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
             print(f"📦 STARTING CHUNK {idx+1}/{len(chunks)}: Policy {chunk['policy_number']}")
             print(f"{'='*40}")
             # RC1: Pass global master list so each chunk filters against full ID universe.
+            # RC8: Pass cached format info to avoid redundant analysis.
             chunk_res = _super_extract(
                 chunk["text"],
                 vision_pattern=vision_pattern,
-                pre_built_master_list=global_master_list or None
+                pre_built_master_list=global_master_list or None,
+                cached_format_info=master_format_info
             )
             # Inject internal tracking ID (used only in chunking_report, not in claims)
             if isinstance(chunk_res, dict):

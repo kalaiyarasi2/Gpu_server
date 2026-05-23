@@ -77,4 +77,6 @@ export interface DocumentFile {
   completedAt: number | null;
   excelPath?: string; // Path to Excel file from backend
   jsonPath?: string;  // Path to JSON file from backend
+  excelUrl?: string;  // Full URL to Excel file
+  jsonUrl?: string;   // Full URL to JSON file
 }

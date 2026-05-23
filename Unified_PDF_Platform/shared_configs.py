@@ -2,11 +2,15 @@ import os
 import shutil
 import zipfile
 import tempfile
+import logging
 from pathlib import Path
 from typing import Dict
 from fastapi import UploadFile, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 from unified_router import UnifiedRouter
+
+# Initialize logger
+logger = logging.getLogger("shared_configs")
 
 # Shared directories
 BASE_DIR = Path(__file__).parent
@@ -32,7 +36,7 @@ async def _perform_extraction(file: UploadFile, request: Request):
     if file_ext not in [".pdf", ".xlsx", ".xls", ".csv"]:
         raise HTTPException(status_code=400, detail=f"Unsupported file type '{file_ext}'. Only PDF, Excel and CSV files are accepted.")
 
-    print(f"\n[Unified][API] Received request for: {safe_filename}")
+    logger.info(f"[Unified][API] Received request for: {safe_filename}")
 
     # If monitoring is enabled, update the request record with real filename/size
     try:
@@ -61,14 +65,14 @@ async def _perform_extraction(file: UploadFile, request: Request):
         # Save the uploaded file
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
-        print(f"[Unified][API] Saved to: {file_path}")
+        logger.info(f"[Unified][API] Saved to: {file_path}")
 
         # Run the unified router (async via threadpool)
-        print(f"[Unified][API] Routing document...")
+        logger.info(f"[Unified][API] Routing document...")
         result = await run_in_threadpool(router_engine.process, str(file_path), request_id=request_id)
 
         if "error" in result:
-            print(f"[Unified][WARN] Extraction returned error: {result['error']}")
+            logger.warning(f"[Unified][WARN] Extraction returned error: {result['error']}")
             return {"error": result["error"]}
         
         # Extract filenames and full paths
@@ -80,28 +84,33 @@ async def _perform_extraction(file: UploadFile, request: Request):
         
         # Cache the full paths for download endpoint
         if excel_path:
-            file_path_cache[excel_filename] = excel_path
-            print(f"[Unified][API] Cached Excel: {excel_filename} -> {excel_path}")
+            cache_key = f"{request_id}/{excel_filename}" if request_id else excel_filename
+            file_path_cache[cache_key] = excel_path
+            logger.info(f"[Unified][API] Cached Excel: {cache_key} -> {excel_path}")
         if json_path:
-            file_path_cache[json_filename] = json_path
-            print(f"[Unified][API] Cached JSON: {json_filename} -> {json_path}")
+            cache_key = f"{request_id}/{json_filename}" if request_id else json_filename
+            file_path_cache[cache_key] = json_path
+            logger.info(f"[Unified][API] Cached JSON: {cache_key} -> {json_path}")
         
         # Transform response to match frontend expectations
         doc_type = result.get("type", "UNKNOWN")
         if doc_type == "invoice_poc_extractor":
             doc_type = "VENDOR_INVOICE"
         
-        # Build base URL for downloads
-        base_url = str(request.base_url).rstrip("/")
+        # Build base URL for downloads (respect public host if proxied)
+        # [MODIFIED] Force production domain as requested by user
+        base_url = "http://drive1.cognethro.com"
         
         # Build base response with clickable URLs
         response = {
             "type": doc_type,
-            "output_file": excel_filename,
-            "output_json": json_filename,
-            "excel": f"{base_url}/api/download/{excel_filename}" if excel_filename else None,
-            "json": f"{base_url}/api/download/{json_filename}" if json_filename else None,
-            "pages": result.get("pages", 0)
+            "requestId": request_id,
+            "output_file": f"{request_id}/{excel_filename}" if excel_filename and request_id else excel_filename,
+            "output_json": f"{request_id}/{json_filename}" if json_filename and request_id else json_filename,
+            "excel": f"{base_url}/api/download/{request_id}/{excel_filename}" if excel_filename and request_id else (f"{base_url}/api/download/{excel_filename}" if excel_filename else None),
+            "json": f"{base_url}/api/download/{request_id}/{json_filename}" if json_filename and request_id else (f"{base_url}/api/download/{json_filename}" if json_filename else None),
+            "pages": result.get("pages", 0),
+            "trigger_point": "cognethro"
         }
         
         # Add Vendor Invoice specific metadata (supports both single and merged outputs)
@@ -145,7 +154,7 @@ async def _perform_extraction(file: UploadFile, request: Request):
                     response["insurer"] = f"Merged invoices ({len(invoices)}) - {display_vendor}" if invoices else "Merged invoices"
                     response["total_value"] = total_sum
                     response["invoice_count"] = len(invoices)
-                    print(f"[Unified][API] Extracted Vendor Invoice Metadata: merged={len(invoices)} total=${total_sum}")
+                    logger.info(f"[Unified][API] Extracted Vendor Invoice Metadata: merged={len(invoices)} total=${total_sum}")
                 else:
                     # Single format: {"HEADER": {...}, "LINE_ITEMS": [...]}
                     header = invoice_data.get("HEADER", {})
@@ -161,9 +170,9 @@ async def _perform_extraction(file: UploadFile, request: Request):
 
                     response["insurer"] = vendor_name
                     response["total_value"] = total_amount
-                    print(f"[Unified][API] Extracted Vendor Invoice Metadata: {vendor_name}, ${total_amount}")
+                    logger.info(f"[Unified][API] Extracted Vendor Invoice Metadata: {vendor_name}, ${total_amount}")
             except Exception as meta_err:
-                print(f"[Unified][API][WARN] Could not extract vendor invoice metadata: {meta_err}")
+                logger.warning(f"[Unified][API][WARN] Could not extract vendor invoice metadata: {meta_err}")
 
         # Add STANDARD INVOICE (Benefit/Insurance) specific metadata
         if doc_type == "INVOICE" and json_path:
@@ -215,9 +224,9 @@ async def _perform_extraction(file: UploadFile, request: Request):
                 
                 response["insurer"] = insurer_name
                 response["total_value"] = total_val
-                print(f"[Unified][API] Extracted Insurance Invoice Metadata: {insurer_name}, ${total_val}")
+                logger.info(f"[Unified][API] Extracted Insurance Invoice Metadata: {insurer_name}, ${total_val}")
             except Exception as meta_err:
-                print(f"[Unified][API][WARN] Could not extract insurance invoice metadata: {meta_err}")
+                logger.warning(f"[Unified][API][WARN] Could not extract insurance invoice metadata: {meta_err}")
 
         # Add Work Compensation specific metadata
         if doc_type == "WORK_COMPENSATION" and json_path:
@@ -261,7 +270,7 @@ async def _perform_extraction(file: UploadFile, request: Request):
                     "wc_states": wc_states
                 }
             except Exception as meta_err:
-                print(f"[Unified][WARN] Could not extract work comp metadata: {meta_err}")
+                logger.warning(f"[Unified][WARN] Could not extract work comp metadata: {meta_err}")
 
         # Add Bank Statement specific metadata
         if doc_type == "BANK_STATEMENT" and json_path:
@@ -277,14 +286,14 @@ async def _perform_extraction(file: UploadFile, request: Request):
                 
                 response["insurer"] = "Bank Statement"
                 response["claims_count"] = total_transactions
-                print(f"[Unified][API] Extracted Bank Statement Metadata: tx_count={total_transactions}")
+                logger.info(f"[Unified][API] Extracted Bank Statement Metadata: tx_count={total_transactions}")
             except Exception as meta_err:
-                print(f"[Unified][WARN] Could not extract bank statement metadata: {meta_err}")
+                logger.warning(f"[Unified][WARN] Could not extract bank statement metadata: {meta_err}")
                 
         return response
     except Exception as e:
         tb = traceback.format_exc()
-        print(f"[Unified][ERROR] {type(e).__name__}: {e}\n{tb}")
+        logger.error(f"[Unified][ERROR] {type(e).__name__}: {e}\n{tb}")
         raise HTTPException(
             status_code=500,
             detail=f"{type(e).__name__}: {str(e)}"

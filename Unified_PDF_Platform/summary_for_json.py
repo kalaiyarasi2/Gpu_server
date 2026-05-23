@@ -170,16 +170,26 @@ class UniversalDocumentAnalyzer:
             stats = self._calculate_claims_statistics(items)
             total_paid = stats["total_medical_paid"] + stats["total_indemnity_paid"] + stats["total_expense_paid"]
             total_reserves = stats["total_medical_reserve"] + stats["total_indemnity_reserve"] + stats["total_expense_reserve"]
+            average_claim = round(total_paid / stats["total_claims"], 2) if stats["total_claims"] > 0 else 0.0
             
             context_stats = f"""
 DOC_TYPE: Insurance Claims
 STATISTICS:
 - Total Claims: {stats['total_claims']}
-- Status Breakdown: {json.dumps(stats['status_breakdown'])}
 - Total Incurred: ${stats['total_incurred']:,.2f}
-- Total Paid: ${total_paid:,.2f} (Medical: ${stats['total_medical_paid']:,.2f}, Indemnity: ${stats['total_indemnity_paid']:,.2f})
+- Total Paid: ${total_paid:,.2f}
+- Average Claim: {average_claim}
+- Medical Paid: ${stats['total_medical_paid']:,.2f}
+- Indemnity Paid: ${stats['total_indemnity_paid']:,.2f}
+- Expense Paid: ${stats['total_expense_paid']:,.2f}
 - Total Reserves: ${total_reserves:,.2f}
-- Litigated: {stats['litigated_count']}, Reopened: {stats['reopened_count']}
+- **Claims Status**: 
+  - Closed: {stats['status_breakdown'].get('Closed', 0)}
+  - Open: {stats['status_breakdown'].get('Open', 0)}
+  - Reopened: {stats['status_breakdown'].get('Reopened', 0)}
+  - Other: {stats['status_breakdown'].get('Other', 0)}
+- Litigated Count: {stats['litigated_count']}
+- Reopened Count: {stats['reopened_count']}
 """
         else:
             stats = self._calculate_invoice_statistics(items)
@@ -193,27 +203,69 @@ STATISTICS:
 """
 
         system_prompt = f"""
-You are a professional data analyst AI. Analyze the provided {doc_type} JSON and generate a comprehensive summary.
-Use the following statistics as the primary source of truth:
+You are a professional insurance data analyst AI. Your task is to generate a comprehensive Insurance Claims Analysis Report based on the provided JSON data.
 
-{context_stats}
+CRITICAL INSTRUCTION: You MUST follow the structure below EXACTLY. Do NOT omit any sections. Do NOT change the headers. Use the provided STATISTICS for section 1.
 
-Structure your report:
-1. **Executive Summary** (Key totals and overview)
-2. **Detailed Breakdown** (Patterns, vendor/carrier specifics, categories)
-   - Must include a "Payment Breakdown" subsection formatted EXACTLY like this for Medical, Expense, and Indemnity payments:
-     - **[Payment Type] Payments**:
-       - Total: $[Amount]
-       - Breakdown:
-         - Claim [Number]: $[Amount]
-   - If a payment type is $0.00 for all claims, format it as: `- **[Payment Type] Payments**: $0.00 for all claims.`
-3. **Observations & Risk Flags** (High value items, anomalies, missing data)
-4. **Action Items / Recommendations**
+# Insurance Claims Analysis Report
+
+## 1. Executive Summary
+- **Total Claims**: {stats['total_claims']}
+- **Total Incurred**: ${stats['total_incurred']:,.2f}
+- **Total Paid**: ${total_paid:,.2f}
+- **Average Claim**: {average_claim}
+  - **Medical Paid**: ${stats['total_medical_paid']:,.2f}
+  - **Indemnity Paid**: ${stats['total_indemnity_paid']:,.2f}
+- **Total Reserves**: ${total_reserves:,.2f}
+- **Claims Status**: 
+  - Closed: {stats['status_breakdown'].get('Closed', 0)}
+  - Open: {stats['status_breakdown'].get('Open', 0)}
+  - Reopened: {stats['status_breakdown'].get('Reopened', 0)}
+  - Other: {stats['status_breakdown'].get('Other', 0)}
+- **Litigated Claims**: {stats['litigated_count']}
+
+## 2. Detailed Breakdown
+### Claims Overview
+(Include Carrier, Policy Number, and Claim Class if found in the data, otherwise 'N/A')
+
+### Individual Claims
+(List EVERY claim numerically with the following fields)
+1. **Claim Number**: [Number]
+   - **Claimant Name**: [Name]
+   - **Year**: [Year]
+   - **Injury Date**: [Date]
+   - **Injury Description**: [Description]
+   - **Nature of Injury**: [Nature if available, otherwise N/A]
+   - **Claim Type**: [Injury Type]
+   - **Total Paid**: $[Amount]
+   - **Total Incurred**: $[Amount]
+   - **Total Reserve**: $[Amount]
+   - **Status**: [Status]
+
+### Payment Breakdown
+- **Medical Payments**: 
+  - Total: ${stats['total_medical_paid']:,.2f}
+  - Breakdown: (List claim numbers and amounts for those with non-zero medical payments)
+- **Expense Payments**: 
+  - Total: ${stats['total_expense_paid']:,.2f}
+  - Breakdown: (List claim numbers and amounts for those with non-zero expense payments)
+- **Indemnity Payments**:
+    - Total: ${stats['total_indemnity_paid']:,.2f}
+    - Breakdown: (List claim numbers and amounts for those with non-zero indemnity payments)
+    
+## 3. Observations & Risk Flags
+- **High Value Claims**: (Identify specific claims by name/number)
+- **Anomalies**: (Identify specific issues like zero-payment closed claims)
+- **Missing Data**: (Identify missing fields)
+
+## 4. Action Items / Recommendations
+(Provide 3-5 professional, actionable recommendations)
 
 Format professionally with headers and bullet points.
 """
         
         user_prompt = f"Data to analyze:\n{json.dumps(data_json, indent=2)}"
+
         
         try:
             response = self.client.chat.completions.create(

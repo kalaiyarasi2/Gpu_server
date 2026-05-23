@@ -8,12 +8,18 @@ from flask_cors import CORS
 import os
 import tempfile
 import json
+import threading
+import uuid
 from werkzeug.utils import secure_filename
 from dataclasses import asdict
 from dotenv import load_dotenv
 from pathlib import Path
 
 load_dotenv()
+
+# Global dictionary to track job statuses
+# In a production environment, this would be a database like Redis or SQLite.
+JOBS = {}
 
 # Import enhanced extractor
 try:
@@ -144,11 +150,58 @@ def extract_document_unified():
     return jsonify(unified_response)
 
 
+def run_extraction_task(job_id, filepath, target_claim):
+    """Background task to run the heavy extraction"""
+    try:
+        JOBS[job_id]['status'] = 'processing'
+        
+        # Use merged-handler wrapper
+        result = process_any_pdf_with_merge(
+            extractor,
+            filepath,
+            target_claim_number=target_claim,
+            header_patterns=MERGED_INVOICE_HEADER_PATTERNS,
+        )
+        
+        # Convert paths to web-accessible URLs
+        for page in result.get('pages', []):
+            if 'image_path' in page:
+                rel_path = os.path.relpath(page['image_path'], OUTPUT_FOLDER)
+                page['image_url'] = f"/api/files/{rel_path}"
+        
+        JOBS[job_id]['status'] = 'completed'
+        JOBS[job_id]['result'] = result
+        
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"❌ Error in background task {job_id}: {e}")
+        JOBS[job_id]['status'] = 'failed'
+        JOBS[job_id]['error'] = str(e)
+        JOBS[job_id]['traceback'] = error_trace
+    finally:
+        # Clean up uploaded file
+        try:
+            if os.path.exists(filepath):
+                os.remove(filepath)
+        except:
+            pass
+
+
+@app.route('/api/job-status/<job_id>', methods=['GET'])
+def get_job_status(job_id):
+    """Check the status of a background extraction job"""
+    if job_id not in JOBS:
+        return jsonify({'error': 'Job not found'}), 404
+    
+    return jsonify(JOBS[job_id])
+
+
 @app.route('/api/extract-full', methods=['POST'])
 def extract_full():
     """
     Enhanced endpoint: Extract with verification
-    Returns: images, text, and schema
+    Returns: job_id for asynchronous tracking
     """
     if 'file' not in request.files:
         return jsonify({'error': 'No file provided'}), 400
@@ -170,47 +223,35 @@ def extract_full():
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(filepath)
         
-        # Process with enhanced extractor
         if not extractor:
             return jsonify({'error': 'Extractor not initialized'}), 500
 
-        # Use merged-handler wrapper so merged invoice PDFs are supported.
-        # For normal single-doc insurance PDFs this behaves exactly like the
-        # original process_pdf_with_verification call.
-        result = process_any_pdf_with_merge(
-            extractor,
-            filepath,
-            target_claim_number=target_claim,
-            header_patterns=MERGED_INVOICE_HEADER_PATTERNS,
+        # Generate a unique Job ID
+        job_id = str(uuid.uuid4())
+        JOBS[job_id] = {
+            'status': 'queued',
+            'filename': filename,
+            'job_id': job_id
+        }
+
+        # Start the "Assistant" in the background
+        thread = threading.Thread(
+            target=run_extraction_task, 
+            args=(job_id, filepath, target_claim)
         )
+        thread.start()
         
-        # Clean up uploaded file
-        try:
-            os.remove(filepath)
-        except:
-            pass
-        
-        # Convert paths to web-accessible URLs
-        for page in result.get('pages', []):
-            if 'image_path' in page:
-                # Get relative path from output folder
-                rel_path = os.path.relpath(page['image_path'], OUTPUT_FOLDER)
-                page['image_url'] = f"/api/files/{rel_path}"
-        
+        # Return IMMEDIATELY to the user
         return jsonify({
             'success': True,
-            'data': result
-        })
+            'message': 'Extraction started in the background',
+            'job_id': job_id
+        }), 202
     
     except Exception as e:
-        import traceback
-        error_trace = traceback.format_exc()
-        print(f"❌ Error in extract_full: {e}")
-        print(error_trace)
         return jsonify({
             'error': str(e),
-            'success': False,
-            'traceback': error_trace
+            'success': False
         }), 500
 
 

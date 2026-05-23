@@ -166,6 +166,8 @@ export function useDocumentProcessor() {
                     metadata,
                     excelPath: json.output_file,
                     jsonPath: json.output_json,
+                    excelUrl: json.excel,
+                    jsonUrl: json.json,
                     completedAt: Date.now(),
                 });
             } catch (error) {

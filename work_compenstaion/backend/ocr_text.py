@@ -13,6 +13,21 @@ from io import BytesIO
 import time
 import re
 import threading
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+# Configure Tesseract path if provided in environment
+TESSERACT_PATH = os.getenv("TESSERACT_PATH")
+if TESSERACT_PATH:
+    if os.path.isdir(TESSERACT_PATH):
+        tess_exe = os.path.join(TESSERACT_PATH, "tesseract.exe")
+        if os.path.exists(tess_exe):
+            pytesseract.pytesseract.tesseract_cmd = tess_exe
+    elif os.path.exists(TESSERACT_PATH):
+        pytesseract.pytesseract.tesseract_cmd = TESSERACT_PATH
+
 try:
     import rostaing_ocr
     ROSTAING_AVAILABLE = True

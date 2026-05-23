@@ -22,6 +22,18 @@ try:
     import pytesseract
     from PIL import Image, ImageEnhance, ImageFilter
     from pdf2image import convert_from_path
+    
+    # Configure Tesseract path if provided in environment
+    TESSERACT_PATH = os.getenv("TESSERACT_PATH")
+    if TESSERACT_PATH:
+        # Check if it's a directory or the executable itself
+        if os.path.isdir(TESSERACT_PATH):
+            tess_exe = os.path.join(TESSERACT_PATH, "tesseract.exe")
+            if os.path.exists(tess_exe):
+                pytesseract.pytesseract.tesseract_cmd = tess_exe
+        elif os.path.exists(TESSERACT_PATH):
+            pytesseract.pytesseract.tesseract_cmd = TESSERACT_PATH
+            
     OCR_AVAILABLE = True
 except ImportError:
     OCR_AVAILABLE = False
@@ -49,6 +61,67 @@ builtins.print = flushed_print
 # Load environment variables
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+# Helper to load extractor classes from different backends
+def get_extractor_class(backend_dir):
+    """Load ChunkedInsuranceExtractor from a specific backend directory.
+    
+    Uses module isolation (clear + restore sys.modules) to prevent collisions
+    when loading the same module name from different backend paths (Insurance vs Work Comp).
+    Falls back gracefully so the router still starts if one backend is missing.
+    """
+    import sys
+    import importlib.util
+    import importlib
+    import pathlib as _pl
+    
+    orig_path = sys.path.copy()
+    # Capture current modules snapshot to restore after load
+    modules_snapshot = set(sys.modules.keys())
+    try:
+        backend_str = str(backend_dir)
+        if not backend_dir.exists():
+            print(f"[Extractor] Backend directory not found: {backend_str}")
+            return None
+        
+        # Insert at position 0 to ensure our backend takes priority
+        if backend_str not in sys.path:
+            sys.path.insert(0, backend_str)
+        
+        # Clear any previously loaded versions of these shared modules
+        modules_to_clear = [
+            'chunked_extractor', 'pdf_detector', 'pdf_rotation',
+            'ocr_text', 'pdf_plumber', 'config', 'utils'
+        ]
+        for mod in modules_to_clear:
+            if mod in sys.modules:
+                del sys.modules[mod]
+            
+        # Use importlib.spec_from_file_location for explicit path-based import
+        # to avoid sys.modules collision with the Insurance backend's chunked_extractor
+        chunked_spec = importlib.util.spec_from_file_location(
+            f"_wc_chunked_extractor", backend_dir / "chunked_extractor.py"
+        )
+        chunked_mod = importlib.util.module_from_spec(chunked_spec)
+        chunked_spec.loader.exec_module(chunked_mod)
+        
+        cls = chunked_mod.ChunkedInsuranceExtractor
+        print(f"[Extractor] Loaded ChunkedInsuranceExtractor from {backend_str}")
+        return cls
+    except ModuleNotFoundError as e:
+        print(f"[Extractor] Module not found in {backend_dir}: {e}")
+        return None
+    except AttributeError as e:
+        print(f"[Extractor] ChunkedInsuranceExtractor class not found in module: {e}")
+        return None
+    except Exception as e:
+        print(f"[Extractor] Error loading extractor from {backend_dir}: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+    finally:
+        # Restore sys.path
+        sys.path = orig_path
 
 # Configuration for paths
 BASE_DIR = Path(__file__).parent
@@ -78,13 +151,6 @@ if POPPLER_PATH and os.path.exists(POPPLER_PATH):
     print(f"[OK] Poppler PATH configured: {POPPLER_PATH}")
 else:
     print("Warning: POPPLER_PATH not set or invalid. OCR may not work for scanned PDFs.")
-
-BASE_DIR = Path(__file__).parent
-INSURANCE_BACKEND_DIR = BASE_DIR.parent / "Insurance_pdf_extractor-main/backend"
-INVOICE_BACKEND_DIR = BASE_DIR.parent / "Invoice_pdf_extractor/Invoice_Extraction-main"
-GENERAL_INVOICE_BACKEND_DIR = BASE_DIR.parent / "invoice/backend"
-WORK_COMPENSATION_BACKEND_DIR = BASE_DIR.parent / "work_compenstaion/backend"
-BANK_STATEMENT_BACKEND_DIR = BASE_DIR.parent / "bank statement/backend"
 
 # Import Insurance extractor dynamically
 INSURANCE_MODULE_AVAILABLE = False

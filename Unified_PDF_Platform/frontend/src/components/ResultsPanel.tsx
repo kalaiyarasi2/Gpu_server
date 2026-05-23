@@ -114,7 +114,26 @@ const ResultsPanel = ({
 
   const tableData = getTableData();
 
-  const handleDownloadJson = () => {
+  const handleDownloadJson = async () => {
+    // If we have a direct JSON URL from the backend, use it
+    if (document.jsonUrl) {
+      try {
+        const response = await fetch(document.jsonUrl);
+        if (!response.ok) throw new Error("Download failed");
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const a = globalThis.document.createElement("a");
+        a.href = url;
+        a.download = document.jsonPath?.split("/").pop() || `${document.name.replace(".pdf", "")}_extracted.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        return;
+      } catch (error) {
+        console.error("JSON remote download error, falling back to local:", error);
+      }
+    }
+
+    // Fallback to local result object
     const blob = new Blob([JSON.stringify(result, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = globalThis.document.createElement("a");
@@ -125,24 +144,31 @@ const ResultsPanel = ({
   };
 
   const handleDownloadExcel = async () => {
-    if (!document.excelPath) {
-      console.error("No Excel file path available");
+    // Priority: jsonUrl > excelPath
+    const downloadUrl = document.excelUrl || (document.excelPath ? `/api/download/${document.excelPath}` : null);
+    
+    if (!downloadUrl) {
+      console.error("No Excel file URL or path available");
+      toast.error("Excel file not available for download");
       return;
     }
 
     try {
-      const response = await fetch(`/api/download/${document.excelPath}`);
+      const response = await fetch(downloadUrl);
       if (!response.ok) throw new Error("Download failed");
 
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const a = globalThis.document.createElement("a");
       a.href = url;
-      a.download = document.excelPath;
+      // Use the filename from the path/url
+      const filename = document.excelPath?.split("/").pop() || "extracted_data.xlsx";
+      a.download = filename;
       a.click();
       URL.revokeObjectURL(url);
     } catch (error) {
       console.error("Excel download error:", error);
+      toast.error("Failed to download Excel file");
     }
   };
 
