@@ -180,6 +180,17 @@ def process_with_structural_layer(pdf_path, output_excel=None):
         print("  [Debug] Calling v3.extract_text_from_pdf_improved...")
         text = v3.extract_text_from_pdf_improved(pdf_path)
     
+    # [FIX] Save extracted text to verification folder unconditionally
+    extracted_text_dir = Path("c:/Users/INT002/pdf_extractor/Unified_PDF_Platform/extracted_text")
+    extracted_text_dir.mkdir(parents=True, exist_ok=True)
+    initial_text_path = extracted_text_dir / f"{Path(pdf_path).stem}_extracted.txt"
+    try:
+        with open(initial_text_path, "w", encoding="utf-8") as f:
+            f.write(text)
+        print(f"  [Debug] Saved initial extracted text to {initial_text_path}")
+    except Exception as e:
+        print(f"  [WARN] Could not save initial extracted text: {e}")
+
     print(f"  [Debug] Text extraction complete. Length: {len(text)} chars.")
     
     # 2. Segment text using structural logic
@@ -273,14 +284,15 @@ def process_with_structural_layer(pdf_path, output_excel=None):
                     "\n[CRITICAL INSTRUCTIONS FOR BCBS EXTRACTION]"
                     "\n1. **STRICT FULL TABLE SCAN**: You MUST scan the entire page and extract EVERY member row. Do NOT skip or merge different member names."
                     "\n2. **ZERO AGGREGATION (IRONCLAD)**: Never sum premiums from different names. If 'Rbrekk' has $6.00 and 'Toczynski' has $652.74, they MUST be two separate JSON objects. Aggregating them is a DESTRUCTIVE ERROR."
-                    "\n3. **ADJUSTMENTS**: Extract adjustments as completely SEPARATE JSON objects. NEVER combine adjustments with current premiums."
+                    "\n3. **ADJUSTMENTS**: Extract adjustments as completely SEPARATE JSON objects. NEVER combine adjustments with current premiums. Check any 'Adjustments' block carefully."
                     "\n4. **MEMBER IDENTIFICATION (STRICT)**:"
                     "\n   - MEMBERID: The alphanumeric ID starting with 'H' or 'W' (usually 9-10 chars, e.g., 'H44156017')."
-                    "\n   - SSN: **PRIORITY 9-DIGITS**. Look for XXX-XX-XXXX or 9-digit number. Capture ALL NINE digits. Also capture masked SSNs like '*****1234' or 'XXX-XX-1234'. Capture EVERY DIGIT visible. Search the entire row near the Name and MemberID for the SSN digits if no clear column exists. **DO NOT LEAVE SSN NULL IF ANY DIGITS ARE VISIBLE ON THE ROW.**"
+                    "\n   - SSN: **PRIORITY 9-DIGITS**. Look for XXX-XX-XXXX or 9-digit number. Capture ALL NINE digits. Also capture masked SSNs like '*****1234' or 'XXX-XX-1234'. Capture EVERY DIGIT visible exactly as it appears. Search the entire row near the Name and MemberID for the SSN digits if no clear column exists. **DO NOT LEAVE SSN NULL IF ANY DIGITS ARE VISIBLE ON THE ROW.**"
                     "\n   - Capture BOTH fields for every row. Do NOT swap them."
                     "\n5. Set CURRENT_PREMIUM to null for adjustments, and ADJUSTMENT_PREMIUM to null for current premium rows. Amounts in parentheses (e.g. ($100.00)) are negative."
                     "\n6. **MULTI-BLOCK LAYOUT**: If labels (Name, ID, SSN) are at the top and amounts are at the bottom, carefully match them by sequence. The first Name/ID corresponds to the first amount, the second to the second, etc."
                     "\n7. Ensure FIRSTNAME and LASTNAME are captured on every single row."
+                    "\n8. **HEADER DATA**: You MUST extract INV_DATE and BILLING_PERIOD from the summary pages and document headers."
                 )
             elif "Covered California" in pdf_path or "Covered California" in chunk_text:
                 carrier_name = "covered_california"
@@ -312,21 +324,33 @@ def process_with_structural_layer(pdf_path, output_excel=None):
             if is_empty_line_items(page_data.get("LINE_ITEMS")) or v3.check_text_quality(chunk_text) < 0.2:
                 print(f"    -> [Layer] Low quality text or no items on chunk {i+1}. Attempting optimized OCR fallback...")
                 try:
-                    # 1. Run OCR once (using fitz/tesseract)
-                    print(f"    -> [Layer] Performance: Running primary-doc OCR pass...")
-                    ocr_text, _ = v3.extract_text_from_pdf_ocr(pdf_path) # Changed to return (text, metadata)
+                    if carrier_name == "bcbs":
+                        # [FIX] Bypass Tesseract and use Vision directly for BCBS scanned PDFs to preserve layout
+                        print(f"    -> [Layer] Performance: Bypassing standard OCR for BCBS. Running Vision OCR directly for layout integrity...")
+                        vis_extractor = v3.OCRPDFExtractor(pdf_path)
+                        ocr_text, _ = vis_extractor.extract(engine='vision')
+                    else:
+                        # 1. Run OCR once (using fitz/tesseract)
+                        print(f"    -> [Layer] Performance: Running primary-doc OCR pass...")
+                        ocr_text, ocr_meta = v3.extract_text_from_pdf_ocr(pdf_path) # Changed to return (text, metadata)
+                        
+                        # [FIX] Check if average OCR accuracy is below 90%
+                        if ocr_meta:
+                            avg_conf = sum(p.get("confidence", 0.0) for p in ocr_meta) / len(ocr_meta)
+                            if avg_conf < 0.90:
+                                print(f"    -> [Layer][ALERT] Average OCR confidence is {avg_conf:.1%} (< 90%). Triggering Vision OCR fallback...")
+                                vis_extractor = v3.OCRPDFExtractor(pdf_path)
+                                ocr_text, _ = vis_extractor.extract(engine='vision')
                     
-                    # [V4][FIX] Check if OCR text needs Vision for better layout (BCBS Multi-Block)
-                    # If this is BCBS and the text looks fragmented, we might want to try Vision
-                    
-                    # 2. Save OCR text to the raw extracted file for transparency
-                    pdf_dir = os.path.dirname(pdf_path)
-                    pdf_base = os.path.basename(pdf_path).replace(".pdf", "_raw_extracted.txt")
-                    txt_path = os.path.join(pdf_dir, pdf_base)
+                    # 2. Save OCR text to the verification folder unconditionally
+                    extracted_text_dir = Path("c:/Users/INT002/pdf_extractor/Unified_PDF_Platform/extracted_text")
+                    extracted_text_dir.mkdir(parents=True, exist_ok=True)
+                    txt_path = extracted_text_dir / f"{Path(pdf_path).stem}_extracted.txt"
 
                     try:
                         with open(txt_path, "w", encoding="utf-8") as f:
                             f.write(ocr_text)
+                        print(f"    -> [Layer] Saved OCR text to {txt_path}")
                     except Exception as e:
                         print(f"    -> [Layer][WARN] Could not save OCR text: {e}")
 
@@ -350,7 +374,10 @@ def process_with_structural_layer(pdf_path, output_excel=None):
                             # We'd ideally only do the specific page, but for now we do the doc if small
                             vis_text, _ = vis_extractor.extract(engine='vision')
                             # Save vis text
-                            with open(txt_path, "w", encoding="utf-8") as f: f.write(vis_text)
+                            try:
+                                with open(txt_path, "w", encoding="utf-8") as f: f.write(vis_text)
+                            except Exception as e:
+                                pass
                             # Re-process with Vision text
                             vis_chunks = map_and_segment_text(vis_text)
                             all_line_items = [] # Reset for Vision
@@ -363,6 +390,12 @@ def process_with_structural_layer(pdf_path, output_excel=None):
                         
                         if items:
                             all_line_items.extend(items)
+                        
+                        # [FIX] Also capture header from OCR data
+                        ocr_header = ocr_data.get("HEADER", {})
+                        for k, v in ocr_header.items():
+                            if v and str(v).lower() not in ["n/a", "none"]:
+                                final_header[k] = v
                     
                     break
 
