@@ -415,11 +415,20 @@ def format_date_clean(val: Optional[str]) -> Optional[str]:
     Standardize dates to m/d/yyyy format, stripping leading zeros.
     Example: 03/06/2026 -> 3/6/2026
     Example: 4/01/2026 -> 4/1/2026
+    Example: may 2026 -> 5/1/2026
     """
-    if not val or not str(val).strip() or str(val).lower() in ["n/a", "none"]:
+    if pd.isna(val) or not str(val).strip() or str(val).lower() in ["n/a", "none", "nan"]:
         return val
         
     s = str(val).strip()
+    
+    # Fast path with pandas to_datetime
+    try:
+        dt = pd.to_datetime(s, errors='coerce')
+        if pd.notna(dt):
+            return f"{dt.month}/{dt.day}/{dt.year}"
+    except Exception:
+        pass
     
     # Month name mapping
     month_map = {
@@ -429,6 +438,21 @@ def format_date_clean(val: Optional[str]) -> Optional[str]:
         "jan": "1", "feb": "2", "mar": "3", "apr": "4", "jun": "6",
         "jul": "7", "aug": "8", "sep": "9", "oct": "10", "nov": "11", "dec": "12"
     }
+
+    # Month Name No Day: "may 2026"
+    month_only_pattern = r'^([A-Za-z]+)\.?\s+(\d{4})$'
+    match_month_only = re.search(month_only_pattern, s, re.IGNORECASE)
+    if match_month_only:
+        month_name, y = match_month_only.groups()
+        month_num = month_map.get(month_name.lower())
+        if month_num:
+            return f"{month_num}/1/{y}"
+
+    # YYYY/MM/DD
+    match_ymd = re.search(r'(\d{4})[/-](\d{1,2})[/-](\d{1,2})', s)
+    if match_ymd:
+        y, m, d = match_ymd.groups()
+        return f"{int(m)}/{int(d)}/{y}"
 
     # 1. Full Date Try: MM/DD/YYYY, MM/DD/YY, M/D/YY
     match = re.search(r'(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})', s)
@@ -461,13 +485,13 @@ def format_date_clean(val: Optional[str]) -> Optional[str]:
     match_yyyymm = re.search(r'^(\d{4})(\d{2})$', s)
     if match_yyyymm:
         y, m = match_yyyymm.groups()
-        return f"1/{int(m)}/{y}"
+        return f"{int(m)}/1/{y}"
             
     # 4. MM/YYYY
     match_mmyyyy = re.search(r'(\d{1,2})[/-](\d{4})', s)
     if match_mmyyyy:
         m, y = match_mmyyyy.groups()
-        return f"1/{int(m)}/{y}"
+        return f"{int(m)}/1/{y}"
 
     return s
 
@@ -3549,8 +3573,9 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                 is_uhc_carrier = "UHC" in fn_upper or "CHILL" in fn_upper
                 is_bcbs_carrier = "BCBS" in fn_upper or "BLUE" in fn_upper
                 is_adj_row = to_float(item.get("ADJUSTMENT_PREMIUM")) != 0 or any(kw in str(item.get("PLAN_NAME")).upper() for kw in ["ADJ", "RETRO", "ADD", "TRM"])
-                
-                if (is_uhc_carrier or is_bcbs_carrier) and is_adj_row:
+                is_global_fee = not fname and not lname or any(kw in str(fname).upper() or kw in str(lname).upper() for kw in ["CREDIT", "FEE", "TOTAL", "SUMMARY"])
+
+                if (is_uhc_carrier or is_bcbs_carrier) and is_adj_row and not is_global_fee:
                     print(f"    [V5][LEDGER] Skipping merge keys for adjustment: {fname} {lname}")
                     key_id_strict = None
                     key_ssn_strict = None
@@ -3705,8 +3730,9 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                     # LEDGER MODE: STRICT SEPARATION for UHC/BCBS/KCL
                     if is_bcbs_doc or is_uhc_doc or is_kcl_doc:
                         # 1. Never merge a CURRENT row with an ADJUSTMENT row
-                        if (has_cur_val1 and has_adj_val2 and not has_adj_val1) or \
-                           (has_adj_val1 and has_cur_val2 and not has_cur_val1):
+                        _is_global_fee = (not fname and not lname) or any(kw in str(fname).upper() or kw in str(lname).upper() for kw in ["CREDIT", "FEE", "TOTAL", "SUMMARY"])
+                        if not _is_global_fee and ((has_cur_val1 and has_adj_val2 and not has_adj_val1) or \
+                           (has_adj_val1 and has_cur_val2 and not has_cur_val1)):
                             print(f"      [V5][LEDGER] Separating CURRENT/ADJUSTMENT for {pn1}")
                             match_index = None
                         # 2. Never merge two DIFFERENT ADJUSTMENT rows (preserve granularity)
@@ -3776,8 +3802,10 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                                 # This prevents doubling premiums from 1-page overlapping chunks.
                                 # Use a more robust check for MOO detection here.
                                 _is_moo = "MUTUAL OF OMAHA" in source_filename.upper() or "MOO" in source_filename.upper()
-                                if _is_moo and v1 == v2:
-                                    print(f"      [V5][MOO][DUP] Skipping sum for identical overlapping row ({fname} {lname} {k}={v2})")
+                                is_global_fee = (not fname and not lname) or any(kw in str(fname).upper() or kw in str(lname).upper() for kw in ["CREDIT", "FEE", "TOTAL", "SUMMARY"])
+                                
+                                if (_is_moo or is_global_fee) and v1 == v2:
+                                    print(f"      [V5][DUP] Skipping sum for identical overlapping row ({fname} {lname} {k}={v2})")
                                     # Already have the value, skip summing
                                     pass
                                 else:
@@ -3905,6 +3933,18 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                 merged_items = filtered_items
 
             for item in merged_items:
+                # [V6] Prevent double counting of global fees that were extracted twice under different columns
+                fname_c = str(item.get("FIRSTNAME") or "").strip().upper()
+                lname_c = str(item.get("LASTNAME") or "").strip().upper()
+                is_global_fee_c = (not fname_c and not lname_c) or any(kw in fname_c or kw in lname_c for kw in ["CREDIT", "FEE", "TOTAL", "SUMMARY"])
+                
+                if is_global_fee_c:
+                    cp_val = to_float(item.get("CURRENT_PREMIUM"))
+                    ap_val = to_float(item.get("ADJUSTMENT_PREMIUM"))
+                    if cp_val != 0 and cp_val == ap_val:
+                        print(f"    [V6] Deduplicating identical premium columns for global fee '{item.get('PLAN_NAME')}': keeping ADJUSTMENT_PREMIUM={ap_val}")
+                        item["CURRENT_PREMIUM"] = None
+
                 row = {"SOURCE_FILE": source_filename}
                 # Ensure all required fields are present (even as None/empty)
                 for field in REQUIRED_FIELDS:

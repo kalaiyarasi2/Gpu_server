@@ -12,6 +12,8 @@ from unified_router import UnifiedRouter
 BASE_DIR = Path(__file__).parent
 UPLOAD_DIR = BASE_DIR / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
+EXTRACTED_TEXT_DIR = BASE_DIR / "extracted_text"
+EXTRACTED_TEXT_DIR.mkdir(exist_ok=True)
 
 # Shared state
 router_engine = UnifiedRouter()

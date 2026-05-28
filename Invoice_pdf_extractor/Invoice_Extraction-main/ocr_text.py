@@ -332,9 +332,11 @@ class OCRPDFExtractor:
         img_base64 = base64.b64encode(buffered.getvalue()).decode()
 
         prompt = (
-            "Extract ALL text from this document page.\n"
-            "PRESERVE the EXACT layout including columns, tables, and spacing.\n"
-            "Return ONLY the extracted text."
+            "Extract ALL text from this document page exactly as it appears.\n"
+            "CRITICAL INSTRUCTION: You MUST preserve the EXACT horizontal layout of the document. "
+            "If the document contains tabular data, columns, or side-by-side values, you MUST format them as Markdown tables (using |) or use strict space-alignment to ensure values on the same visual row remain on the same line in your output.\n"
+            "NEVER flatten columns into a vertical list of words. Items on the same row must stay on the same row.\n"
+            "Return ONLY the extracted text or markdown tables without any other commentary."
         )
 
         response = self.client.chat.completions.create(

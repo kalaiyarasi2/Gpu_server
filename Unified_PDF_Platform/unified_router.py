@@ -595,6 +595,30 @@ RULES:
             df['CURRENT_PREMIUM'] = df['CURRENT_PREMIUM'].apply(self.clean_val)
         if 'ADJUSTMENT_PREMIUM' in df.columns:
             df['ADJUSTMENT_PREMIUM'] = df['ADJUSTMENT_PREMIUM'].apply(self.clean_val)
+            
+        def standardize_date(date_str):
+            if pd.isna(date_str) or str(date_str).strip() in ["", "None", "nan"]:
+                return date_str
+            s = str(date_str).strip()
+            try:
+                if "-" in s and not re.match(r'^\d{4}-\d{2}-\d{2}$', s) and not re.match(r'^\d{1,2}-\d{1,2}-\d{2,4}$', s): 
+                    parts = [p.strip() for p in s.split("-")]
+                    if len(parts) == 2:
+                        dt1 = pd.to_datetime(parts[0], errors='coerce')
+                        dt2 = pd.to_datetime(parts[1], errors='coerce')
+                        if pd.notna(dt1) and pd.notna(dt2):
+                            return f"{dt1.month}/{dt1.day}/{dt1.year} - {dt2.month}/{dt2.day}/{dt2.year}"
+                dt = pd.to_datetime(s, errors='coerce')
+                if pd.notna(dt):
+                    return f"{dt.month}/{dt.day}/{dt.year}"
+                return s
+            except Exception:
+                return s
+
+        if 'INV_DATE' in df.columns:
+            df['INV_DATE'] = df['INV_DATE'].apply(standardize_date)
+        if 'BILLING_PERIOD' in df.columns:
+            df['BILLING_PERIOD'] = df['BILLING_PERIOD'].apply(standardize_date)
 
         # Name splitting
         if 'FULL_NAME' in df.columns and ('LASTNAME' not in df.columns or df['LASTNAME'].isnull().all()):
@@ -2755,16 +2779,11 @@ Return ONLY the company name or UNKNOWN:"""
                     else:
                         result = {"error": "Excel/CSV extraction failed to yield structured data"}
                 else:
-                    # TRY 1: Standard Extractor (PDF)
-                    result = self.run_invoice_extractor(str(working_path), use_structural=False, request_id=request_id)
-                    
-                    # FALLBACK: If standard extraction yielded no data or failed, try structural
-                    should_fallback = False
-                    
-                    # 1. Proactive Detection: Is this a Guardian or GIS 23 invoice?
+                    # 1. Proactive Detection BEFORE Standard Extraction
                     is_guardian = False
                     is_gis23 = False
                     is_angle = False
+                    is_uhc = False
                     try:
                         import pdfplumber
                         with pdfplumber.open(working_path) as pdf:
@@ -2777,24 +2796,33 @@ Return ONLY the company name or UNKNOWN:"""
                                 print("[INFO] GIS 23 Restaurant Services invoice detected proactively.")
                             if "angle" in first_page_text:
                                 is_angle = True
+                            if "uhc" in first_page_text or "unitedhealthcare" in first_page_text:
+                                is_uhc = True
+                                print("[INFO] UHC invoice detected proactively.")
                     except Exception as e:
                         print(f"  [Router] Detection failed: {e}")
 
-                    if "error" in result:
-                        should_fallback = True
+                    should_fallback = False
+                    result = {"error": "Skipped standard extraction"}
+                    
+                    if is_guardian or is_gis23 or is_angle or is_uhc:
+                         should_fallback = True
+                         reason = "Guardian" if is_guardian else ("Angle" if is_angle else ("UHC" if is_uhc else "GIS 23"))
+                         print(f"[WARN] {reason} invoice: Skipping Standard Extractor and forcing Structural layer for maximum accuracy...")
                     else:
-                        try:
-                            df = pd.read_excel(result["excel"])
-                            if len(df) <= 1: # Only header or empty
-                                should_fallback = True
-                            
-                            # 2. Force fallback for complex invoices to ensure accuracy and prevent standard timeouts
-                            if is_guardian or is_gis23 or is_angle:
-                                 should_fallback = True
-                                 reason = "Guardian" if is_guardian else ("Angle" if is_angle else "GIS 23")
-                                 print(f"[WARN] {reason} invoice: Forcing Structural layer for maximum accuracy...")
-                        except:
+                        # TRY 1: Standard Extractor (PDF)
+                        result = self.run_invoice_extractor(str(working_path), use_structural=False, request_id=request_id)
+                        
+                        # FALLBACK: If standard extraction yielded no data or failed, try structural
+                        if "error" in result:
                             should_fallback = True
+                        else:
+                            try:
+                                df = pd.read_excel(result["excel"])
+                                if len(df) <= 1: # Only header or empty
+                                    should_fallback = True
+                            except:
+                                should_fallback = True
                     
                     if should_fallback:
                         print("\n[WARN] Standard extraction yielded insufficient results. Falling back to Structural Layer...")

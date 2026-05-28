@@ -150,6 +150,53 @@ def is_empty_line_items(items):
             return False
     return True
 
+
+def detect_pdf_type(pdf_path: str) -> str:
+    """
+    Identifies whether a PDF is scanned (image-based) or digital (has embedded text).
+    Uses PyMuPDF (fitz) - FREE and instant, no API call required.
+    
+    Returns:
+        'scanned'  - PDF has no embedded selectable text (image-only pages)
+        'digital'  - PDF has embedded selectable text
+    """
+    import fitz
+    try:
+        doc = fitz.open(pdf_path)
+        sample_pages = min(3, len(doc))
+        total_chars = sum(len(doc.load_page(i).get_text().strip()) for i in range(sample_pages))
+        avg_chars = total_chars / sample_pages if sample_pages > 0 else 0
+        doc.close()
+        pdf_type = 'scanned' if avg_chars < 50 else 'digital'
+        print(f"  [PDF_DETECT] Type={pdf_type.upper()} (avg {avg_chars:.0f} embedded chars/page)")
+        return pdf_type
+    except Exception as e:
+        print(f"  [PDF_DETECT] Detection failed ({e}). Defaulting to 'digital'.")
+        return 'digital'
+
+
+def apply_markdown_structure(text: str) -> str:
+    """
+    Restructures poorly-aligned digital PDF text into Markdown-style table rows.
+    Converts multi-column whitespace-separated lines into pipe-delimited rows.
+    
+    This is a FREE, pure Python operation - no API call, no cost, no added time.
+    Used as a fallback when digital text quality is < 90%.
+    """
+    lines = text.splitlines()
+    structured = []
+    for line in lines:
+        # Detect lines with 3+ tokens separated by 2+ spaces (table data pattern)
+        tokens = re.split(r'  {2,}', line)
+        if len(tokens) >= 3 and any(t.strip() for t in tokens):
+            # Wrap into pipe-delimited Markdown table row
+            structured.append('| ' + ' | '.join(t.strip() for t in tokens if t.strip()) + ' |')
+        else:
+            structured.append(line)
+    result = '\n'.join(structured)
+    print(f"  [MARKDOWN_PROC] Restructured {len(lines)} lines into Markdown format.")
+    return result
+
 def process_with_structural_layer(pdf_path, output_excel=None):
     """Process PDF with structural analysis layer.
     
@@ -168,28 +215,58 @@ def process_with_structural_layer(pdf_path, output_excel=None):
     
     print(f"\n[Structural Layer] Analyzing: {pdf_path}")
     
-    # 1. Extract raw text with markers
-    print("  [Debug] Detecting carrier for optimized mode...")
-    # Quick check for KCL
+    # =========================================================================
+    # STEP 1: Detect PDF type — Scanned (image) or Digital (embedded text)
+    # This is FREE — uses PyMuPDF only, no API call.
+    # =========================================================================
     is_kcl = "KCL" in pdf_path or "Kansas City Life" in pdf_path
+    pdf_type = detect_pdf_type(pdf_path)
     
-    if is_kcl:
-        print("  [Layer] KCL detected. Using VERTICAL extraction mode for 3-column layout.")
-        text = v3.extract_text_from_pdf_pymupdf(pdf_path, mode="vertical")
-    else:
-        print("  [Debug] Calling v3.extract_text_from_pdf_improved...")
-        text = v3.extract_text_from_pdf_improved(pdf_path)
-    
-    # [FIX] Save extracted text to verification folder unconditionally
     extracted_text_dir = Path("c:/Users/INT002/pdf_extractor/Unified_PDF_Platform/extracted_text")
     extracted_text_dir.mkdir(parents=True, exist_ok=True)
     initial_text_path = extracted_text_dir / f"{Path(pdf_path).stem}_extracted.txt"
+
+    if pdf_type == 'scanned':
+        # =====================================================================
+        # PATH A: SCANNED PDF
+        # The PDF is image-only — standard text extraction returns nothing.
+        # Route directly to GPT-4o Vision OCR with Markdown table enforcement.
+        # =====================================================================
+        print("  [PATH A] Scanned PDF detected -> Running GPT-4o Vision OCR + Markdown...")
+        vis_extractor = v3.OCRPDFExtractor(pdf_path)
+        text, _ = vis_extractor.extract(engine='vision')
+        print(f"  [PATH A] Vision OCR complete. Extracted {len(text)} chars.")
+    else:
+        # =====================================================================
+        # PATH B: DIGITAL PDF
+        # The PDF has embedded text — use standard extraction (fast, free).
+        # Then run a quality check. If garbled (< 90%), apply Markdown
+        # post-processor to restructure the text (still free, no API call).
+        # =====================================================================
+        if is_kcl:
+            print("  [PATH B] Digital PDF (KCL) -> Using VERTICAL extraction mode.")
+            text = v3.extract_text_from_pdf_pymupdf(pdf_path, mode="vertical")
+        else:
+            print("  [PATH B] Digital PDF -> Running standard text extraction...")
+            text = v3.extract_text_from_pdf_improved(pdf_path)
+        
+        # Quality gate
+        quality_score = v3.check_text_quality(text)
+        print(f"  [QUALITY] Text quality score: {quality_score:.2f}")
+        
+        if quality_score < 0.90:
+            print(f"  [QUALITY] Score < 90% -> Applying Markdown post-processor (no API call)...")
+            text = apply_markdown_structure(text)
+        else:
+            print(f"  [QUALITY] Score >= 90% -> Text quality OK. Using as-is.")
+    
+    # Save the final text to verification folder
     try:
         with open(initial_text_path, "w", encoding="utf-8") as f:
             f.write(text)
-        print(f"  [Debug] Saved initial extracted text to {initial_text_path}")
+        print(f"  [Debug] Saved extracted text to {initial_text_path}")
     except Exception as e:
-        print(f"  [WARN] Could not save initial extracted text: {e}")
+        print(f"  [WARN] Could not save extracted text: {e}")
 
     print(f"  [Debug] Text extraction complete. Length: {len(text)} chars.")
     
@@ -302,6 +379,15 @@ def process_with_structural_layer(pdf_path, output_excel=None):
                     "\n2. Ensure the Billing period is captured correctly."
                     "\n3. Format all dates, including the Invoice date and Billing period, strictly as M/D/Y."
                 )
+            elif "UHC" in pdf_path.upper() or "UnitedHealthcare" in chunk_text:
+                carrier_name = "unitedhealthcare"
+                prompt_hint = (
+                    "\n[CRITICAL INSTRUCTIONS FOR UHC EXTRACTION]"
+                    "\n1. Follow the UHC multiline aggregation rules."
+                    "\n2. Map 'Charge Amount' to CURRENT_PREMIUM and 'Adjustment Detail Amount' to ADJUSTMENT_PREMIUM."
+                    "\n3. Extract all package savings credits and fees as standalone line items."
+                    "\n4. If a single row has BOTH a charge and an adjustment, output them BOTH in the SAME single JSON record (populate both CURRENT_PREMIUM and ADJUSTMENT_PREMIUM)."
+                )
 
         
             
@@ -319,88 +405,10 @@ def process_with_structural_layer(pdf_path, output_excel=None):
                  print(f"    -> [Layer] Vertical fallback triggered for {chunk_type} chunk...")
                  # (Implementation of vertical fallback would go here or call v3 logic)
             
-            # [V4][FIX] OCR Fallback for Structural Layer
-            # If standard extraction failed or yielded low results, and the document is likely scanned
-            if is_empty_line_items(page_data.get("LINE_ITEMS")) or v3.check_text_quality(chunk_text) < 0.2:
-                print(f"    -> [Layer] Low quality text or no items on chunk {i+1}. Attempting optimized OCR fallback...")
-                try:
-                    if carrier_name == "bcbs":
-                        # [FIX] Bypass Tesseract and use Vision directly for BCBS scanned PDFs to preserve layout
-                        print(f"    -> [Layer] Performance: Bypassing standard OCR for BCBS. Running Vision OCR directly for layout integrity...")
-                        vis_extractor = v3.OCRPDFExtractor(pdf_path)
-                        ocr_text, _ = vis_extractor.extract(engine='vision')
-                    else:
-                        # 1. Run OCR once (using fitz/tesseract)
-                        print(f"    -> [Layer] Performance: Running primary-doc OCR pass...")
-                        ocr_text, ocr_meta = v3.extract_text_from_pdf_ocr(pdf_path) # Changed to return (text, metadata)
-                        
-                        # [FIX] Check if average OCR accuracy is below 90%
-                        if ocr_meta:
-                            avg_conf = sum(p.get("confidence", 0.0) for p in ocr_meta) / len(ocr_meta)
-                            if avg_conf < 0.90:
-                                print(f"    -> [Layer][ALERT] Average OCR confidence is {avg_conf:.1%} (< 90%). Triggering Vision OCR fallback...")
-                                vis_extractor = v3.OCRPDFExtractor(pdf_path)
-                                ocr_text, _ = vis_extractor.extract(engine='vision')
-                    
-                    # 2. Save OCR text to the verification folder unconditionally
-                    extracted_text_dir = Path("c:/Users/INT002/pdf_extractor/Unified_PDF_Platform/extracted_text")
-                    extracted_text_dir.mkdir(parents=True, exist_ok=True)
-                    txt_path = extracted_text_dir / f"{Path(pdf_path).stem}_extracted.txt"
-
-                    try:
-                        with open(txt_path, "w", encoding="utf-8") as f:
-                            f.write(ocr_text)
-                        print(f"    -> [Layer] Saved OCR text to {txt_path}")
-                    except Exception as e:
-                        print(f"    -> [Layer][WARN] Could not save OCR text: {e}")
-
-                    # 3. RE-SEGMENT the OCR text to process it in manageable chunks
-                    ocr_chunks = map_and_segment_text(ocr_text)
-                    
-                    # 4. Process all OCR chunks
-                    all_line_items = []
-                    for j, ocr_chunk in enumerate(ocr_chunks):
-                        print(f"    -> [Layer] Processing OCR Chunk {j+1}/{len(ocr_chunks)}...")
-                        ocr_data = v3.extract_fields_with_llm(ocr_chunk["text"] + prompt_hint, client, f"ocr_chunk_{j+1}", detected_carrier=carrier_name, request_id=os.environ.get("AI_MONITOR_REQUEST_ID"))
-                        items = ocr_data.get("LINE_ITEMS", [])
-                        
-                        # [V5][FIX] VISION FALLBACK: If names are missing, use Vision OCR (near-perfect layout)
-                        # We trigger if more than 20% of items are missing names, or if we have > 1 missing name
-                        missing_count = sum(1 for item in items if not item.get("LASTNAME"))
-                        if (missing_count > 1 or (items and missing_count/len(items) > 0.2)) and carrier_name == "bcbs":
-                            print(f"    -> [Layer][ALERT] {missing_count} names missing in OCR chunk. Triggering Vision OCR fallback for layout integrity...")
-                            # Extract just this page with Vision
-                            vis_extractor = v3.OCRPDFExtractor(pdf_path)
-                            # We'd ideally only do the specific page, but for now we do the doc if small
-                            vis_text, _ = vis_extractor.extract(engine='vision')
-                            # Save vis text
-                            try:
-                                with open(txt_path, "w", encoding="utf-8") as f: f.write(vis_text)
-                            except Exception as e:
-                                pass
-                            # Re-process with Vision text
-                            vis_chunks = map_and_segment_text(vis_text)
-                            all_line_items = [] # Reset for Vision
-                            for k, vis_chunk in enumerate(vis_chunks):
-                                print(f"    -> [Layer] Processing Vision Chunk {k+1}/{len(vis_chunks)}...")
-                                vis_data = v3.extract_fields_with_llm(vis_chunk["text"] + prompt_hint, client, f"vis_chunk_{k+1}", detected_carrier=carrier_name, request_id=os.environ.get("AI_MONITOR_REQUEST_ID"))
-                                if vis_data.get("LINE_ITEMS"):
-                                    all_line_items.extend(vis_data["LINE_ITEMS"])
-                            break # Out of OCR chunk loop, we have Vision items
-                        
-                        if items:
-                            all_line_items.extend(items)
-                        
-                        # [FIX] Also capture header from OCR data
-                        ocr_header = ocr_data.get("HEADER", {})
-                        for k, v in ocr_header.items():
-                            if v and str(v).lower() not in ["n/a", "none"]:
-                                final_header[k] = v
-                    
-                    break
-
-                except Exception as e:
-                    print(f"    -> [Layer][ERROR] OCR fallback failed: {e}")
+            # [V6] Per-chunk OCR fallback REMOVED.
+            # PDF type detection + quality gate now runs ONCE at document level
+            # before chunking (PATH A / PATH B logic). This avoids redundant API
+            # calls and repeated full-document Vision scans per chunk.
         
         
         
@@ -416,7 +424,7 @@ def process_with_structural_layer(pdf_path, output_excel=None):
             all_line_items.extend(items)
             print(f"    -> Extracted {len(items)} items")
             
-    # Final assembly and saving
+    # Final assembly and saving — keep both CURRENT_PREMIUM and ADJUSTMENT_PREMIUM on the same row
     data = {"HEADER": final_header, "LINE_ITEMS": all_line_items}
     rows = v3.flatten_extracted_data(data, os.path.basename(pdf_path))
     
