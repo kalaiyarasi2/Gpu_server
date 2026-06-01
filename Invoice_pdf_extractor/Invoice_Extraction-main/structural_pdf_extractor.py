@@ -370,6 +370,7 @@ def process_with_structural_layer(pdf_path, output_excel=None):
                     "\n6. **MULTI-BLOCK LAYOUT**: If labels (Name, ID, SSN) are at the top and amounts are at the bottom, carefully match them by sequence. The first Name/ID corresponds to the first amount, the second to the second, etc."
                     "\n7. Ensure FIRSTNAME and LASTNAME are captured on every single row."
                     "\n8. **HEADER DATA**: You MUST extract INV_DATE and BILLING_PERIOD from the summary pages and document headers."
+                    "\n9. **PLAN NAME CORRECTION**: If the plan name contains 'NFO' or 'INFO' (e.g., 'BLUECARE NFO' or 'BLUECARE INFO'), this is a character misread of 'NFQ'. You MUST correct it to 'NFQ' (e.g., 'BLUECARE NFQ')."
                 )
             elif "Covered California" in pdf_path or "Covered California" in chunk_text:
                 carrier_name = "covered_california"

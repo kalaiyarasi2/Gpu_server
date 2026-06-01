@@ -1495,6 +1495,7 @@ Extract data from the document text provided below.
         - It MUST be at the start.
         - Strip location prefixes (SAND, MARV, BEAC, JAX, CAFE, BAKE).
         - Correct any reversal (e.g., "NFQ... BLUECARE" -> "BLUECARE NFQ...").
+        - If the plan name contains 'NFO' or 'INFO' (e.g., 'BLUECARE NFO' or 'BLUECARE INFO'), this is a character misread of 'NFQ'. You MUST correct it to 'NFQ' (e.g., 'BLUECARE NFQ').
     - **PLAN_TYPE (STRICT NULL)**: For BCBS, leave `PLAN_TYPE` as **NULL**. DO NOT infer "MEDICAL".
     - **MANDATORY DETAIL EXTRACTION**: Extract members ONLY from the subscriber detail tables (e.g., "SECTION 3" or "DETAIL OF SUBSCRIBERS").
     - **GREEDY EXTRACTION**: Capture every row in the detail table. Even if a name was seen in a summary header (e.g., Account Owner "SHARAD SAXTON"), extract it again as a member row if it appears with a Subscriber ID and Premium.
@@ -4029,6 +4030,10 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                             # Extract everything else and put BLUECARE at start
                             other_parts = re.sub(r'BLUECARE', '', pn_clean, flags=re.IGNORECASE).strip()
                             pn_clean = f"BLUECARE {other_parts}"
+                        
+                        # Correct character misreads: NFO/INFO -> NFQ
+                        pn_clean = re.sub(r'\bNFO\b', 'NFQ', pn_clean, flags=re.IGNORECASE)
+                        pn_clean = re.sub(r'\bINFO\b', 'NFQ', pn_clean, flags=re.IGNORECASE)
                         
                         row["PLAN_NAME"] = pn_clean.strip()
                     else:
