@@ -172,7 +172,7 @@ async def health_check():
         "version": API_VERSION,
         "supported_types": ["PDF", "XLSX", "XLS", "CSV"],
         "extract_endpoint": "POST /api/extract  (multipart/form-data, field name: 'file')",
-        "example_curl": 'curl -X POST http://drive1.cognethro.com/api/extract -F "file=@yourfile.pdf"'
+        "example_curl": 'curl -X POST https://drive1.cognethro.com/api/extract -F "file=@yourfile.pdf"'
     }
 
 @app.get("/docs", include_in_schema=False)

@@ -4,11 +4,12 @@ import subprocess
 import json
 import re
 import threading
+import asyncio
 from contextlib import contextmanager
 from pathlib import Path
 from typing import List, Dict, Optional, Any, Union
 import pandas as pd
-from openai import OpenAI
+from openai import OpenAI, AsyncOpenAI
 from dotenv import load_dotenv
 import fitz  # PyMuPDF
 from PIL import Image, ImageEnhance
@@ -734,7 +735,9 @@ RULES:
 
 class UnifiedRouter:
     def __init__(self):
-        self.client = OpenAI(api_key=OPENAI_API_KEY)
+        self.client = AsyncOpenAI(api_key=OPENAI_API_KEY)
+        self.sync_client = OpenAI(api_key=OPENAI_API_KEY)
+        self.semaphore = asyncio.Semaphore(5)  # Limit concurrent extractions to 5 based on 32GB RAM hardware
         
         # Initialize Insurance extractor
         print("\n[STEP] Initializing Extractors...")
@@ -785,6 +788,60 @@ class UnifiedRouter:
         else:
             print("[ERR] Bank Statement Extractor class not found")
             self.bank_extractor = None
+
+    async def _run_subprocess_async(self, cmd, timeout_secs, request_id=None):
+        """Asynchronous wrapper to run process with real-time logging."""
+        print(f"  [Async-Subprocess] Running: {' '.join(cmd)}", flush=True)
+        try:
+            # Prepare environment
+            env = {"PYTHONIOENCODING": "utf-8", "PYTHONUNBUFFERED": "1", **os.environ}
+            if request_id:
+                env["AI_MONITOR_REQUEST_ID"] = str(request_id)
+
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                env=env
+            )
+
+            full_stdout = []
+            full_stderr = []
+
+            async def stream_reader(stream, log_label, collector):
+                while True:
+                    line = await stream.readline()
+                    if not line:
+                        break
+                    decoded_line = line.decode('utf-8', errors='replace').strip()
+                    print(f"    [{log_label}] {decoded_line}", flush=True)
+                    collector.append(decoded_line + "\n")
+
+            # Run readers concurrently
+            try:
+                await asyncio.wait_for(
+                    asyncio.gather(
+                        stream_reader(process.stdout, "OUT", full_stdout),
+                        stream_reader(process.stderr, "ERR", full_stderr)
+                    ),
+                    timeout=timeout_secs
+                )
+                returncode = await process.wait()
+            except asyncio.TimeoutExpired:
+                process.terminate()
+                print(f"  [ERR] Subprocess timed out after {timeout_secs}s")
+                raise
+
+            class ExecutionResult:
+                def __init__(self, stdout, stderr, returncode):
+                    self.stdout = "".join(stdout)
+                    self.stderr = "".join(stderr)
+                    self.returncode = returncode
+            
+            return ExecutionResult(full_stdout, full_stderr, returncode)
+        except Exception as e:
+            print(f"  [ERR] Async Subprocess error: {e}")
+            raise
 
     def _get_bank_extractor_class(self, backend_dir):
         """Dynamic loader for StatementExtractor."""
@@ -1268,7 +1325,7 @@ class UnifiedRouter:
 
         return None, None
 
-    def classify_document(self, file_path, request_id=None):
+    async def classify_document(self, file_path, request_id=None):
         """Layer 1 & 2: Classify type and identify provider.
 
         Accuracy-first redesign:
@@ -1291,7 +1348,9 @@ class UnifiedRouter:
         text = ""
         if file_ext == ".pdf":
             print("\n[STEP] Extracting text snippet for classification...")
-            text = self.extract_snippet(file_path)
+            # extract_snippet is CPU-bound but uses libraries like fitz/pdfplumber
+            # We run it in a thread to avoid blocking the event loop
+            text = await asyncio.to_thread(self.extract_snippet, file_path)
         elif file_ext in [".xlsx", ".xls"]:
             print("\n[STEP] Extracting Excel metadata for classification...")
             try:
@@ -1324,7 +1383,7 @@ class UnifiedRouter:
         if pre_type:
             print(f"[Pre-Classify] Deterministic rule fired → {pre_type} ({pre_reason})")
             # Still run provider ID (cheap, uses already-extracted text)
-            provider = self._identify_provider(filename, text[:2000], request_id=request_id)
+            provider = await self._identify_provider(filename, text[:2000], request_id=request_id)
             print(f"\n[INFO] Classification Result: {pre_type} | Provider: {provider}")
             return pre_type, provider
 
@@ -1375,7 +1434,7 @@ Line 2: Carrier/vendor name or UNKNOWN
 
 OUTPUT:"""
                 start_time_fn = time.time()
-                fn_response = self.client.chat.completions.create(
+                fn_response = await self.client.chat.completions.create(
                     model="gpt-4o-mini",
                     messages=[{"role": "user", "content": filename_prompt}],
                     temperature=0
@@ -1470,7 +1529,7 @@ OUTPUT:"""
         try:
             print("\n[AI] Sending to AI for full classification...")
             start_time = time.time()
-            response = self.client.chat.completions.create(
+            response = await self.client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0,
@@ -1521,7 +1580,7 @@ OUTPUT:"""
             return "INVOICE"
         return None
 
-    def _identify_provider(self, filename: str, text_snippet: str, request_id=None) -> str:
+    async def _identify_provider(self, filename: str, text_snippet: str, request_id=None) -> str:
         """Lightweight provider/carrier identification using the already-extracted snippet."""
         try:
             start_time = time.time()
@@ -1537,7 +1596,7 @@ TEXT SNIPPET:
 {text_snippet or '[No text available]'}
 
 Return ONLY the company name or UNKNOWN:"""
-            prov_response = self.client.chat.completions.create(
+            prov_response = await self.client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[{"role": "user", "content": prov_prompt}],
                 temperature=0
@@ -1835,67 +1894,58 @@ Return ONLY the company name or UNKNOWN:"""
             print(f"  [Merge] Error merging results: {e}")
             return False
 
-    def run_invoice_extractor(self, pdf_path, use_structural=False, request_id=None):
-        """Run the invoice extractor on the PDF.
-        
-        Args:
-            pdf_path: Path to the PDF file
-            use_structural: If True, use the structural analysis layer for better accuracy.
-                          Default is False - use standard extractor first.
-        """
+    async def run_invoice_extractor(self, pdf_path, use_structural=False, request_id=None):
+        """Run the invoice extractor on the PDF (Async)."""
         print("\n" + "="*70)
-        print("[STEP 2] RUNNING INVOICE EXTRACTOR")
+        print("[STEP 2] RUNNING INVOICE EXTRACTOR (ASYNC)")
         print("="*70)
         print(f"[INFO] Input: {pdf_path}")
         
-        # Choose extraction method
-        if use_structural and STRUCTURAL_INVOICE_SCRIPT.exists():
-            print(f"[INFO] Method: Structural Analysis Layer (Enhanced)")
-            print(f"[INFO] Script: {STRUCTURAL_INVOICE_SCRIPT}")
-            script_to_use = STRUCTURAL_INVOICE_SCRIPT
-            output_xlsx = OUTPUT_BASE / f"{Path(pdf_path).stem}_invoice_structural.xlsx"
-        else:
-            print(f"[INFO] Method: Standard Extraction")
-            print(f"[INFO] Script: {INVOICE_SCRIPT}")
-            script_to_use = INVOICE_SCRIPT
-            output_xlsx = OUTPUT_BASE / f"{Path(pdf_path).stem}_invoice.xlsx"
-        
-        print("\n[INFO] Processing... (this may take 30-60 seconds)\n")
-
         # ── Step A: Auto-Chunking for Large Files ────────────────────────────
         try:
-            doc = fitz.open(pdf_path)
+            # We run the PDF page count check in a thread to keep the loop free
+            doc = await asyncio.to_thread(fitz.open, str(pdf_path))
             page_count = len(doc)
             doc.close()
         except Exception as e:
             print(f"  [WARN] Could not determine page count: {e}")
             page_count = 1
 
-        # Only chunk if file is large AND not already a chunk (prevent infinite recursion)
+        # Only chunk if file is large AND not already a chunk
         is_already_chunk = "_chunk_" in str(pdf_path)
         if page_count > 15 and not is_already_chunk:
-            print(f"  [Auto-Chunking] Document has {page_count} pages. Processing in chunks of 15 for stability...")
-            chunks = self._split_pdf_for_processing(pdf_path, chunk_size=15)
-            processed_excels = []
+            print(f"  [Auto-Chunking] Document has {page_count} pages. Processing in chunks of 15 PARALLEL...")
+            chunks = await asyncio.to_thread(self._split_pdf_for_processing, pdf_path, chunk_size=15)
             
-            for i, chunk in enumerate(chunks):
-                print(f"\n  {'─'*10} Processing Chunk {i+1} of {len(chunks)} {'─'*10}")
-                # Process each small chunk using the standard pipeline
-                chunk_res = self.run_invoice_extractor(str(chunk), use_structural=use_structural, request_id=request_id)
-                if "excel" in chunk_res:
-                    processed_excels.append(chunk_res["excel"])
+            async def process_chunk_with_semaphore(chunk_path, idx):
+                async with self.semaphore:
+                    print(f"\n  {'─'*10} Starting Parallel Chunk {idx+1} {'─'*10}")
+                    return await self.run_invoice_extractor(str(chunk_path), use_structural=use_structural, request_id=request_id)
+
+            # Launch all chunks in parallel
+            tasks = [process_chunk_with_semaphore(chunk, i) for i, chunk in enumerate(chunks)]
+            chunk_results = await asyncio.gather(*tasks)
+            
+            processed_excels = []
+            for i, res in enumerate(chunk_results):
+                if "excel" in res:
+                    processed_excels.append(res["excel"])
                 else:
-                    print(f"  [ERR] Chunk {i+1} failed: {chunk_res.get('error')}")
+                    print(f"  [ERR] Chunk {i+1} failed: {res.get('error')}")
             
             if not processed_excels:
                 return {"error": "All document chunks failed to process."}
                 
             # Merge results into a final unified report
             final_output_xlsx = OUTPUT_BASE / f"{Path(pdf_path).stem}_merged_report.xlsx"
-            if self._merge_invoice_results(processed_excels, final_output_xlsx):
-                # Use standard xlsx_to_json for the final merged result
-                json_path = self.xlsx_to_json(final_output_xlsx)
-                print(f"  [OK] Large file processing complete. Merged result: {final_output_xlsx.name}")
+            # Sort processed excels by chunk number to ensure order
+            processed_excels.sort(key=lambda x: int(re.search(r'chunk_(\d+)', str(x)).group(1)) if "_chunk_" in str(x) else 0)
+            
+            merge_success = await asyncio.to_thread(self._merge_invoice_results, processed_excels, final_output_xlsx)
+            
+            if merge_success:
+                json_path = await asyncio.to_thread(self.xlsx_to_json, final_output_xlsx)
+                print(f"  [OK] Parallel processing complete. Merged result: {final_output_xlsx.name}")
                 return {
                     "type": "INVOICE", 
                     "excel": str(final_output_xlsx), 
@@ -1904,420 +1954,223 @@ Return ONLY the company name or UNKNOWN:"""
                     "chunk_count": len(chunks)
                 }
             else:
-                return {"error": "Failed to merge chunked extraction results."}
-        # ──────────────────────────────────────────────────────────────────
+                return {"error": "Failed to merge parallel chunk results."}
 
+        # ── Step B: Single File Extraction ───────────────────────────────────
+        if use_structural and STRUCTURAL_INVOICE_SCRIPT.exists():
+            script_to_use = STRUCTURAL_INVOICE_SCRIPT
+            output_xlsx = OUTPUT_BASE / f"{Path(pdf_path).stem}_invoice_structural.xlsx"
+        else:
+            script_to_use = INVOICE_SCRIPT
+            output_xlsx = OUTPUT_BASE / f"{Path(pdf_path).stem}_invoice.xlsx"
+        
         try:
-            # For structural extractor, pass the output file explicitly
-            if use_structural and script_to_use == STRUCTURAL_INVOICE_SCRIPT:
-                import asyncio
-                if output_xlsx.exists():
-                    output_xlsx.unlink(missing_ok=True)
-                result = self._run_with_logging([sys.executable, str(script_to_use), str(pdf_path), str(output_xlsx)], 3600, request_id=request_id)
-            else:
-                import asyncio
-                result = self._run_with_logging([sys.executable, str(script_to_use), str(pdf_path), str(output_xlsx)], 3600, request_id=request_id)
+            if output_xlsx.exists():
+                output_xlsx.unlink(missing_ok=True)
+            
+            result = await self._run_subprocess_async([sys.executable, str(script_to_use), str(pdf_path), str(output_xlsx)], 3600, request_id=request_id)
             
             if result.returncode != 0:
-                print(f"\n[ERR] Extraction Failed (Exit Code: {result.returncode})")
-                print(f"Error Details:\n{result.stderr}")
                 return {"error": f"Invoice extraction failed: {result.stderr}"}
             
-            print("[OK] Invoice extractor completed successfully!")
-            print("\n[STEP] Verifying generated files...")
-            
             if not output_xlsx.exists():
-                print(f"\n[ERR] Error: Expected Excel output file not found at {output_xlsx}")
-                print(f"   Stdout: {result.stdout}")
                 return {"error": "Excel output not found"}
             
-            # Move the file to unified_outputs for consistency
             final_output = OUTPUT_BASE / output_xlsx.name
             if output_xlsx != final_output:
-                import shutil
-                shutil.copy2(output_xlsx, final_output)
+                await asyncio.to_thread(shutil.copy2, output_xlsx, final_output)
                 output_xlsx = final_output
             
-            print(f"\n[STEP] Excel File: {output_xlsx.name}")
-            print(f"   Location: {output_xlsx}")
-            
-            # Derive the original extractor JSON path (same stem as XLSX but with _invoice.json suffix)
-            # This JSON has INV_TOTAL and other metadata fields that xlsx_to_json strips out.
             orig_json_path = str(output_xlsx).replace(".xlsx", ".json")
-            # Generate the xlsx-derived JSON too (for download only), but use orig for metadata
-            xlsx_json_path = self.xlsx_to_json(output_xlsx)
-            # Prefer original extractor JSON if it exists (has richer metadata e.g. INV_TOTAL)
+            xlsx_json_path = await asyncio.to_thread(self.xlsx_to_json, output_xlsx)
             json_for_metadata = orig_json_path if os.path.exists(orig_json_path) else xlsx_json_path
             return {"type": "INVOICE", "excel": str(output_xlsx), "json": json_for_metadata}
 
-        except subprocess.TimeoutExpired:
-            print(f"\n[ERR] Invoice Extraction Failed: Timeout after 3600 seconds.")
-            return {"error": "Invoice extraction timed out."}
         except Exception as e:
-            print(f"\n[ERR] Invoice Extraction Error: {e}")
             return {"error": str(e)}
 
-    def run_general_invoice_extractor(self, pdf_path, request_id=None):
-        """Run the General Invoice (Vendor) extractor."""
+    async def run_general_invoice_extractor(self, pdf_path, request_id=None):
+        """Run the General Invoice (Vendor) extractor (Async)."""
         print("\n" + "="*70)
-        print("[STEP 2] RUNNING GENERAL INVOICE EXTRACTOR")
+        print("[STEP 2] RUNNING GENERAL INVOICE EXTRACTOR (ASYNC)")
         print("="*70)
         print(f"[INFO] Input: {pdf_path}")
-        print(f"[INFO] Script: {GENERAL_INVOICE_SCRIPT}")
         
         stem = Path(pdf_path).stem
         output_xlsx = OUTPUT_BASE / f"{stem}_invoice_poc_extractor.xlsx"
         output_json = OUTPUT_BASE / f"{stem}_invoice_poc_extractor.json"
         
-        # Instantiate client for dynamic identification
-        if not OPENAI_API_KEY:
-            return {"error": "OPENAI_API_KEY not set (required for invoice_poc_extractor)"}
-        client = OpenAI(api_key=OPENAI_API_KEY)
-
         # 1) Detect whether this PDF contains multiple invoices
         try:
-            # Use the local handle_merge from invoice backend for improved boundary detection
-            if str(GENERAL_INVOICE_BACKEND_DIR) not in sys.path:
-                sys.path.insert(0, str(GENERAL_INVOICE_BACKEND_DIR))
+            # handle_merged_pdf_with_page_texts is CPU/PDF bound
             from handle_merge import handle_merged_pdf_with_page_texts
-            doc = fitz.open(pdf_path)
+            doc = await asyncio.to_thread(fitz.open, pdf_path)
             page_texts = [(doc[i].get_text() or "") for i in range(len(doc))]
             doc.close()
-            ranges, sub_pdfs = handle_merged_pdf_with_page_texts(
+            
+            ranges, sub_pdfs = await asyncio.to_thread(
+                handle_merged_pdf_with_page_texts,
                 pdf_path=pdf_path,
                 page_texts=page_texts,
                 temp_split_root=OUTPUT_BASE / "merged_invoice_splits",
                 header_patterns=MERGED_INVOICE_HEADER_PATTERNS,
-                client=client,
+                client=self.sync_client, # handle_merge likely uses sync client
             )
         except Exception as e:
-            print(f"[WARN] Merge detection failed, falling back to single-pass invoice extraction: {e}")
+            print(f"[WARN] Merge detection failed: {e}")
             ranges, sub_pdfs = ([(0, 0)], [Path(pdf_path)])
 
-        # If not actually merged, run the original subprocess path (unchanged behaviour)
+        # ── SINGLE INVOICE PATH ──────────────────────────────────────────────
         if not sub_pdfs or len(sub_pdfs) <= 1:
             try:
-                import asyncio
-                result = self._run_with_logging(
+                result = await self._run_subprocess_async(
                     [sys.executable, str(GENERAL_INVOICE_SCRIPT), str(pdf_path)],
                     3600,
                     request_id=request_id
                 )
                 if result.returncode != 0:
-                    print(f"\n[ERR] General Invoice Extraction Failed (Exit Code: {result.returncode})")
-                    print(f"Error Details:\n{result.stderr}")
                     return {"error": f"General invoice extraction failed: {result.stderr}"}
 
                 poc_output = Path(pdf_path).with_suffix(".xlsx")
-                if not poc_output.exists():
-                    return {"error": "POC output file not found"}
-
-                import shutil
-                shutil.move(str(poc_output), str(output_xlsx))
+                if poc_output.exists():
+                    await asyncio.to_thread(shutil.move, str(poc_output), str(output_xlsx))
 
                 poc_json = Path(pdf_path).with_suffix(".json")
                 if poc_json.exists():
-                    shutil.move(str(poc_json), str(output_json))
+                    await asyncio.to_thread(shutil.move, str(poc_json), str(output_json))
                 else:
-                    output_json = Path(self.xlsx_to_json(output_xlsx))
-
-                # Single-invoice analysis.json
-                try:
-                    import json as json_lib
-                    with open(output_json, "r", encoding="utf-8") as f:
-                        data = json_lib.load(f)
-                    header = (data or {}).get("HEADER") or {}
-                    total = header.get("TOTAL_AMOUNT", 0) or 0
-                    if isinstance(total, str):
-                        try:
-                            total = float(total.replace(",", "").replace("$", ""))
-                        except Exception:
-                            total = 0.0
-                    total_f = float(total) if isinstance(total, (int, float)) else 0.0
-                    analysis = {
-                        "source_file": Path(pdf_path).name,
-                        "invoice_count": 1,
-                        "invoices": [
-                            {
-                                "invoice_index": 1,
-                                "vendor_name": header.get("VENDOR_NAME"),
-                                "invoice_number": header.get("INVOICE_NUMBER"),
-                                "invoice_date": header.get("DATE"),
-                                "due_date": header.get("DUE_DATE"),
-                                "po_number": header.get("PO_NUMBER"),
-                                "total_amount": total_f,
-                            }
-                        ],
-                        "total_amount_sum": total_f,
-                    }
-                    analysis_path = OUTPUT_BASE / f"{stem}_analysis.json"
-                    with open(analysis_path, "w", encoding="utf-8") as f:
-                        json_lib.dump(analysis, f, indent=2, ensure_ascii=False)
-                except Exception as e:
-                    print(f"[WARN] Could not write invoice analysis.json: {e}")
+                    output_json = Path(await asyncio.to_thread(self.xlsx_to_json, output_xlsx))
 
                 return {"type": "invoice_poc_extractor", "excel": str(output_xlsx), "json": str(output_json)}
             except Exception as e:
-                print(f"\n[ERR] General Invoice Error: {e}")
                 return {"error": str(e)}
 
-        # 2) Merged PDF: process each split sub-PDF and combine outputs
+        # ── MERGED INVOICE PATH (PARALLEL) ───────────────────────────────────
         try:
             from invoice_poc_extractor import process_single_pdf, flatten_data  # type: ignore[import]
 
-            if not OPENAI_API_KEY:
-                return {"error": "OPENAI_API_KEY not set (required for invoice_poc_extractor)"}
-            
-            # Use already instantiated client
+            async def process_sub_pdf(sub_pdf, idx):
+                async with self.semaphore:
+                    # process_single_pdf is synchronous AI/PDF code
+                    return await asyncio.to_thread(process_single_pdf, str(sub_pdf), self.sync_client)
 
-            combined = {
-                "MERGED": True,
-                "SOURCE_FILE": Path(pdf_path).name,
-                "INVOICE_COUNT": len(sub_pdfs),
-                "INVOICES": [],
-            }
+            tasks = [process_sub_pdf(sub_pdf, i) for i, sub_pdf in enumerate(sub_pdfs)]
+            sub_results = await asyncio.gather(*tasks)
 
-            all_rows: List[Dict] = []
-
-            for idx, sub_pdf in enumerate(sub_pdfs, start=1):
-                inv_data = process_single_pdf(str(sub_pdf), client)
+            all_rows = []
+            flat_invoices = []
+            for idx, (inv_data, sub_pdf) in enumerate(zip(sub_results, sub_pdfs), start=1):
                 start_page, end_page = ranges[idx - 1] if idx - 1 < len(ranges) else (None, None)
-
-                combined["INVOICES"].append({
-                    "invoice_index": idx,
-                    "page_range_0_based": [start_page, end_page],
-                    "pdf_path": str(sub_pdf),
-                    "data": inv_data,
-                })
-
-                # Flatten for Excel
-                rows = flatten_data(inv_data, source_file=Path(pdf_path).name)
+                flat_invoices.append(inv_data)
+                
+                rows = await asyncio.to_thread(flatten_data, inv_data, source_file=Path(pdf_path).name)
                 for r in rows:
                     r["INVOICE_INDEX"] = idx
                     r["PAGE_START_0_BASED"] = start_page
                     r["PAGE_END_0_BASED"] = end_page
                     all_rows.append(r)
 
-            # Write combined JSON in "flat" format: array of {HEADER, LINE_ITEMS}
-            flat_invoices = [inv.get("data", {}) for inv in combined.get("INVOICES", [])]
+            # Write combined JSON
             with open(output_json, "w", encoding="utf-8") as f:
                 json.dump(flat_invoices, f, indent=2, ensure_ascii=False)
 
             # Write combined Excel
-            if all_rows:
-                df = pd.DataFrame(all_rows)
-            else:
-                df = pd.DataFrame(
-                    [
-                        {
-                            "SOURCE_FILE": Path(pdf_path).name,
-                            "MERGED": True,
-                            "INVOICE_COUNT": len(sub_pdfs),
-                        }
-                    ]
-                )
-            df.to_excel(output_xlsx, index=False)
-
-            # High-level analysis.json for merged invoices
-            try:
-                analysis_invoices = []
-                total_sum = 0.0
-                for inv in combined.get("INVOICES", []):
-                    data = (inv or {}).get("data") or {}
-                    header = (data or {}).get("HEADER") or {}
-                    ta = header.get("TOTAL_AMOUNT", 0) or 0
-                    if isinstance(ta, str):
-                        try:
-                            ta_clean = float(ta.replace(",", "").replace("$", ""))
-                        except Exception:
-                            ta_clean = 0.0
-                    else:
-                        ta_clean = float(ta or 0)
-                    total_sum += ta_clean
-                    analysis_invoices.append(
-                        {
-                            "invoice_index": inv.get("invoice_index"),
-                            "vendor_name": header.get("VENDOR_NAME"),
-                            "invoice_number": header.get("INVOICE_NUMBER"),
-                            "invoice_date": header.get("DATE"),
-                            "due_date": header.get("DUE_DATE"),
-                            "po_number": header.get("PO_NUMBER"),
-                            "total_amount": ta_clean,
-                        }
-                    )
-
-                analysis = {
-                    "source_file": Path(pdf_path).name,
-                    "invoice_count": len(analysis_invoices),
-                    "invoices": analysis_invoices,
-                    "total_amount_sum": total_sum,
-                }
-                analysis_path = OUTPUT_BASE / f"{stem}_analysis.json"
-                with open(analysis_path, "w", encoding="utf-8") as f:
-                    json.dump(analysis, f, indent=2, ensure_ascii=False)
-            except Exception as e:
-                print(f"[WARN] Could not write merged invoice analysis.json: {e}")
+            df = pd.DataFrame(all_rows) if all_rows else pd.DataFrame([{"SOURCE_FILE": Path(pdf_path).name, "MERGED": True}])
+            await asyncio.to_thread(df.to_excel, output_xlsx, index=False)
 
             return {"type": "invoice_poc_extractor", "excel": str(output_xlsx), "json": str(output_json)}
         except Exception as e:
-            print(f"\n[ERR] General Invoice (Merged) Error: {e}")
-            return {"error": str(e)}
+            return {"error": f"General Invoice (Merged) Error: {e}"}
 
-    def run_insurance_extractor(self, pdf_path, request_id=None):
+    async def run_insurance_extractor(self, pdf_path, request_id=None):
         """Run the insurance extractor using direct module import (preferred) or subprocess fallback."""
         print("\n" + "="*70)
-        print("[STEP 2] RUNNING INSURANCE EXTRACTOR")
+        print("[STEP 2] RUNNING INSURANCE EXTRACTOR (ASYNC)")
         print("="*70)
         print(f"[INFO] Input: {pdf_path}")
         
         # Method 1: Direct module import (PREFERRED)
         if self.insurance_extractor:
-            print(f"[INFO] Method: Direct Module Import (ChunkedInsuranceExtractor)")
-            print("\n[INFO] Processing... (this may take 1-2 minutes)\n")
-            
             try:
-                # Inject request_id into the extractor instance if supported
-                if hasattr(self.insurance_extractor, 'request_id'):
-                    self.insurance_extractor.request_id = self.request_id
+                # process_pdf_with_verification is CPU/AI bound
+                def _run_ins():
+                    if hasattr(self.insurance_extractor, 'request_id'):
+                        self.insurance_extractor.request_id = request_id
+                    with backend_context(INSURANCE_BACKEND_DIR):
+                        return self.insurance_extractor.process_pdf_with_verification(
+                            pdf_path=pdf_path,
+                            target_claim_number=None
+                        )
                 
-                # Call the main processing method within the correct backend context
-                with backend_context(INSURANCE_BACKEND_DIR):
-                    result = self.insurance_extractor.process_pdf_with_verification(
-                        pdf_path=pdf_path,
-                        target_claim_number=None  # Extract all claims
-                    )
-                
-                print("[OK] Insurance extractor completed successfully!")
-                print("\n[STEP] Locating output files...")
-                
-                # Extract session information from result
-                session_id = result.get("session_id")
+                result = await asyncio.to_thread(_run_ins)
                 session_dir = Path(result.get("session_dir"))
                 schema_file = session_dir / "extracted_schema.json"
                 
                 if schema_file.exists():
-                    print(f"\n[OK] Found JSON output: {schema_file.name}")
-                    print(f"   Location: {schema_file}")
-                    print("\n[STEP] Converting JSON to Excel...")
-                    excel_path = self.json_to_xlsx(schema_file)
-                    if excel_path:
-                        print(f"[OK] Excel File: {Path(excel_path).name}")
-                    else:
-                        print(f"[ERR] JSON to Excel conversion returned None")
-                    print("\n" + "="*70)
-                    print("[OK] INSURANCE EXTRACTION COMPLETE")
-                    print("="*70)
+                    excel_path = await asyncio.to_thread(self.json_to_xlsx, schema_file)
                     return {
                         "type": "INSURANCE_CLAIMS",
                         "json": str(schema_file),
                         "excel": excel_path,
-                        "session_id": session_id,
+                        "session_id": result.get("session_id"),
                         "session_dir": str(session_dir)
                     }
                 else:
-                    print(f"\n[ERR] Error: Expected schema file not found at {schema_file}")
                     return {"error": "Schema file not found after extraction"}
-                    
             except Exception as e:
-                print(f"\n[ERR] Insurance Extraction Error: {e}")
-                import traceback
-                traceback.print_exc()
                 return {"error": f"Insurance extraction failed: {str(e)}"}
         
-        # Method 2: Subprocess fallback (if module import failed)
+        # Method 2: Subprocess fallback
         else:
-            print(f"[INFO] Method: Subprocess (Fallback)")
-            print(f"[INFO] Script: {INSURANCE_SCRIPT}")
-            print("\n[INFO] Processing... (this may take 1-2 minutes)\n")
-            
-            import asyncio
-            result = self._run_with_logging(
-                [sys.executable, str(INSURANCE_SCRIPT), str(pdf_path)],
-                900
-            )
-            
+            result = await self._run_subprocess_async([sys.executable, str(INSURANCE_SCRIPT), str(pdf_path)], 1800, request_id=request_id)
             if result.returncode == 0:
-                print("[OK] Insurance extractor completed successfully!")
-                print("\n[STEP] Searching for most recent extraction folder...")
                 insurance_out_dir = INSURANCE_SCRIPT.parent / "outputs"
-                
                 if insurance_out_dir.exists():
                     folders = list(insurance_out_dir.glob("extraction_*"))
                     if folders:
                         folders.sort(key=lambda x: x.stat().st_mtime, reverse=True)
-                        latest_folder = folders[0]
-                        schema_json = latest_folder / "extracted_schema.json"
-                        
+                        schema_json = folders[0] / "extracted_schema.json"
                         if schema_json.exists():
-                            print(f"[OK] Found JSON output: {schema_json.name}")
-                            print(f"   Location: {schema_json}")
-                            print("\n[STEP] Converting JSON to Excel...")
-                            excel_path = self.json_to_xlsx(schema_json)
-                            if excel_path:
-                                print(f"[OK] Excel File: {Path(excel_path).name}")
-                            else:
-                                print(f"[ERR] JSON to Excel conversion returned None")
-                            print("\n" + "="*70)
-                            print("[OK] INSURANCE EXTRACTION COMPLETE")
-                            print("="*70)
+                            excel_path = await asyncio.to_thread(self.json_to_xlsx, schema_json)
                             return {"type": "INSURANCE_CLAIMS", "json": str(schema_json), "excel": excel_path}
-                
-                print("\n[ERR] Error: Could not find output JSON.")
-                return {"error": "Output JSON not found", "stdout": result.stdout}
-            else:
-                print(f"\n[ERR] Insurance Extraction Failed (Exit Code: {result.returncode})")
-                print(f"Error Details:\n{result.stderr}")
-                return {"error": result.stderr}
+                return {"error": "Output JSON not found"}
+            return {"error": result.stderr}
 
-    def run_work_compensation_extractor(self, pdf_path, request_id=None):
+    async def run_work_compensation_extractor(self, pdf_path, request_id=None):
         """Run the work compensation extractor using direct module import."""
         print("\n" + "="*70)
-        print("[STEP] RUNNING WORK COMPENSATION EXTRACTOR")
+        print("[STEP] RUNNING WORK COMPENSATION EXTRACTOR (ASYNC)")
         print("="*70)
-        print(f"📂 Input: {pdf_path}")
         
         if self.work_comp_extractor:
-            print(f"🔧 Method: Direct Module Import (WorkCompExtractor)")
-            print("\n⏳ Processing... (this may take 1-2 minutes)\n")
-            
             try:
-                # Inject request_id into the extractor instance if supported
-                if hasattr(self.work_comp_extractor, 'request_id'):
-                    self.work_comp_extractor.request_id = self.request_id
+                def _run_wc():
+                    if hasattr(self.work_comp_extractor, 'request_id'):
+                        self.work_comp_extractor.request_id = request_id
+                    with backend_context(WORK_COMP_BACKEND_DIR):
+                        return self.work_comp_extractor.process_pdf_with_verification(
+                            pdf_path=pdf_path,
+                            target_claim_number=None
+                        )
                 
-                # Call the main processing method within the correct backend context
-                with backend_context(WORK_COMP_BACKEND_DIR):
-                    result = self.work_comp_extractor.process_pdf_with_verification(
-                        pdf_path=pdf_path,
-                        target_claim_number=None
-                    )
-                
-                print("[OK] Work Compensation extractor completed successfully!")
-                
-                # Extract session information
+                result = await asyncio.to_thread(_run_wc)
                 session_dir = Path(result.get("session_dir"))
                 schema_file = session_dir / "extracted_schema.json"
                 
                 if schema_file.exists():
-                    # Use the specialized Workers' Comp flattener for multi-sheet output
-                    excel_path = self.flatten_workers_comp_to_excel(schema_file)
+                    excel_path = await asyncio.to_thread(self.flatten_workers_comp_to_excel, schema_file)
                     return {
                         "type": "WORK_COMPENSATION",
                         "json": str(schema_file),
                         "excel": excel_path,
                         "session_dir": str(session_dir)
                     }
-                else:
-                    return {"error": "Schema file not found after extraction"}
-                    
+                return {"error": "Schema file not found after extraction"}
             except Exception as e:
-                print(f"\n❌ Work Comp Extraction Error: {e}")
                 return {"error": f"Work Comp extraction failed: {str(e)}"}
-        else:
-            print("\n[ERR] Error: Work Comp Extractor not initialized.")
-            return {"error": "Work Comp Extractor not available"}
+        return {"error": "Work Comp Extractor not available"}
 
-    def run_bank_statement_extractor(self, pdf_path, request_id=None):
+    async def run_bank_statement_extractor(self, pdf_path, request_id=None):
         """Run the bank statement extractor using direct module import."""
         print("\n" + "="*70)
         print("[STEP] RUNNING BANK STATEMENT EXTRACTOR")
@@ -2493,7 +2346,7 @@ Return ONLY the company name or UNKNOWN:"""
         print(f"[ID-OCR] Final snippet ready: {len(final)} chars")
         return final
 
-    def run_identification_extractor(self, pdf_path, request_id=None):
+    async def run_identification_extractor(self, pdf_path, request_id=None):
         """Extract personal information from IDs (Passport, DL, SSN) using gpt-4.1-mini."""
         print("\n" + "="*70)
         print("[STEP] RUNNING IDENTIFICATION EXTRACTOR")
@@ -2525,7 +2378,7 @@ Return ONLY the company name or UNKNOWN:"""
             """
 
             start_time = time.time()
-            response = self.client.chat.completions.create(
+            response = await self.client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
@@ -2748,11 +2601,11 @@ Return ONLY the company name or UNKNOWN:"""
         except Exception as e:
             return False, str(e)
 
-    def process(self, file_path, request_id=None):
-        """Main entry point: 7-Layer Processing Pipeline."""
+    async def process(self, file_path, request_id=None):
+        """Main entry point: 7-Layer Processing Pipeline (Async)."""
         self.request_id = request_id
         print("\n" + "="*70)
-        print("[STEP] UNIFIED PDF INTELLIGENT ROUTER (7-LAYER VERSION)")
+        print("[STEP] UNIFIED PDF INTELLIGENT ROUTER (ASYNC 7-LAYER)")
         print("="*70)
         file_path = Path(file_path)
         print(f"[INFO] Input: {file_path.name}")
@@ -2769,7 +2622,7 @@ Return ONLY the company name or UNKNOWN:"""
         if file_ext == ".pdf":
             try:
                 import fitz
-                doc = fitz.open(str(file_path))
+                doc = await asyncio.to_thread(fitz.open, str(file_path))
                 num_pages = len(doc)
                 doc.close()
             except Exception:
@@ -2784,10 +2637,10 @@ Return ONLY the company name or UNKNOWN:"""
             if file_ext == ".pdf":
                 print("\n[STEP] NORMALIZING PDF (ORIENTATION & ROTATION)...")
                 # We save a corrected copy for all downstream stages (classification + extraction)
-                working_path = Path(self._detect_rotation_and_fix(str(file_path), tmp_dir))
+                working_path = Path(await asyncio.to_thread(self._detect_rotation_and_fix, str(file_path), tmp_dir))
             
             # Step 1: Classify (Layer 1 & 2)
-            doc_type, provider = self.classify_document(str(working_path), request_id=request_id)
+            doc_type, provider = await self.classify_document(str(working_path), request_id=request_id)
             
             if doc_type == "UNKNOWN":
                 print("\n" + "="*70)
@@ -2807,7 +2660,7 @@ Return ONLY the company name or UNKNOWN:"""
                 # Layer 4: Format-Specific Extraction
                 if file_ext in [".xlsx", ".xls", ".csv"]:
                     extractor = ExcelExtractor(output_base=OUTPUT_BASE, request_id=self.request_id)
-                    excel_path = extractor.process(working_path)
+                    excel_path = await asyncio.to_thread(extractor.process, working_path)
                     
                     if isinstance(excel_path, dict) and "error" in excel_path:
                         # ExcelExtractor returned a graceful failure
@@ -2816,13 +2669,13 @@ Return ONLY the company name or UNKNOWN:"""
                         result = {
                             "type": "INVOICE",
                             "excel": excel_path,
-                            "json": self.xlsx_to_json(Path(excel_path))
+                            "json": await asyncio.to_thread(self.xlsx_to_json, Path(excel_path))
                         }
                     else:
                         result = {"error": "Excel/CSV extraction failed to yield structured data"}
                 else:
                     # TRY 1: Standard Extractor (PDF)
-                    result = self.run_invoice_extractor(str(working_path), use_structural=False, request_id=request_id)
+                    result = await self.run_invoice_extractor(str(working_path), use_structural=False, request_id=request_id)
                     
                     # FALLBACK: If standard extraction yielded no data or failed, try structural
                     should_fallback = False
@@ -2850,7 +2703,7 @@ Return ONLY the company name or UNKNOWN:"""
                         should_fallback = True
                     else:
                         try:
-                            df = pd.read_excel(result["excel"])
+                            df = await asyncio.to_thread(pd.read_excel, result["excel"])
                             if len(df) <= 1: # Only header or empty
                                 should_fallback = True
                             
@@ -2864,40 +2717,40 @@ Return ONLY the company name or UNKNOWN:"""
                     
                     if should_fallback:
                         print("\n[WARN] Standard extraction yielded insufficient results. Falling back to Structural Layer...")
-                        structural_result = self.run_invoice_extractor(str(working_path), use_structural=True, request_id=request_id)
+                        structural_result = await self.run_invoice_extractor(str(working_path), use_structural=True, request_id=request_id)
                         if "error" not in structural_result:
                             result = structural_result
                         else:
                             print(f"[ERR] Structural fallback also failed: {structural_result.get('error')}")
 
             elif doc_type == "invoice_poc_extractor":
-                result = self.run_general_invoice_extractor(str(working_path), request_id=request_id)
+                result = await self.run_general_invoice_extractor(str(working_path), request_id=request_id)
 
             elif doc_type == "INSURANCE_CLAIMS":
                 if file_ext in [".xlsx", ".xls", ".csv"]:
                     print(f"[INFO] Routing Claim Spreadsheet to Structured Extractor...")
                     extractor = ExcelExtractor(output_base=OUTPUT_BASE, request_id=self.request_id)
-                    excel_path = extractor.process(working_path)
+                    excel_path = await asyncio.to_thread(extractor.process, working_path)
 
                     if excel_path:
                         result = {
                             "type": "INSURANCE_CLAIMS",
                             "excel": excel_path,
-                            "json": self.xlsx_to_json(Path(excel_path))
+                            "json": await asyncio.to_thread(self.xlsx_to_json, Path(excel_path))
                         }
                     else:
                         result = {"error": "Excel/CSV claim extraction failed to yield structured data"}
                 elif file_ext == ".pdf":
-                    result = self.run_insurance_extractor(str(working_path), request_id=request_id)
+                    result = await self.run_insurance_extractor(str(working_path), request_id=request_id)
                 else:
                      print(f"[ERR] Insurance extractor called for {file_ext} file. Not supported yet.")
                      result = {"error": "Insurance extraction (Loss Runs/Claims) currently only supports PDF or common spreadsheet formats (XLSX, CSV)."}
             elif doc_type == "WORK_COMPENSATION":
-                result = self.run_work_compensation_extractor(str(working_path), request_id=request_id)
+                result = await self.run_work_compensation_extractor(str(working_path), request_id=request_id)
             elif doc_type == "BANK_STATEMENT":
-                result = self.run_bank_statement_extractor(str(working_path), request_id=request_id)
+                result = await self.run_bank_statement_extractor(str(working_path), request_id=request_id)
             elif doc_type == "IDENTIFICATION":
-                result = self.run_identification_extractor(str(working_path), request_id=request_id)
+                result = await self.run_identification_extractor(str(working_path), request_id=request_id)
             else:
                 result = {"error": f"Unsupported document type: {doc_type}"}
             
@@ -2933,10 +2786,13 @@ if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("Usage: python unified_router.py <pdf_path>")
         sys.exit(1)
-    
-    router = UnifiedRouter()
-    result = router.process(sys.argv[1])
-    print("\n" + "="*50)
-    print("UNIFIED ROUTER RESULT")
-    print("="*50)
-    print(json.dumps(result, indent=2))
+
+    async def main():
+        router = UnifiedRouter()
+        result = await router.process(sys.argv[1])
+        print("\n" + "="*50)
+        print("UNIFIED ROUTER RESULT")
+        print("="*50)
+        print(json.dumps(result, indent=2))
+
+    asyncio.run(main())

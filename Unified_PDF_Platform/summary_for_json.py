@@ -170,7 +170,8 @@ class UniversalDocumentAnalyzer:
             stats = self._calculate_claims_statistics(items)
             total_paid = stats["total_medical_paid"] + stats["total_indemnity_paid"] + stats["total_expense_paid"]
             total_reserves = stats["total_medical_reserve"] + stats["total_indemnity_reserve"] + stats["total_expense_reserve"]
-            average_claim = round(total_paid / stats["total_claims"], 2) if stats["total_claims"] > 0 else 0.0
+            # Calculate average based on Total Incurred as requested
+            average_claim = round(stats["total_incurred"] / stats["total_claims"], 2) if stats["total_claims"] > 0 else 0.0
             
             context_stats = f"""
 DOC_TYPE: Insurance Claims

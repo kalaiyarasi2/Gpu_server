@@ -67,9 +67,9 @@ async def _perform_extraction(file: UploadFile, request: Request):
             shutil.copyfileobj(file.file, buffer)
         logger.info(f"[Unified][API] Saved to: {file_path}")
 
-        # Run the unified router (async via threadpool)
+        # Run the unified router (Async)
         logger.info(f"[Unified][API] Routing document...")
-        result = await run_in_threadpool(router_engine.process, str(file_path), request_id=request_id)
+        result = await router_engine.process(str(file_path), request_id=request_id)
 
         if "error" in result:
             logger.warning(f"[Unified][WARN] Extraction returned error: {result['error']}")
@@ -99,7 +99,7 @@ async def _perform_extraction(file: UploadFile, request: Request):
         
         # Build base URL for downloads (respect public host if proxied)
         # [MODIFIED] Force production domain as requested by user
-        base_url = "http://drive1.cognethro.com"
+        base_url = "https://drive1.cognethro.com"
         
         # Build base response with clickable URLs
         response = {

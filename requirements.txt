@@ -24,5 +24,4 @@ pandas
 openpyxl
 
 # Monitoring & Database
-sqlite3  # Usually built-in
 httpx

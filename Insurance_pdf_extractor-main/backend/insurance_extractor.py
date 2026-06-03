@@ -193,24 +193,28 @@ class EnhancedInsuranceExtractor:
     def extract_text_from_pdf(self, pdf_path: str, is_scanned: Optional[bool] = None) -> Tuple[str, List[Dict]]:
         """
         Extract text from PDF using detection and appropriate extraction method.
+        MODIFIED: Always prioritizes Rostaing-OCR (GPU) for layout preservation.
         """
-        from pdf_detector import PDFDetector
+        # from pdf_detector import PDFDetector  # Commented out to bypass detection
         from config import config
         
         try:
-            if is_scanned is None:
-                print(f"🔍 Detecting PDF type...")
-                detector = PDFDetector(pdf_path)
-                is_scanned = detector.is_scanned()
-            else:
-                print(f"🔍 PDF type already identified: {'Scanned' if is_scanned else 'Digital'}")
+            # if is_scanned is None:
+            #     print(f"🔍 Detecting PDF type...")
+            #     detector = PDFDetector(pdf_path)
+            #     is_scanned = detector.is_scanned()
+            # else:
+            #     print(f"🔍 PDF type already identified: {'Scanned' if is_scanned else 'Digital'}")
+            
+            # FORCE SCANNED/GPU PATH
+            is_scanned = True 
             
             # Check if we should use Vision for scanned PDFs
             use_vision = getattr(config, 'OCR_ENGINE', 'tesseract') == 'vision'
             
             # STAGE 2 & 3: OCR Fallback (Schema -> Tesseract -> Vision)
             if is_scanned:
-                print(f"📸 SCANNED PDF DETECTED: Starting OCR Pipeline...")
+                print(f"🚀 ROSTAING-OCR PRIORITY: Starting GPU Extraction Pipeline...")
                 
                 # FIRST ATTEMPT: Rostaing-OCR (SchemaOCRExtractor)
                 try:
@@ -247,10 +251,12 @@ class EnhancedInsuranceExtractor:
                     dpi=getattr(config, 'OCR_DPI', 600),
                     psm_mode=getattr(config, 'OCR_PSM_MODE', 3)
                 )
-            else:
-                print(f"📄 DIGITAL PDF DETECTED: Stage 1 (Hybrid Native Extraction)...")
-                from pdf_plumber import extract_pdf_hybrid
-                text, metadata, info = extract_pdf_hybrid(pdf_path)
+            # else:
+            #     print(f"📄 DIGITAL PDF DETECTED: Stage 1 (Hybrid Native Extraction)...")
+            #     from pdf_plumber import extract_pdf_hybrid
+            #     text, metadata, info = extract_pdf_hybrid(pdf_path)
+            #     ... (code commented out below) ...
+
                 
                 # Check quality and detect reversal in native extraction
                 from text_quality_verifier import TextQualityVerifier

@@ -1,0 +1,70 @@
+# Use Windows-based Python image
+FROM python:3.11-windowsservercore-ltsc2022
+
+# Set working directory
+WORKDIR C:/app
+
+# Install System Dependencies (Tesseract and Poppler)
+# We use PowerShell for easier downloads and unzipping
+SHELL ["powershell", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
+
+# 0. Install Visual C++ Redistributable (Required for PyMuPDF/fitz)
+RUN Invoke-WebRequest -Uri "https://aka.ms/vs/17/release/vc_redist.x64.exe" -OutFile "vc_redist.exe"; \
+    Start-Process vc_redist.exe -ArgumentList '/quiet', '/install' -Wait; \
+    Remove-Item vc_redist.exe
+
+# 1. Install Tesseract OCR
+RUN Invoke-WebRequest -Uri "https://github.com/UB-Mannheim/tesseract/releases/download/v5.4.0.20240606/tesseract-ocr-w64-setup-5.4.0.20240606.exe" -OutFile "tess_setup.exe"; \
+    Start-Process tess_setup.exe -ArgumentList '/S' -Wait; \
+    Remove-Item tess_setup.exe; \
+    $oldPath = [Environment]::GetEnvironmentVariable('Path', [EnvironmentVariableTarget]::Machine); \
+    [Environment]::SetEnvironmentVariable('Path', $oldPath + ';C:\Program Files\Tesseract-OCR', [EnvironmentVariableTarget]::Machine)
+
+# 2. Install Poppler
+RUN Invoke-WebRequest -Uri "https://github.com/oschwartz10612/poppler-windows/releases/download/v24.07.0-0/Release-24.07.0-0.zip" -OutFile "poppler.zip"; \
+    Expand-Archive poppler.zip -DestinationPath C:\poppler_temp; \
+    $binDir = Get-ChildItem -Path C:\poppler_temp -Filter "bin" -Recurse | Where-Object { $_.FullName -like '*Library\bin*' } | Select-Object -First 1; \
+    if ($binDir) { \
+        $popplerRoot = $binDir.Parent.Parent.FullName; \
+        New-Item -ItemType Directory -Force -Path C:\poppler; \
+        Move-Item -Path "$popplerRoot\*" -Destination C:\poppler -Force; \
+    } else { \
+        Move-Item -Path C:\poppler_temp\* -Destination C:\poppler -Force; \
+    } \
+    Remove-Item -Path C:\poppler_temp -Recurse -Force; \
+    Remove-Item poppler.zip; \
+    $oldPath = [Environment]::GetEnvironmentVariable('Path', [EnvironmentVariableTarget]::Machine); \
+    [Environment]::SetEnvironmentVariable('Path', $oldPath + ';C:\poppler\Library\bin', [EnvironmentVariableTarget]::Machine)
+
+# Copy the entire project
+COPY . .
+
+# Install Python dependencies
+# We install CUDA-enabled PyTorch first to ensure it's the primary version
+RUN python -m pip install --no-cache-dir --upgrade pip; \
+    python -m pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121; \
+    pip install --no-cache-dir -r Unified_PDF_Platform/requirements.txt; \
+    if (Test-Path Email_pipeline/requirements.txt) { pip install --no-cache-dir -r Email_pipeline/requirements.txt }; \
+    if (Test-Path requirements.txt) { pip install --no-cache-dir -r requirements.txt }; \
+    pip uninstall -y opencv-python; \
+    pip install --no-cache-dir opencv-python-headless; \
+    if (Test-Path hardware_profile.json) { Remove-Item hardware_profile.json }
+
+# Create necessary directories
+RUN New-Item -ItemType Directory -Force -Path "Unified_PDF_Platform\uploads"; \
+    New-Item -ItemType Directory -Force -Path "Unified_PDF_Platform\unified_outputs"; \
+    New-Item -ItemType Directory -Force -Path "outputs"
+
+# Inject NVIDIA DLLs for GPU passthrough
+COPY nvidia_dlls/nvcuda.dll C:/Windows/System32/nvcuda.dll
+COPY nvidia_dlls/nvcuda64.dll C:/Windows/System32/nvcuda64.dll
+
+# Expose the port
+EXPOSE 8007
+
+# Set environment variables for the app to find Tesseract/Poppler if needed
+ENV TESSERACT_PATH="C:\Program Files\Tesseract-OCR\tesseract.exe"
+ENV POPPLER_PATH="C:\poppler\Library\bin"
+
+# Start the application
+CMD ["python", "Unified_PDF_Platform/unified_app.py"]
