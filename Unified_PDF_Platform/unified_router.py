@@ -2706,6 +2706,85 @@ Return ONLY the company name or UNKNOWN:"""
         except Exception as e:
             return False, str(e)
 
+    def _save_extracted_text_compulsorily(self, file_path, working_path, result):
+        """Compulsorily saves or copies the extracted text of the document to the extracted_text directory."""
+        try:
+            file_path = Path(file_path)
+            working_path = Path(working_path)
+            stem = file_path.stem
+            
+            dest_dir = BASE_DIR / "extracted_text"
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            dest_path = dest_dir / f"{stem}_extracted.txt"
+            
+            copied = False
+            
+            # 1. Check if the result has session_dir (Claims, Work Comp, Bank Statement)
+            if isinstance(result, dict) and result.get("session_dir"):
+                session_dir = Path(result["session_dir"])
+                src_txt = session_dir / "extracted_text.txt"
+                if src_txt.exists():
+                    import shutil
+                    shutil.copy2(src_txt, dest_path)
+                    print(f"[Unified][Router] Saved extracted text from session_dir to: {dest_path}")
+                    copied = True
+            
+            # 2. Check for standard invoice extractor text file options
+            if not copied:
+                src_txt_options = [
+                    working_path.parent / f"{stem}_raw_extracted.txt",
+                    working_path.parent / f"{stem}_extracted.txt",
+                    working_path.parent / f"{stem}_extracted_text.txt",
+                    file_path.parent / f"{stem}_raw_extracted.txt",
+                    file_path.parent / f"{stem}_extracted.txt",
+                    file_path.parent / f"{stem}_extracted_text.txt",
+                ]
+                for src_txt in src_txt_options:
+                    if src_txt.exists():
+                        import shutil
+                        shutil.copy2(src_txt, dest_path)
+                        print(f"[Unified][Router] Copied standard text file to: {dest_path}")
+                        copied = True
+                        break
+            
+            # 3. Check for general/vendor invoice extractor text file
+            if not copied:
+                src_txt_options = [
+                    working_path.parent / f"{stem}_extracted_text.txt",
+                    file_path.parent / f"{stem}_extracted_text.txt",
+                ]
+                for src_txt in src_txt_options:
+                    if src_txt.exists():
+                        import shutil
+                        shutil.copy2(src_txt, dest_path)
+                        print(f"[Unified][Router] Copied general invoice text to: {dest_path}")
+                        copied = True
+                        break
+
+            # 4. Fallback: Extract text directly from the PDF if it's a PDF
+            if not copied and file_path.suffix.lower() == ".pdf":
+                print(f"[Unified][Router] No text file found for PDF. Extracting text directly for saving...")
+                try:
+                    import fitz
+                    # Use working_path (rotated/normalized) if it exists, otherwise file_path
+                    pdf_to_use = working_path if working_path.exists() else file_path
+                    doc = fitz.open(str(pdf_to_use))
+                    text_parts = []
+                    for page in doc:
+                        text_parts.append(page.get_text() or "")
+                    doc.close()
+                    text = "\n\n".join(text_parts)
+                    
+                    with open(dest_path, "w", encoding="utf-8") as f:
+                        f.write(text)
+                    print(f"[Unified][Router] Direct PDF text extracted and saved to: {dest_path}")
+                    copied = True
+                except Exception as ext_err:
+                    print(f"[Unified][Router][WARN] Failed to extract text directly: {ext_err}")
+                    
+        except Exception as e:
+            print(f"[Unified][Router][WARN] Failed to compulsorily save extracted text: {e}")
+
     def process(self, file_path, request_id=None):
         """Main entry point: 7-Layer Processing Pipeline."""
         self.request_id = request_id
@@ -2784,6 +2863,12 @@ Return ONLY the company name or UNKNOWN:"""
                     is_gis23 = False
                     is_angle = False
                     is_uhc = False
+                    is_legal_shield = False
+                    filename_lower = os.path.basename(file_path).lower()
+                    if (provider and ("LEGAL" in provider.upper() or "SHIELD" in provider.upper())) or \
+                       "legal shield" in filename_lower or "legalshield" in filename_lower:
+                        is_legal_shield = True
+                        print("[INFO] Legal Shield invoice detected proactively.")
                     try:
                         import pdfplumber
                         with pdfplumber.open(working_path) as pdf:
@@ -2805,9 +2890,18 @@ Return ONLY the company name or UNKNOWN:"""
                     should_fallback = False
                     result = {"error": "Skipped standard extraction"}
                     
-                    if is_guardian or is_gis23 or is_angle or is_uhc:
+                    if is_guardian or is_gis23 or is_angle or is_uhc or is_legal_shield:
                          should_fallback = True
-                         reason = "Guardian" if is_guardian else ("Angle" if is_angle else ("UHC" if is_uhc else "GIS 23"))
+                         if is_guardian:
+                             reason = "Guardian"
+                         elif is_angle:
+                             reason = "Angle"
+                         elif is_uhc:
+                             reason = "UHC"
+                         elif is_legal_shield:
+                             reason = "LegalShield"
+                         else:
+                             reason = "GIS 23"
                          print(f"[WARN] {reason} invoice: Skipping Standard Extractor and forcing Structural layer for maximum accuracy...")
                     else:
                         # TRY 1: Standard Extractor (PDF)
@@ -2886,6 +2980,9 @@ Return ONLY the company name or UNKNOWN:"""
                 result.setdefault("type", doc_type)
                 result.setdefault("provider", provider)
                 result.setdefault("pages", num_pages)
+            
+            # Save extracted text compulsorily before cleanup of temp directory
+            self._save_extracted_text_compulsorily(file_path, working_path, result)
                 
             return result
 

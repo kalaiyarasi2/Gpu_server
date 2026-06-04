@@ -220,19 +220,20 @@ def process_with_structural_layer(pdf_path, output_excel=None):
     # This is FREE — uses PyMuPDF only, no API call.
     # =========================================================================
     is_kcl = "KCL" in pdf_path or "Kansas City Life" in pdf_path
+    is_legalshield = "LEGALSHIELD" in pdf_path.upper() or "LEGAL SHIELD" in pdf_path.upper()
     pdf_type = detect_pdf_type(pdf_path)
     
     extracted_text_dir = Path("c:/Users/INT002/pdf_extractor/Unified_PDF_Platform/extracted_text")
     extracted_text_dir.mkdir(parents=True, exist_ok=True)
     initial_text_path = extracted_text_dir / f"{Path(pdf_path).stem}_extracted.txt"
 
-    if pdf_type == 'scanned':
+    if pdf_type == 'scanned' or is_legalshield:
         # =====================================================================
-        # PATH A: SCANNED PDF
-        # The PDF is image-only — standard text extraction returns nothing.
+        # PATH A: SCANNED PDF / FORCED VISION OCR
+        # The PDF is image-only or requires high-fidelity layout preservation.
         # Route directly to GPT-4o Vision OCR with Markdown table enforcement.
         # =====================================================================
-        print("  [PATH A] Scanned PDF detected -> Running GPT-4o Vision OCR + Markdown...")
+        print("  [PATH A] Scanned PDF or Forced LegalShield -> Running GPT-4o Vision OCR + Markdown...")
         vis_extractor = v3.OCRPDFExtractor(pdf_path)
         text, _ = vis_extractor.extract(engine='vision')
         print(f"  [PATH A] Vision OCR complete. Extracted {len(text)} chars.")
@@ -389,6 +390,17 @@ def process_with_structural_layer(pdf_path, output_excel=None):
                     "\n3. Extract all package savings credits and fees as standalone line items."
                     "\n4. If a single row has BOTH a charge and an adjustment, output them BOTH in the SAME single JSON record (populate both CURRENT_PREMIUM and ADJUSTMENT_PREMIUM)."
                 )
+            elif "LEGALSHIELD" in pdf_path.upper() or "LEGAL SHIELD" in pdf_path.upper() or "LEGAL SHIELD" in chunk_text.upper() or "LEGALSHIELD" in chunk_text.upper():
+                carrier_name = "legal_shield"
+                prompt_hint = (
+                    "\n[CRITICAL INSTRUCTIONS FOR LEGAL SHIELD]"
+                    "\n1. **ADJUSTMENT LOGIC (CRITICAL)**: If a member row contains a date (e.g., `01/15/2026`), the amount in that row MUST be placed in `ADJUSTMENT_PREMIUM` and `CURRENT_PREMIUM` MUST be NULL."
+                    "\n2. **CURRENT PREMIUM LOGIC**: If a member row has NO date (or only the global invoice date copied down), the amount MUST be placed in `CURRENT_PREMIUM`."
+                    "\n3. **MEMBERID PREFIX PLAN MAPPING**:"
+                    "\n   - Member IDs starting with **101** -> PLAN_NAME: 'Legal Plan', PLAN_TYPE: 'VOLUNTARY'"
+                    "\n   - Member IDs starting with **700** -> PLAN_NAME: 'Identity Theft Plan', PLAN_TYPE: 'VOLUNTARY'"
+                    "\n4. Preserve any row-level date in the `INV_DATE` field for that line item."
+                )
 
         
             
@@ -425,6 +437,11 @@ def process_with_structural_layer(pdf_path, output_excel=None):
             all_line_items.extend(items)
             print(f"    -> Extracted {len(items)} items")
             
+    # Apply LegalShield normalization if detected
+    if is_legalshield:
+        inv_date = final_header.get("INV_DATE")
+        all_line_items = v3.normalize_legal_shield_data(all_line_items, invoice_date=inv_date)
+        
     # Final assembly and saving — keep both CURRENT_PREMIUM and ADJUSTMENT_PREMIUM on the same row
     data = {"HEADER": final_header, "LINE_ITEMS": all_line_items}
     rows = v3.flatten_extracted_data(data, os.path.basename(pdf_path))

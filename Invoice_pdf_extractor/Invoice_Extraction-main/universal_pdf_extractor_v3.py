@@ -299,7 +299,7 @@ def normalize_uhc_coverage(items: list) -> list:
                 item["COVERAGE"] = UHC_COVERAGE_MAP[key]
     return items
 
-def normalize_legal_shield_data(items: list) -> list:
+def normalize_legal_shield_data(items: list, invoice_date: str = None) -> list:
     """
     Post-process Legal Shield line items:
     1. Map Plan Name based on Member ID prefix:
@@ -309,6 +309,14 @@ def normalize_legal_shield_data(items: list) -> list:
        - If a row has a date (e.g. 01/15/2026), it is an ADJUSTMENT_PREMIUM.
        - If a row has no date, it is a CURRENT_PREMIUM.
     """
+    # Normalize global invoice date (digits only, stripped of leading zeros, e.g. "05/15/2026" -> "5152026")
+    def normalize_date_digits(d_str):
+        if not d_str: return ""
+        digits = re.sub(r'\D', '', str(d_str))
+        return digits.lstrip('0')
+
+    norm_global_date = normalize_date_digits(invoice_date) if invoice_date else None
+
     for item in items:
         # 1. Plan Name Mapping
         mid = str(item.get("MEMBERID") or "").strip()
@@ -330,6 +338,12 @@ def normalize_legal_shield_data(items: list) -> list:
         # Check if it looks like a date (e.g. contains / or -)
         is_date_row = row_date and isinstance(row_date, str) and (('/' in row_date) or ('-' in row_date))
         
+        if is_date_row and norm_global_date:
+            norm_row_date = normalize_date_digits(row_date)
+            if norm_row_date == norm_global_date:
+                # This is just the global invoice date copied down; not an adjustment row
+                is_date_row = False
+
         if is_date_row:
             cur_prem = to_float(item.get("CURRENT_PREMIUM"))
             adj_prem = to_float(item.get("ADJUSTMENT_PREMIUM"))
@@ -338,6 +352,7 @@ def normalize_legal_shield_data(items: list) -> list:
                 item["CURRENT_PREMIUM"] = 0.0
                 
     return items
+
 
 def deduplicate_uhc_fees(items: list) -> list:
     """
@@ -2349,7 +2364,8 @@ def process_verified_text_file(txt_path: str, client: OpenAI, source_filename: O
 
     # [V4][LEGALSHIELD] Legal Shield Normalization
     if "LINE_ITEMS" in extracted_data and extracted_data["LINE_ITEMS"] and is_legal_shield:
-        extracted_data["LINE_ITEMS"] = normalize_legal_shield_data(extracted_data["LINE_ITEMS"])
+        inv_date = extracted_data.get("HEADER", {}).get("INV_DATE")
+        extracted_data["LINE_ITEMS"] = normalize_legal_shield_data(extracted_data["LINE_ITEMS"], invoice_date=inv_date)
 
     # Add source filename
     if source_filename:
@@ -3087,7 +3103,8 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
 
     # [V4][LEGALSHIELD] Legal Shield Normalization
     if "Legal Shield" in str(global_carrier):
-        all_line_items = normalize_legal_shield_data(all_line_items)
+        inv_date = final_header.get("INV_DATE")
+        all_line_items = normalize_legal_shield_data(all_line_items, invoice_date=inv_date)
         data["LINE_ITEMS"] = all_line_items
 
     # [LEARNING] Final Audit & Auto-Training
