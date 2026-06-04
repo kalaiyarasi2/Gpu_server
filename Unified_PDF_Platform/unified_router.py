@@ -2719,6 +2719,11 @@ Return ONLY the company name or UNKNOWN:"""
             
             copied = False
             
+            # Check if destination file already exists and is non-empty (to prevent overwriting OCR text with empty direct PDF text)
+            if dest_path.exists() and dest_path.stat().st_size > 100:
+                print(f"[Unified][Router] Text file already exists and is non-empty: {dest_path}")
+                copied = True
+            
             # 1. Check if the result has session_dir (Claims, Work Comp, Bank Statement)
             if isinstance(result, dict) and result.get("session_dir"):
                 session_dir = Path(result["session_dir"])
