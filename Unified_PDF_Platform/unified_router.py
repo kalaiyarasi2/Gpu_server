@@ -1095,7 +1095,13 @@ class UnifiedRouter:
             return "BANK_STATEMENT", "Filename bank keyword"
 
         # RULE F5: Explicit vendor invoice keywords in filename
-        vendor_fn_kw = ["internet", "subscription", "utility", "phone bill", "electricity"]
+        # NOTE: Employer/business names (hotels, restaurants, etc.) are NOT reliable
+        # classification signals by filename alone — rely on content rules instead.
+        # Only include keywords that unambiguously describe the DOCUMENT type.
+        vendor_fn_kw = [
+            "internet bill", "subscription invoice", "utility bill", "phone bill",
+            "electricity bill", "water bill", "tax invoice",
+        ]
         if any(kw in filename_lower for kw in vendor_fn_kw):
             print("[Pre-Classify] Vendor invoice filename → invoice_poc_extractor")
             return "invoice_poc_extractor", "Filename vendor keyword"
@@ -1114,12 +1120,28 @@ class UnifiedRouter:
             "benefit billing", "enrollment bill",
             "american public life", "apl",
             "member premium", "subscriber premium",
-            "unitedhealthcare", "uhc", "bluecross", "blueshield", "bcbs", "humana", "aetna", "cigna", "angle", "angle health",
+            "unitedhealthcare", "uhc", "bluecross", "blueshield", "bcbs",
+            "humana", "aetna", "cigna", "angle", "angle health",
             "legal shield", "legalshield",
             "policy no.", "subscriber id", "member id",
-            "benefit invoice", "premium statement", "billing summary", "billing statement", "premium amount"
+            "benefit invoice", "premium statement", "billing summary",
+            "billing statement", "premium amount",
+            # HMO / Blue Cross / Blue Shield specific
+            "hmo blue", "hmo", "blue cross", "blue shield",
+            "hmo blue ne", "hmo blue ne saver",
+            # Common insurance invoice header fields
+            "group number", "invoice number", "billing period", "account number",
+            "current rates", "current premium", "due date",
         ]
         premium_hits = sum(1 for kw in premium_billing_signals if kw in text_lower)
+        
+        # Strong individual signals that alone are enough to classify as INVOICE
+        strong_invoice_signals = [
+            "hmo blue", "hmo blue ne", "unitedhealthcare", "uhc", "bcbs",
+            "blue cross", "blue shield", "medlink", "medsupp", "cobra",
+            "subscriber premium", "member premium", "benefit billing",
+        ]
+        has_strong_invoice_signal = any(kw in text_lower for kw in strong_invoice_signals)
 
         # WC Loss Run / Claims content
         loss_run_content_signals = [
@@ -1158,9 +1180,11 @@ class UnifiedRouter:
             return "INSURANCE_CLAIMS", f"Loss run content signals ({loss_hits} matches)"
 
         # RULE C3: Insurance Invoice signals → INVOICE
-        if premium_hits >= 2:
-            print(f"[Pre-Classify] Premium billing signals ({premium_hits} hits) → INVOICE")
-            return "INVOICE", f"Premium billing content signals ({premium_hits} matches)"
+        # Fire if: 1 strong carrier signal OR 2+ general premium signals
+        if has_strong_invoice_signal or premium_hits >= 2:
+            reason = "strong carrier signal" if has_strong_invoice_signal else f"{premium_hits} premium billing signals"
+            print(f"[Pre-Classify] Premium billing detected ({reason}) → INVOICE")
+            return "INVOICE", f"Premium billing content signals ({reason})"
 
         # ── SECONDARY CONTENT RULES ──────────────────────────────────────────
 
@@ -1286,6 +1310,30 @@ class UnifiedRouter:
             print(f"\n[INFO] Classification Result: {pre_type} | Provider: {provider}")
             return pre_type, provider
 
+        # ── STEP 1b: Cached extracted text fallback for scanned PDFs ─────────
+        # Many scanned PDFs yield 0 chars from PyMuPDF/pdfplumber at classification time
+        # but have a rich cached extracted text file from a prior OCR run.
+        # Use the cached text to re-run deterministic rules before falling to LLM.
+        if file_ext == ".pdf" and len(text.strip()) < 50:
+            stem = Path(file_path).stem
+            cached_text_path = BASE_DIR / "extracted_text" / f"{stem}_extracted.txt"
+            if not cached_text_path.exists():
+                cached_text_path = BASE_DIR / "extracted_text" / f"{stem}.txt"
+            if cached_text_path.exists():
+                try:
+                    cached_text = cached_text_path.read_text(encoding="utf-8", errors="ignore")
+                    if len(cached_text.strip()) > 50:
+                        print(f"[Pre-Classify] Scanned PDF has sparse snippet — using cached text ({len(cached_text)} chars): {cached_text_path.name}")
+                        text = cached_text
+                        pre_type, pre_reason = self._pre_classify(filename, file_ext, text_snippet=text)
+                        if pre_type:
+                            print(f"[Pre-Classify] Deterministic rule fired (cached text) → {pre_type} ({pre_reason})")
+                            provider = self._identify_provider(filename, text[:2000], request_id=request_id)
+                            print(f"\n[INFO] Classification Result: {pre_type} | Provider: {provider}")
+                            return pre_type, provider
+                except Exception as cache_err:
+                    print(f"[Pre-Classify] Could not read cached text: {cache_err}")
+
         # ── STEP 2: Assess text quality for LLM fallback decisions ───────────
         clean_text_len = len(re.sub(r'[^a-zA-Z0-9]', '', text)) if text else 0
         meaningful_keywords = [
@@ -1326,6 +1374,9 @@ CRITICAL RULES (apply in order, first match wins):
 8. Any Property & Casualty / Workers Comp CARRIER or TPA name (Accident Fund, CCMSI, BerkleyNet, KeyRisk, Travelers,
    Zurich, CNA, AmTrust, Liberty Mutual, Markel, Stonetrust, FCBI, State Fund, Clear Springs,
    Chesapeake Employers, Berkshire Hathaway) paired with no invoice or benefit keywords -> INSURANCE_CLAIMS
+IMPORTANT: Rule 9 DELETED intentionally. Employer/business names (hotel, restaurant, company names)
+   in filenames are NOT reliable document type signals. A file named after an employer could be any type.
+   When in doubt with an unrecognised name, return INVOICE as the safest default for premium billing.
 
 Return EXACTLY TWO lines:
 Line 1: INSURANCE_CLAIMS | WORK_COMPENSATION | INVOICE | invoice_poc_extractor | IDENTIFICATION | BANK_STATEMENT
@@ -1387,15 +1438,22 @@ WORK_COMPENSATION
 
 INSURANCE_INVOICE (or INVOICE)
   -> Insurance premium billing statements, group benefit billing, carrier premium lists.
-  -> Key signals: medlink, medsupp, group medical, cobra, medlink, medsupp, "Benefit Billing".
-  -> Includes: UHC, Aetna, Cigna, American Public Life (APL) premium billings.
+  -> Key signals: Group Number, Account Number, Billing Period, Invoice Number, Member ID,
+     Subscriber ID, plan names (HMO, PPO, SAVER), carrier names, premium amounts per member.
+  -> Includes: UHC, Aetna, Cigna, American Public Life (APL), BCBS, HMO Blue,
+     Blue Cross Blue Shield, Humana, Anthem, MetLife, Guardian, Principal premium billings.
+  -> CRITICAL: If the filename contains an EMPLOYER name (e.g., 'Groton Inn', 'ABC Hotel'),
+     the document may still be an insurance premium billing for that employer's group plan.
+     Look at the CONTENT (Group Number, Member list, HMO/PPO plan) not the employer name.
   -> NOT for general utilities or SaaS bills.
 
 invoice_poc_extractor
   -> Any general billing document: vendor invoices, SaaS subscriptions, utility bills.
-  -> Key signals: amount billed/due, billing period, line item charges, GSTIN/GST,
-    CGST/SGST, "Amount Payable", "Due Date", "Recurring Charges".
+  -> Key signals: GSTIN/GST, CGST/SGST, "Amount Payable", line item unit costs, "Qty",
+     software/internet service charges, "Bill To" / "Ship To" addresses.
   -> Includes: internet bills (Spectra), software (Zoho), utility bills.
+  -> IMPORTANT: A document for employer 'Groton Inn' or any hotel/business is NOT automatically
+     a vendor invoice — check if it contains insurance member/premium data (then it's INVOICE).
 
 IDENTIFICATION
   -> Government-issued ID documents: Passport, Driver License, SSN Card, State ID.
@@ -1415,6 +1473,8 @@ PRIORITY TIEBREAKER RULES:
 - Health/dental/vision insurance CARRIER name (UHC, BCBS, Anthem, etc.) -> INVOICE
 - ACORD 130/133 form -> WORK_COMPENSATION
 - Claimant + date of loss + incurred amounts -> INSURANCE_CLAIMS
+- Hotel / Inn / Resort / Restaurant / Catering / Venue name -> VENDOR_INVOICE
+  (A numeric reference number after a hotel/venue name is a RESERVATION or FOLIO number, NOT a claim number)
 
 Return EXACTLY TWO lines:
 Line 1: INSURANCE_CLAIMS | WORK_COMPENSATION | BENEFIT_INVOICE | VENDOR_INVOICE | IDENTIFICATION | BANK_STATEMENT
@@ -2869,6 +2929,7 @@ Return ONLY the company name or UNKNOWN:"""
                     is_angle = False
                     is_uhc = False
                     is_legal_shield = False
+                    is_bcbs = False  # Blue Cross Blue Shield / HMO Blue
                     filename_lower = os.path.basename(file_path).lower()
                     if (provider and ("LEGAL" in provider.upper() or "SHIELD" in provider.upper())) or \
                        "legal shield" in filename_lower or "legalshield" in filename_lower:
@@ -2889,13 +2950,19 @@ Return ONLY the company name or UNKNOWN:"""
                             if "uhc" in first_page_text or "unitedhealthcare" in first_page_text:
                                 is_uhc = True
                                 print("[INFO] UHC invoice detected proactively.")
+                            if any(kw in first_page_text for kw in [
+                                "hmo blue", "blue cross", "blue shield", "bcbs",
+                                "bluecross", "blueshield", "hmo blue ne",
+                            ]):
+                                is_bcbs = True
+                                print("[INFO] Blue Cross / HMO Blue invoice detected proactively.")
                     except Exception as e:
                         print(f"  [Router] Detection failed: {e}")
 
                     should_fallback = False
                     result = {"error": "Skipped standard extraction"}
                     
-                    if is_guardian or is_gis23 or is_angle or is_uhc or is_legal_shield:
+                    if is_guardian or is_gis23 or is_angle or is_uhc or is_legal_shield or is_bcbs:
                          should_fallback = True
                          if is_guardian:
                              reason = "Guardian"
@@ -2903,6 +2970,8 @@ Return ONLY the company name or UNKNOWN:"""
                              reason = "Angle"
                          elif is_uhc:
                              reason = "UHC"
+                         elif is_bcbs:
+                             reason = "BlueCross/HMO Blue"
                          elif is_legal_shield:
                              reason = "LegalShield"
                          else:
