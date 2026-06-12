@@ -1868,7 +1868,14 @@ Extract data from the document text provided below.
    - Leave CURRENT_PREMIUM as null
    
     **CRITICAL RULES**:
-    4. **ONE ROW PER MEMBER**: Each unique member (MEMBERID + Name) MUST appear exactly once in the JSON output, UNLESS it is BCBS.
+    4. **ONE ROW PER MEMBER vs. MULTI-PLAN SPLITTING (CONTEXT-DEPENDENT)**:
+       - **Single-plan invoices** (one premium column per member): One JSON object per member.
+       - **Multi-plan / Wide-format invoices** (multiple PREMIUM columns in the header): 
+         One JSON object per member PER NON-ZERO PLAN COLUMN. This is an intentional exception 
+         to the one-row rule. See rule 2 (WIDE FORMAT / MULTI-COLUMN TABLES) below.
+       - **BCBS LEDGER MODE**: Keep every individual adjustment event as a separate object.
+       - **How to know which mode applies**: If the column header row contains more than one 
+         PREMIUM column (see rule 2 classification), use multi-plan splitting mode.
     5. **BCBS LEDGER MODE**: For BlueCross BlueShield (BCBS), keep individual adjustment events (e.g. "CHANGE", "ADD", "TRM") as SEPARATE JSON objects. DO NOT merge them into one row.
     6. **MATH INTEGRITY**: Ensure you capture the TOTAL value for each adjustment row exactly as shown. If the amount is in parentheses (e.g. ($8,928.95)), it MUST be recorded as a negative number (-8928.95).
     7. **SKIP SUMMARIES**: If a person has individual rows like "CHANGE" and "ADD" AND a "Subscriber Total" row, ONLY capture the individual "CHANGE" and "ADD" rows. Skip the "Subscriber Total" to avoid double counting.
@@ -1879,11 +1886,28 @@ Extract data from the document text provided below.
     - Members listed after a section header belong to that section
     - Section continues until you see a new section header
 
-6. **PREMIUM COLUMN LOGIC (ANTHEM/Multi-Column)**:
-   - If you see multiple amount columns (e.g. Subscriber, Dep, Total):
-     - **CURRENT_PREMIUM** MUST be the **TOTAL** amount.
-     - **DO NOT** use "Subscriber Amount" or "Dependent Amount" as ADJUSTMENT_PREMIUM.
-   - **ADJUSTMENT_PREMIUM** requires an explicit column header like "Adjustment", "Retro", "Credit", "Prorated", or "Adjustment Amount".
+6. **PREMIUM COLUMN LOGIC — TWO DISTINCT SCENARIOS**:
+
+   **SCENARIO A — ANTHEM / SUBSCRIBER+DEP SPLIT** (single plan, split by who pays):
+   - Applies ONLY when columns represent portions of the SAME plan's cost 
+     (e.g., "Subscriber Amount", "Dependent Amount", "Employer Amount", "Total").
+   - In this case: **CURRENT_PREMIUM** MUST be the **TOTAL** amount (the full plan cost).
+   - **DO NOT** use "Subscriber Amount" or "Dependent Amount" as ADJUSTMENT_PREMIUM.
+   - Recognition signal: Only ONE type of insurance is being billed, and columns represent 
+     who bears each portion of cost.
+
+   **SCENARIO B — WIDE FORMAT / MULTI-PLAN** (multiple independent plans as columns):
+   - Applies when columns each represent a DIFFERENT insurance plan 
+     (e.g., "Life Premium", "Dep Life", "Medical Premium", "Dental Premium").
+   - In this case: Use each column's value directly as `CURRENT_PREMIUM` for its plan row.
+   - NEVER extract the TOTAL column. Ignore it completely.
+   - Recognition signal: Column headers contain different plan type names.
+
+   **ADJUSTMENT_PREMIUM RULE (applies to both scenarios)**:
+   - `ADJUSTMENT_PREMIUM` requires an explicit column header: "Adjustment", "Retro", 
+     "Credit", "Prorated", "ACF CREDIT", or "Adjustment Amount".
+   - Values shown with a trailing minus sign (e.g., "11.90-") MUST be treated as 
+     negative numbers (e.g., -11.90) and mapped to `ADJUSTMENT_PREMIUM`.
    - **ALIASED MAPPING**:
      - "Actual Amount" -> map to **CURRENT_PREMIUM**
      - "Adjustment Amount" -> map to **ADJUSTMENT_PREMIUM**
@@ -1949,12 +1973,64 @@ Output: `{{"LASTNAME": "ANAND", "FIRSTNAME": "ARJUN", "MEMBERID": "2543915", "SS
       - **IGNORE NAME HEADERS**: Often invoices repeat a name at the top of a section or page (e.g., "Bill for: Sharad Saxton"). DO NOT extract these as line items if they are solo headers. ONLY extract names when they are part of the actual premium/billing table rows.
       - **CRITICAL: NEVER MISATTRIBUTE TOTALS**: A member's premium must be their own individual cost. NEVER attribute a sub-total or grand total (e.g., $3301.90) to an individual member row (e.g., SAXTON SHARAD). Sub-totals are for visual grouping only and MUST be ignored for individual line item extraction.
 
-2. **WIDE FORMAT / MULTI-COLUMN TABLES**:
-   - If coverages (Dental, Vision, LIFE, Std) are listed as COLUMNS:
-     - Generate a SEPARATE JSON object for EVERY column with a non-zero value.
-     - Column Header -> `PLAN_NAME`.
-     - Value in Column -> `CURRENT_PREMIUM`.
-     - Derived Type (e.g., "Dental" -> DENTAL) -> `PLAN_TYPE`.
+2. **WIDE FORMAT / MULTI-COLUMN TABLES (UNIVERSAL RULE)**:
+   - If a table has multiple PLAN PREMIUM columns (e.g., Life Premium, Dep Life, Medical Premium, 
+     Dental Premium, LTD Premium, STD Premium, GAP Premium, HSA Fee, etc.) listed as SEPARATE 
+     COLUMNS in the header — one per member row — apply this rule:
+     - **STEP 1 — READ THE COLUMN HEADERS**: Identify every column in the header row(s). 
+       Two-line headers are common (e.g., "Life | Dep" on row 1 and "Premium | Life" on row 2).
+       Combine adjacent header fragments to reconstruct the full column name 
+       (e.g., "Dep" + "Life" = "Dep Life").
+     - **STEP 2 — CLASSIFY EACH COLUMN** into one of three types:
+       - **PREMIUM column**: A dollar amount that is a standalone plan cost. 
+         Examples: "Life Premium", "Dep Life", "Medical Premium", "Dental Premium", 
+         "LTD Premium", "SPD Premium", "GAP Premium", "HSA Fee".
+       - **VOLUME/METADATA column**: A count, coverage amount, or rate basis. 
+         MUST be IGNORED — never extracted to any premium field.
+         Examples: "Life Volume", "LTD Volume", "SPD90 Volume", "SPD180 Volume", 
+         "GAP EE Volume", "GAP FAM Volume", any column containing "Volume" or "Count".
+       - **TOTAL/ROW-SUM column**: The sum of all premiums on that row. 
+         MUST be IGNORED — never extracted to any premium field.
+         Examples: "TOTAL", "Row Total", "Flex Total", "Total Premium".
+     - **STEP 3 — EXTRACT PLAN ROWS**: For each member row, create ONE separate JSON 
+       object for EVERY PREMIUM column that has a **non-zero value** for that member.
+       - Use the column header as `PLAN_NAME`.
+       - Use the cell value as `CURRENT_PREMIUM`.
+       - Infer `PLAN_TYPE` from the column name:
+         - "Life", "Dep Life", "Retiree Life", "Dependent Life" → **LIFE**
+         - "Medical", "Med Premium" → **MEDICAL**
+         - "Dental", "Dental Premium" → **DENTAL**
+         - "Vision" → **VISION**
+         - "LTD" → **LTD**
+         - "STD", "SPD" → **STD**
+         - "HSA Fee" → **VOLUNTARY**
+         - "GAP" → **VOLUNTARY**
+       - If a PREMIUM column cell is **0.00 or 0** for a member → **skip it** (do not create a row).
+     - **COVERAGE INHERITANCE**: All split rows for the same member MUST share the same 
+       LASTNAME, FIRSTNAME, MEMBERID, SSN, and COVERAGE values.
+
+3. **TWO-LINE COLUMN HEADERS (UNIVERSAL RULE)**:
+   Many invoices use two-line column headers where a single column's name is split 
+   across two consecutive header lines. You MUST read both lines and combine fragments 
+   to reconstruct the full column name before classifying columns.
+   
+   **Method**: 
+   - Identify rows that function as column headers (before the `====` separator line 
+     or before the first data row).
+   - If two consecutive lines both appear to be headers (no member name/DOB), 
+     treat them as a single combined header. Merge fragments by position:
+     - Fragment in position N of line 1 + Fragment in position N of line 2 = Full column name.
+   
+   **Examples**:
+   - Line 1: `Life | Life | Dep | Retiree | Retiree | HSA`
+     Line 2: `Volume | Premium | Life | Life | Dep Life | Fee | TOTAL`
+     → Columns: `[Life Volume][Life Premium][Dep Life][Retiree Life][Retiree Dep Life][HSA Fee][TOTAL]`
+   
+   - Line 1: `LTD | LTD | SPD90 | SPD180 | SPD | GAP EE | GAP FAM | GAP`
+     Line 2: `Volume | Premium | Volume | Volume | Premium | Volume | Volume | Premium | TOTAL`
+     → Columns: `[LTD Volume][LTD Premium][SPD90 Volume][SPD180 Volume][SPD Premium][GAP EE Volume][GAP FAM Volume][GAP Premium][TOTAL]`
+   
+   After reconstruction, apply the VOLUME/METADATA/TOTAL/PREMIUM classification from rule 2.
 
 3. **ADJUSTMENT SECTION MAPPING (GUARDIAN)**:
    - If a table has **"New Premium"** and **"New Premium Adjustment"** columns:
