@@ -104,6 +104,7 @@ Image.MAX_IMAGE_PIXELS = None
 
 from financial_data_validation import FinancialValidator
 from data_validation import GeneralDataValidator
+from extraction_stabilizer import call_llm_deterministically, validate_claim_math
 
 
 @dataclass
@@ -190,6 +191,38 @@ class EnhancedInsuranceExtractor:
         self.output_dir = Path(output_dir) if output_dir else Path("outputs")
         self.output_dir.mkdir(parents=True, exist_ok=True)
     
+    def _parse_llm_json_response(self, response_content: str, label: str = "LLM response") -> Dict:
+        """
+        Parses JSON content from an LLM response, handling markdown code blocks and attempting minor fixes.
+        """
+        # 1. Try to find content within ```json ... ``` block
+        match = re.search(r"```json\s*(\{.*\})\s*```", response_content, re.DOTALL)
+        if match:
+            json_str = match.group(1)
+        else:
+            json_str = response_content.strip() # Assume it's just JSON
+
+        try:
+            return json.loads(json_str)
+        except json.JSONDecodeError as e:
+            print(f"   ⚠️  JSONDecodeError in {label} (attempt 1): {e}")
+            print(f"   Attempting to fix common JSON issues...")
+            
+            # Attempt to fix common issues: unescaped newlines in strings
+            # This regex is an attempt to find unescaped newlines inside string values
+            # and replace them with '\n'
+            fixed_json_str = re.sub(r'(?<=\\")\n(?=\\s*[a-zA-Z0-9"\'])', r'\\n', json_str)
+            fixed_json_str = fixed_json_str.replace("\\", "\\\\") # Escape backslashes
+            
+            try:
+                return json.loads(fixed_json_str)
+            except json.JSONDecodeError as e2:
+                print(f"   ❌ JSONDecodeError in {label} (attempt 2, after fixing): {e2}")
+                print(f"   Raw LLM response content (first 500 chars): {response_content[:500]}")
+                print(f"   JSON string (first 500 chars): {json_str[:500]}")
+                print(f"   Fixed JSON string (first 500 chars): {fixed_json_str[:500]}")
+                raise # Re-raise the exception if still not fixed
+
     def extract_text_from_pdf(self, pdf_path: str, is_scanned: Optional[bool] = None) -> Tuple[str, List[Dict]]:
         """
         Extract text from PDF using detection and appropriate extraction method.
@@ -639,18 +672,13 @@ Return ONLY the JSON. No explanations. Ensure you catch EVERY claim number, espe
 """
 
         try:
-            response = self.client.chat.completions.create(
-                model="gpt-4o",
-                messages=[{
-                    "role": "user",
-                    "content": prompt
-                }],
-                response_format={"type": "json_object"},
-                max_tokens=8000,
-                temperature=0.0
+            response = call_llm_deterministically(
+                self.client,
+                prompt,
+                model="gpt-4o"
             )
             
-            result = json.loads(response.choices[0].message.content)
+            result = self._parse_llm_json_response(response.choices[0].message.content, label="_detect_claim_numbers_ai")
             
             # Extract claim numbers
             claim_numbers = [c["claim_number"] for c in result.get("claim_numbers", [])]
@@ -730,22 +758,17 @@ IMPORTANT:
 - If page is blank or shows an error, still report the confidence as 0.0"""
 
         try:
-            response = self.client.chat.completions.create(
-                model="gpt-4o",
+            response = call_llm_deterministically(
+                self.client,
                 messages=[{
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": prompt},
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/png;base64,{img_base64}"
-                            }
-                        }
-                    ]
+                    "type": "text", "text": prompt
+                }, {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:image/png;base64,{img_base64}"
+                    }
                 }],
-                max_tokens=8000,
-                temperature=0.0  # Zero temperature for exact extraction
+                model="gpt-4o"
             )
             
             response_text = response.choices[0].message.content
@@ -858,15 +881,13 @@ DOCUMENT SAMPLE:
 """
         
         try:
-            response = self.client.chat.completions.create(
-                model="gpt-4o",
-                messages=[{"role": "user", "content": prompt}],
-                response_format={"type": "json_object"},
-                max_tokens=1500,
-                temperature=0.0
+            response = call_llm_deterministically(
+                self.client,
+                prompt,
+                model="gpt-4o"
             )
             
-            chunking_plan = json.loads(response.choices[0].message.content)
+            chunking_plan = self._parse_llm_json_response(response.choices[0].message.content, label="_chunk_text_dynamically")
             splits = chunking_plan.get("suggested_splits", [])
             default_overlap = chunking_plan.get("optimal_overlap", 300)
             
@@ -1024,15 +1045,11 @@ DOCUMENT TEXT (first 8000 chars):
 Return ONLY the JSON. Ensure the dynamic_rules is extremely precise."""
 
         try:
-            response = self.client.chat.completions.create(
-                model="gpt-4o",
-                messages=[{"role": "user", "content": prompt}],
-                response_format={"type": "json_object"},
-                max_tokens=1500,
-                temperature=0.0
-            )
-            
-            format_info = json.loads(response.choices[0].message.content)
+            format_info = self._parse_llm_json_response(call_llm_deterministically(
+                self.client,
+                prompt,
+                model="gpt-4o"
+            ).choices[0].message.content, label="_analyze_document_format")
             
             print(f"   ✓ Format detected: {format_info.get('format_type', 'unknown')}")
             print(f"   ✓ Insurer: {format_info.get('insurer', 'unknown')}")
@@ -1085,14 +1102,11 @@ DOCUMENT TEXT (first 4000 chars):
 {text[:4000]}
 """
         try:
-            response = self.client.chat.completions.create(
-                model="gpt-4o",
-                messages=[{"role": "user", "content": prompt}],
-                response_format={"type": "json_object"},
-                max_tokens=200,
-                temperature=0.0
-            )
-            result = json.loads(response.choices[0].message.content)
+            result = self._parse_llm_json_response(call_llm_deterministically(
+                self.client,
+                prompt,
+                model="gpt-4o"
+            ).choices[0].message.content, label="_smart_verify_format")
             
             if result.get("is_match"):
                 print(f"   ✓ Layout match confirmed ({result.get('reason', 'verified')}). Reusing cached schema.")
@@ -1500,21 +1514,14 @@ Follow the format-specific instructions above. Validate your extractions."""
         # Step 1: Initial Extraction Attempt
         data = {"claims": []}
         try:
-            response = self.client.chat.completions.create(
-                model="gpt-4o",
-                messages=[{
-                    "role": "user",
-                    "content": prompt
-                }],
-                response_format={"type": "json_object"},
-                # FIX-1: Raised from 8000→16000 so GPT-4o never truncates mid-JSON
-                # when a chunk contains many claims (36-chunk docs need ~12k+ output tokens).
-                max_tokens=16000,
-                temperature=0.0
+            response = call_llm_deterministically(
+                self.client,
+                prompt,
+                model="gpt-4o"
             )
             
             response_text = response.choices[0].message.content
-            initial_data = json.loads(response_text)
+            initial_data = self._parse_llm_json_response(response_text, label="_extract_all_claims_initial")
             
             # Check consistency
             if "claims" in initial_data:
@@ -2187,15 +2194,13 @@ TEXT TO ANALYZE:
 Return ONLY the JSON."""
 
         try:
-            response = self.client.chat.completions.create(
-                model="gpt-4o",
-                messages=[{"role": "user", "content": retry_prompt}],
-                response_format={"type": "json_object"},
-                max_tokens=8000,
-                temperature=0.0
+            response = call_llm_deterministically(
+                self.client,
+                retry_prompt,
+                model="gpt-4o"
             )
             
-            retry_data = json.loads(response.choices[0].message.content)
+            retry_data = self._parse_llm_json_response(response.choices[0].message.content, label="_extract_missing_claims_by_number")
             if "claims" in retry_data:
                 retry_data = self._post_process_claims(retry_data)
                 return retry_data
@@ -2254,19 +2259,14 @@ TEXT TO ANALYZE:
 Return ONLY the JSON object for claim {target_claim_number}."""
 
         try:
-            response = self.client.chat.completions.create(
-                model="gpt-4o",
-                messages=[{
-                    "role": "user",
-                    "content": prompt
-                }],
-                response_format={"type": "json_object"},
-                max_tokens=8000,
-                temperature=0.1
+            response = call_llm_deterministically(
+                self.client,
+                prompt,
+                model="gpt-4o"
             )
             
             response_text = response.choices[0].message.content
-            data = json.loads(response_text)
+            data = self._parse_llm_json_response(response_text, label="_extract_single_claim")
             
             # Wrap in 'claims' list for post-processing consistency
             wrapped_data = {"claims": [data]}
@@ -2394,6 +2394,15 @@ Return ONLY the JSON object for claim {target_claim_number}."""
             # This requires modifying how extract_schema_from_text is called
             schema_data = self.extract_schema_from_text(all_text, target_claim_number, num_pages=len(pages_metadata), vision_pattern=vision_pattern)
             
+            # Pre-Validation Math Check using the new stabilizer
+            valid_claims_from_stabilizer = []
+            for claim in schema_data.get("claims", []):
+                if validate_claim_math(claim):
+                    valid_claims_from_stabilizer.append(claim)
+                else:
+                    logger.warning(f"Claim {claim.get('claim_number')} failed initial math validation.")
+            schema_data["claims"] = valid_claims_from_stabilizer
+
             # Validation Step
             schema_data["claims"] = fin_validator.validate_claims(schema_data.get("claims", []), vision_pattern or {})
             
