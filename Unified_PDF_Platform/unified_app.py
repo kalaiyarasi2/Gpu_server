@@ -39,6 +39,9 @@ if current_dir not in sys.path:
     sys.path.insert(0, current_dir)
 # Import summary router
 from summary_api import router as summary_router
+from ai_summary_file import router as ai_summary_router
+from claims_dashboard_api import router as claims_dashboard_router
+from management_claims_dashboard_api import router as management_claims_dashboard_router
 
 # Import monitoring components
 from monitor import add_monitoring_to_app
@@ -84,6 +87,9 @@ app.add_middleware(
 # BASE_DIR and UPLOAD_DIR are now defined at the top
 # Include summary_api router
 app.include_router(summary_router)
+app.include_router(ai_summary_router)
+app.include_router(claims_dashboard_router)
+app.include_router(management_claims_dashboard_router)
 
 # --- Background Email Pipeline Management ---
 email_process = None
