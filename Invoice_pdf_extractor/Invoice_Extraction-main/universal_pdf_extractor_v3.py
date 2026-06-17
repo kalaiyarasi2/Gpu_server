@@ -118,6 +118,106 @@ def check_text_quality(text: str) -> float:
     alnum = sum(c.isalnum() for c in clean)
     return alnum / len(clean)
 
+def parse_allied_direct_page(page_text: str, current_inv: str) -> tuple[list, str, float]:
+    """
+    [V7] DETERMINISTIC DIRECT PARSER FOR ALLIED / PRIMESOUTH INVOICES
+    
+    This function was added to solve two critical issues:
+    1. LLM Token Truncation: Dense pages (e.g. Page 10) caused the AI to hit the output token limit, truncating employees.
+    2. Horizontal Name/Date Crashing: Solves issues where 'LASTNAME, FIRSTNAME' horizontally crashes into the 'EFFECTIVE DATE' column without spaces.
+    
+    What this parser does:
+    - Bypasses the LLM entirely for Allied invoices.
+    - Uses a deterministic Regex to cleanly split the name, date, coverage tier, and all numeric premium columns.
+    - Dynamically detects the invoice number (9832, 9833, 9835) from the header to map premium values to the correct plans (Life, Medical, Dental, LTD, DOL ACF, etc.).
+    - Extracts the true grand total `AMOUNT_DUE` from the `** Location Totals` line at the bottom of the page.
+    - Injects the `REPORTED INVOICE TOTAL (FOR AUDIT)` directly into the line items list as an item, guaranteeing a total row is generated for EVERY invoice in a multi-invoice PDF.
+    """
+    import re
+    lines = page_text.split('\n')
+    items = []
+    # Identify invoice number for this page's header (usually first 20 lines)
+    for line in lines[:20]:
+        if '9832' in line: current_inv = '9832'; break
+        elif '9833' in line: current_inv = '9833'; break
+        elif '9835' in line: current_inv = '9835'; break
+        
+    for line in lines:
+        line = line.strip()
+        # Optional space between name and DOB to catch long names
+        m = re.match(r'^([A-Z\s\-]+,\s*[A-Z\s\-]+?)\s*(\d{2}/\d{2}/\d{4})\s+(.+?)\s+((?:[\d\.\-]+\s*)+)$', line)
+        if m:
+            nums_raw = m.group(4).strip().split()
+            nums = []
+            for n in nums_raw:
+                if n.endswith('-'): nums.append(-float(n[:-1]))
+                else: nums.append(float(n))
+            
+            fname = m.group(1).split(',')[1].strip() if len(m.group(1).split(',')) > 1 else ''
+            lname = m.group(1).split(',')[0].strip()
+            tier = m.group(3).strip()
+            date = m.group(2).strip()
+
+            def add_plan(p_name, p_type, premium):
+                if premium != 0:
+                    items.append({
+                        'FIRSTNAME': fname,
+                        'LASTNAME': lname,
+                        'PLAN_NAME': p_name,
+                        'PLAN_TYPE': p_type,
+                        'COVERAGE': tier if tier not in ["3337"] else None,
+                        'CURRENT_PREMIUM': premium,
+                        'ADJUSTMENT_PREMIUM': 0.0,
+                        'INV_NUMBER': current_inv,
+                        'INV_DATE': date
+                    })
+
+            if '9835' in current_inv:
+                if len(nums) >= 6:
+                    if nums[0] != 0: add_plan('DOL ACF', 'FEES', nums[0])
+                    if nums[1] != 0: add_plan('ACF CREDIT', 'FEES', nums[1])
+                    if nums[2] != 0: add_plan('Medical', 'MEDICAL', nums[2])
+                    if nums[3] != 0: add_plan('Dental', 'DENTAL', nums[3])
+                    if nums[4] != 0: add_plan('POP Plan Fee', 'FEES', nums[4])
+                    if nums[5] != 0: add_plan('Flex Fee', 'FEES', nums[5])
+            elif '9832' in current_inv:
+                if len(nums) >= 6:
+                    if nums[1] != 0: add_plan('Life', 'LIFE', nums[1])
+                    if nums[2] != 0: add_plan('Dep Life', 'LIFE', nums[2])
+                    if nums[3] != 0: add_plan('Retiree Life', 'LIFE', nums[3])
+                    if nums[4] != 0: add_plan('Retiree Dep Life', 'LIFE', nums[4])
+                    if nums[5] != 0: add_plan('HSA Fee', 'FEES', nums[5])
+            elif '9833' in current_inv:
+                if len(nums) >= 7:
+                    if nums[0] != 0: add_plan('LTD', 'DISABILITY', nums[0])
+                    if nums[3] != 0: add_plan('SPD', 'DISABILITY', nums[3])
+                    if nums[6] != 0: add_plan('GAP', 'MEDICAL', nums[6])
+                    
+    amount_due = None
+    for line in lines:
+        if "** Location Totals" in line:
+            tokens = line.strip().split()
+            if tokens:
+                try:
+                    amount_due = float(tokens[-1].replace(',', ''))
+                except:
+                    pass
+
+    if amount_due is not None:
+        items.append({
+            'FIRSTNAME': 'INVOICE TOTAL',
+            'LASTNAME': '',
+            'PLAN_NAME': 'REPORTED INVOICE TOTAL (FOR AUDIT)',
+            'PLAN_TYPE': 'TOTAL',
+            'COVERAGE': None,
+            'CURRENT_PREMIUM': amount_due,
+            'ADJUSTMENT_PREMIUM': 0.0,
+            'INV_NUMBER': current_inv,
+            'INV_DATE': None
+        })
+
+    return items, current_inv, amount_due
+
 
 def clean_billing_period(val: Optional[str]) -> Optional[str]:
     """
@@ -1912,6 +2012,22 @@ Extract data from the document text provided below.
      - "Actual Amount" -> map to **CURRENT_PREMIUM**
      - "Adjustment Amount" -> map to **ADJUSTMENT_PREMIUM**
    - If no explicit adjustment column exists, `ADJUSTMENT_PREMIUM` is null.
+   - **COLUMN-NAME PRECISION (CRITICAL — NO OVER-TRIGGERING)**:
+     A column is an ADJUSTMENT/CREDIT column ONLY if its full reconstructed name
+     ENDS WITH or CONTAINS one of these exact words as a standalone token:
+     "CREDIT", "ADJUSTMENT", "RETRO", "PRORATED", "RETROACTIVITY".
+     - Example: "ACF CREDIT" → ADJUSTMENT column (contains "CREDIT").
+     - Example: "DOL ACF" → PREMIUM column (does NOT contain "CREDIT" or "ADJUSTMENT"). You MUST extract this column's values into `CURRENT_PREMIUM`.
+     - **DO NOT** classify a column as an adjustment just because its name contains
+       "ACF" or any other abbreviation. Only the words above qualify.
+   - **TRAILING-MINUS = COLUMN SIGNAL**: If you observe that ALL non-zero values in
+     a column use the trailing-minus format (e.g. "11.90-", "462.39-"), this means
+     the ENTIRE column is a CREDIT/ADJUSTMENT column. You MUST:
+     1. Strip the trailing minus and negate the value (e.g. "11.90-" → -11.90).
+     2. Map the value to `ADJUSTMENT_PREMIUM`.
+     3. Leave `CURRENT_PREMIUM` null for that column.
+     This applies even if the column header is ambiguous, as long as values are
+     consistently trailing-minus.
 
 
 
@@ -1991,11 +2107,25 @@ Output: `{{"LASTNAME": "ANAND", "FIRSTNAME": "ARJUN", "MEMBERID": "2543915", "SS
          "GAP EE Volume", "GAP FAM Volume", any column containing "Volume" or "Count".
        - **TOTAL/ROW-SUM column**: The sum of all premiums on that row. 
          MUST be IGNORED — never extracted to any premium field.
-         Examples: "TOTAL", "Row Total", "Flex Total", "Total Premium".
-     - **STEP 3 — EXTRACT PLAN ROWS**: For each member row, create ONE separate JSON 
-       object for EVERY PREMIUM column that has a **non-zero value** for that member.
+         A column qualifies as a TOTAL column ONLY if:
+           (a) its reconstructed name IS or ENDS WITH the word "Total" or "TOTAL"
+               (e.g. "TOTAL", "Row Total", "Flex Total", "Total Premium"), OR
+           (b) its cell values always equal the arithmetic sum of the other premium columns.
+         **CRITICAL DISAMBIGUATION — "Fee" ≠ "Total"**:
+           - "Flex Fee" → **PREMIUM column** (it is a standalone plan charge, NOT a row sum).
+           - "Flex Total" → TOTAL column (it IS a row sum).
+           - "POP Plan Fee" → **PREMIUM column**.
+           - "Admin Fee" → **PREMIUM column**.
+           - Any column ending in **"Fee"** is ALWAYS a PREMIUM column, regardless of
+             any other word in its name. NEVER classify a "...Fee" column as TOTAL or VOLUME.
+
+     - **STEP 3 — EXTRACT PLAN ROWS**: 
+       - **TOKEN SAVING**: To conserve tokens, NEVER repeat `LASTNAME`, `FIRSTNAME`, `COVERAGE`, etc. for multiple plans for the same member! Output a single JSON object per member and place their extracted plans inside a nested `"PLANS"` array. Omit any keys with null or empty values.
+       - Inside the `"PLANS"` array, create an object for EVERY PREMIUM column AND EVERY ADJUSTMENT column that has a **non-zero value** for that member.
+       - **CRITICAL**: You MUST NOT skip the `DOL ACF` and `ACF CREDIT` columns! If they have non-zero values (like 11.90 and 11.90-), you MUST create a JSON object for each inside `"PLANS"`.
        - Use the column header as `PLAN_NAME`.
-       - Use the cell value as `CURRENT_PREMIUM`.
+       - If it is a PREMIUM column, map the cell value to `CURRENT_PREMIUM` (leave `ADJUSTMENT_PREMIUM` null).
+       - If it is an ADJUSTMENT column, map the NEGATED cell value (e.g. "11.90-" -> -11.90) to `ADJUSTMENT_PREMIUM` (leave `CURRENT_PREMIUM` null).
        - Infer `PLAN_TYPE` from the column name:
          - "Life", "Dep Life", "Retiree Life", "Dependent Life" → **LIFE**
          - "Medical", "Med Premium" → **MEDICAL**
@@ -2005,6 +2135,15 @@ Output: `{{"LASTNAME": "ANAND", "FIRSTNAME": "ARJUN", "MEMBERID": "2543915", "SS
          - "STD", "SPD" → **STD**
          - "HSA Fee" → **VOLUNTARY**
          - "GAP" → **VOLUNTARY**
+         - Any column whose name **ends in "Fee"** or contains "Fee" as a word
+           (e.g. "Flex Fee", "POP Plan Fee", "Admin Fee", "DOL Fee", "HSA Fee")
+           → **VOLUNTARY**
+         - "Flex" (standalone or as prefix, e.g. "Flex Fee", "Flex Benefit")
+           → **VOLUNTARY**
+         - "DOL" (Department of Labor contribution columns)
+           → **VOLUNTARY**
+         - "POP" (Premium Only Plan / Section 125 fee column)
+           → **VOLUNTARY**
        - If a PREMIUM column cell is **0.00 or 0** for a member → **skip it** (do not create a row).
      - **COVERAGE INHERITANCE**: All split rows for the same member MUST share the same 
        LASTNAME, FIRSTNAME, MEMBERID, SSN, and COVERAGE values.
@@ -2022,6 +2161,10 @@ Output: `{{"LASTNAME": "ANAND", "FIRSTNAME": "ARJUN", "MEMBERID": "2543915", "SS
      - Fragment in position N of line 1 + Fragment in position N of line 2 = Full column name.
    
    **Examples**:
+   - Line 1: `DOL | ACF | Medical | Dental | POP Plan | Flex`
+     Line 2: `ACF | CREDIT | Premium | Premium | Fee | Fee | Total`
+     → Columns: `[DOL ACF][ACF CREDIT][Medical Premium][Dental Premium][POP Plan Fee][Flex Fee][Total]`
+
    - Line 1: `Life | Life | Dep | Retiree | Retiree | HSA`
      Line 2: `Volume | Premium | Life | Life | Dep Life | Fee | TOTAL`
      → Columns: `[Life Volume][Life Premium][Dep Life][Retiree Life][Retiree Dep Life][HSA Fee][TOTAL]`
@@ -2099,6 +2242,22 @@ JSON OUTPUT:"""
         
         try:
             extracted_data = json.loads(response_text)
+            
+            # [V7][FIX] Flatten nested plans if the LLM output them to save tokens
+            if "LINE_ITEMS" in extracted_data:
+                flattened_items = []
+                for item in extracted_data["LINE_ITEMS"]:
+                    if "PLANS" in item and isinstance(item["PLANS"], list):
+                        # Extract base member info
+                        base_info = {k: v for k, v in item.items() if k != "PLANS"}
+                        for plan in item["PLANS"]:
+                            new_item = base_info.copy()
+                            new_item.update(plan)
+                            flattened_items.append(new_item)
+                    else:
+                        flattened_items.append(item)
+                extracted_data["LINE_ITEMS"] = flattened_items
+                
             print(f"  [OK] Successfully extracted {sum(1 for v in extracted_data.values() if v is not None)} fields")
             return extracted_data
         except json.JSONDecodeError as e:
@@ -2119,6 +2278,21 @@ JSON OUTPUT:"""
                         fixed_json += '"}]}'
                     
                     extracted_data = json.loads(fixed_json)
+                    
+                    # [V7][FIX] Flatten nested plans if the LLM output them to save tokens
+                    if "LINE_ITEMS" in extracted_data:
+                        flattened_items = []
+                        for item in extracted_data["LINE_ITEMS"]:
+                            if "PLANS" in item and isinstance(item["PLANS"], list):
+                                base_info = {k: v for k, v in item.items() if k != "PLANS"}
+                                for plan in item["PLANS"]:
+                                    new_item = base_info.copy()
+                                    new_item.update(plan)
+                                    flattened_items.append(new_item)
+                            else:
+                                flattened_items.append(item)
+                        extracted_data["LINE_ITEMS"] = flattened_items
+                        
                     print("  [V3][RECOVERY] Successfully recovered truncated JSON.")
                     return extracted_data
             except Exception as re:
@@ -2335,6 +2509,10 @@ def process_verified_text_file(txt_path: str, client: OpenAI, source_filename: O
         is_legal_shield = "LEGAL SHIELD" in text.upper() or "LEGALSHIELD" in text.upper()
         global_carrier = "Legal Shield" if is_legal_shield else None
         
+        allied_inv_context = "9835"
+        is_allied = "ALLIED" in str(pdf_path).upper() or "PRIMESOUTH" in str(pdf_path).upper() or "PRIMESOUTH" in text[:2000].upper()
+
+        
         current_section = "CURRENT"
         for i, page_text in enumerate(parts):
             if not page_text.strip(): continue
@@ -2388,7 +2566,17 @@ def process_verified_text_file(txt_path: str, client: OpenAI, source_filename: O
                 contextual_text = f"### CURRENT SECTION: {section_type} ###\n\n{section_text}"
                 
                 # UHC Summary Skip logic remains page-level usually, but we keep it safe here
-                if is_uhc and i > 0 and (("Summary" in page_text and "Description" in page_text) or ("Total Volume" in page_text)):
+                if is_allied:
+                    print(f"  [V7][ALLIED] Using Direct Parser for Page {page_num}...")
+                    allied_items, allied_inv_context = parse_allied_direct_page(page_text, allied_inv_context)
+                    
+                    if page_num == 1:
+                        # Extract header using LLM ONLY for the first page
+                        page_data = extract_fields_with_llm(contextual_text, client, f"Page {page_num}", mode="standard", detected_carrier=global_carrier) or {}
+                        page_data["LINE_ITEMS"] = allied_items
+                    else:
+                        page_data = {"LINE_ITEMS": allied_items}
+                elif is_uhc and i > 0 and (("Summary" in page_text and "Description" in page_text) or ("Total Volume" in page_text)):
                      page_data = extract_fields_with_llm(contextual_text, client, f"Page {page_num} (Summary)", mode="standard", detected_carrier=global_carrier) or {}
                 else:
                      page_data = extract_fields_with_llm(contextual_text, client, f"Page {page_num}", mode="standard", detected_carrier=global_carrier) or {}
@@ -2682,7 +2870,8 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
 
     # [V5][AUDIT] Building a global master list for high-precision carrier documents.
     master_list = []
-    if len(text) > 50000 or "Mutual of Omaha" in text or "Legal Shield" in text or "Principal" in text:
+    is_allied_global = "ALLIED" in str(pdf_path).upper() or "PRIMESOUTH" in str(pdf_path).upper()
+    if not is_allied_global and (len(text) > 50000 or "Mutual of Omaha" in text or "Legal Shield" in text or "Principal" in text):
         master_list = _detect_member_ids_ai(text, client)
     all_line_items = []
     final_header = {field: None for field in ["INV_DATE", "INV_NUMBER", "BILLING_PERIOD", "TOTAL_BILLED", "TOTAL_ADJUSTMENTS", "AMOUNT_DUE", "GROUP_NUMBER", "PRICING_ADJUSTMENT"]}
@@ -2943,6 +3132,25 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
         is_skip_page = (is_gis_invoice and i == 0 and (not is_already_chunk or is_first_chunk)) or \
                        (is_humana_invoice and (i == 0 or i == 1 or i == 2 or i == 4)) or \
                        is_uhc_summary
+                       
+        is_allied = "ALLIED" in str(pdf_path).upper() or "PRIMESOUTH" in str(pdf_path).upper()
+        if is_allied:
+            print(f"  [V7][ALLIED] Using Direct Parser for {chunk_id_str}...")
+            allied_items, current_inv_num, page_amount_due = parse_allied_direct_page(page_text, "9835")
+            if i == 0:
+                header_only_data = extract_fields_with_llm(page_text, client, f"{os.path.basename(pdf_path)}_{chunk_id_str}_header", mode="standard", detected_carrier=global_carrier) or {}
+                hdr = header_only_data.get("HEADER", {})
+                if page_amount_due is not None:
+                    hdr["AMOUNT_DUE"] = page_amount_due
+                    hdr["INV_NUMBER"] = current_inv_num
+                return {"index": i, "header": hdr, "items": allied_items, "refinement_info": None, "passes": 1}
+            else:
+                hdr = {}
+                if page_amount_due is not None:
+                    hdr["AMOUNT_DUE"] = page_amount_due
+                    hdr["INV_NUMBER"] = current_inv_num
+                return {"index": i, "header": hdr, "items": allied_items, "refinement_info": None, "passes": 1}
+        
         
         if is_skip_page:
             reason = "GIS" if is_gis_invoice else ("Humana" if is_humana_invoice else "UHC Summary")
@@ -4585,7 +4793,8 @@ def batch_process_step(txt_directory: str, output_excel: str = "extracted_data.x
     print(f"[DATA] Processed {len(all_data)} TXT file(s)")
     print(f"\n[SUMMARY] Summary:")
     print(df.to_string(index=False))
-    print(f"{'='*70}\n")
+print(f"{'='*70}\n")
+
 
 
 def parse_moo_detail_direct(full_raw_text: str, inv_date: str = None, inv_number: str = None,
