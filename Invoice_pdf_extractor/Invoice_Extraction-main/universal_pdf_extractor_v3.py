@@ -138,9 +138,10 @@ def parse_allied_direct_page(page_text: str, current_inv: str) -> tuple[list, st
     items = []
     # Identify invoice number for this page's header (usually first 20 lines)
     for line in lines[:20]:
-        if '9832' in line: current_inv = '9832'; break
-        elif '9833' in line: current_inv = '9833'; break
-        elif '9835' in line: current_inv = '9835'; break
+        upper_line = line.upper()
+        if '9832' in line or '12901' in line or 'DEP LIFE' in upper_line: current_inv = '9832'; break
+        elif '9833' in line or '12902' in line or 'SPD90' in upper_line or 'LTD' in upper_line: current_inv = '9833'; break
+        elif '9835' in line or '12903' in line or 'MEDICAL' in upper_line or 'DENTAL' in upper_line or 'DOL ACF' in upper_line: current_inv = '9835'; break
         
     for line in lines:
         line = line.strip()
@@ -195,7 +196,7 @@ def parse_allied_direct_page(page_text: str, current_inv: str) -> tuple[list, st
                     
     amount_due = None
     for line in lines:
-        if "** Location Totals" in line:
+        if "** Location Totals" in line or "* * T O T A L S" in line or "* * I N V O I C E T O T A L" in line or "* * G R A N D T O T A L" in line:
             tokens = line.strip().split()
             if tokens:
                 try:
