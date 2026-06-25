@@ -644,6 +644,143 @@ class ManagementDashboardAnalyzer:
 
         return "\n".join(parts), metrics_json, filter_metadata
 
+    @staticmethod
+    def json_to_text(file_path: str, year_filter: Optional[int] = None) -> Tuple[str, str, Dict[str, Any]]:
+        """
+        Read JSON file, convert to a DataFrame, map keys to standard columns,
+        and calculate metrics.
+        
+        Args:
+            file_path: Path to JSON file
+            year_filter: Optional year to filter by. If None, all years are included.
+            
+        Returns:
+            Tuple of (text_data, metrics_json, filter_metadata)
+        """
+        import json
+        with open(file_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        # Extract list of items
+        if isinstance(data, list):
+            items = data
+        elif isinstance(data, dict):
+            items = data.get("claims") or data.get("invoices") or data.get("data") or []
+            if not items:
+                for val in data.values():
+                    if isinstance(val, list) and len(val) > 0 and isinstance(val[0], dict):
+                        items = val
+                        break
+        else:
+            items = []
+
+        if not items:
+            return "", "{}", {
+                "year_filter_applied": year_filter is not None,
+                "year": year_filter,
+                "total_claims_before_filter": 0,
+                "total_claims_after_filter": 0,
+                "filtered_claims_excluded": 0,
+                "message": "No data to filter"
+            }
+
+        df = pd.DataFrame(items)
+
+        # Apply column mappings to standardise keys
+        column_mapping = {
+            "Claim Number": ["claim_number", "claimnumber", "claim_num", "claimno", "claim_no", "claim id", "claim_id"],
+            "Employer Location": ["employer_location", "employerlocation", "location", "emp_location"],
+            "Accident State": ["accident_state", "accidentstate", "state", "loss_state", "lossstate"],
+            "Status": ["status", "claim_status", "claimstatus"],
+            "Total Net Incurred": ["total_net_incurred", "totalnetincurred", "net_incurred", "netincurred", "incurred", "total_incurred"],
+            "Total Reserve": ["total_reserve", "totalreserve", "reserve", "outstanding_reserve", "outstandingreserve", "total_reserves", "medical_reserve", "indemnity_reserve"],
+            "Total Paid": ["total_paid", "totalpaid", "paid", "amount_paid"],
+            "Indemnity Paid": ["indemnity_paid", "indemnitypaid"],
+            "Medical Paid": ["medical_paid", "medicalpaid"],
+            "Litigation?": ["litigation", "litigation?", "litigated", "litigation_indicator"],
+            "NCCI Class Code": ["ncci_class_code", "ncci_class", "class_code", "classcode"],
+            "NCCI Class Description": ["ncci_class_description", "class_description", "class_desc"],
+            "Accident Cause": ["accident_cause", "cause", "cause_of_injury", "injury_cause"],
+            "Date of Loss": ["date_of_loss", "dateofloss", "loss_date", "accident_date", "date_of_injury", "injury_date", "dol"],
+            "ValuationDate": ["valuation_date", "valuationdate"],
+            "Account": ["account", "employer_name", "employername"]
+        }
+
+        for target_col, src_cols in column_mapping.items():
+            if target_col in df.columns:
+                continue
+            for src in src_cols:
+                matched_col = None
+                for c in df.columns:
+                    if c.lower() == src.lower():
+                        matched_col = c
+                        break
+                if matched_col:
+                    df[target_col] = df[matched_col]
+                    break
+
+        # Financial standardisation/fallbacks
+        financial_cols = ["Total Net Incurred", "Total Paid", "Total Reserve", "Indemnity Paid", "Medical Paid"]
+        for col in financial_cols:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col].astype(str).str.replace(r"[\$,]", "", regex=True), errors="coerce").fillna(0)
+            else:
+                df[col] = 0.0
+
+        # Calculate missing totals from components if possible
+        if "Total Paid" not in df.columns or df["Total Paid"].sum() == 0:
+            sub_paid = [c for c in ["medical_paid", "indemnity_paid", "expense_paid"] if c in df.columns]
+            if sub_paid:
+                df["Total Paid"] = df[sub_paid].sum(axis=1)
+
+        if "Total Reserve" not in df.columns or df["Total Reserve"].sum() == 0:
+            sub_res = [c for c in ["medical_reserve", "indemnity_reserve", "expense_reserve"] if c in df.columns]
+            if sub_res:
+                df["Total Reserve"] = df[sub_res].sum(axis=1)
+
+        if "Total Net Incurred" not in df.columns or df["Total Net Incurred"].sum() == 0:
+            df["Total Net Incurred"] = df["Total Paid"] + df["Total Reserve"]
+
+        # Normalise Litigation
+        if "Litigation?" in df.columns:
+            def normalise_litigation(val):
+                if pd.isna(val):
+                    return "NO"
+                val_str = str(val).strip().upper()
+                if val_str in ("YES", "Y", "TRUE", "1"):
+                    return "YES"
+                return "NO"
+            df["Litigation?"] = df["Litigation?"].apply(normalise_litigation)
+
+        # Standardise other columns
+        if "Status" in df.columns:
+            df["Status"] = df["Status"].astype(str).str.upper()
+
+        total_rows_before = len(df)
+        
+        # Apply year filter
+        df = ManagementDashboardAnalyzer.filter_by_year(df, year_filter)
+        total_rows_after = len(df)
+
+        parts = ["=== Sheet: Claims ==="]
+        if not df.empty:
+            parts.append(df.to_csv(sep="|", index=False, na_rep=""))
+        else:
+            parts.append("")
+
+        metrics_json = ManagementDashboardAnalyzer.calculate_dashboard_metrics(df)
+
+        filter_metadata = {
+            "year_filter_applied": year_filter is not None,
+            "year": year_filter,
+            "total_claims_before_filter": total_rows_before,
+            "total_claims_after_filter": total_rows_after,
+            "filtered_claims_excluded": total_rows_before - total_rows_after if year_filter else 0,
+            "message": f"Analysis includes only claims from year {year_filter}" if year_filter else "All years included in analysis"
+        }
+
+        return "\n".join(parts), metrics_json, filter_metadata
+
     def generate_dashboard(
         self,
         excel_text: str,
@@ -688,16 +825,16 @@ router = APIRouter()
 
 @router.post(
     "/api/management-claims-dashboard",
-    summary="Generate Management Claims Dashboard from Excel",
+    summary="Generate Management Claims Dashboard from Excel or JSON",
     description=(
-        "Upload a Loss Run Excel file and receive a comprehensive "
+        "Upload a Loss Run Excel or JSON file and receive a comprehensive "
         "AI-generated Management Claims Dashboard following the 10-section structure. "
         "Optionally filter by year to analyze only claims from a specific year."
     ),
     tags=["Management Dashboard"],
 )
 async def generate_management_dashboard(
-    file: UploadFile = File(..., description="Loss Run Excel file (.xlsx or .xls)"),
+    file: UploadFile = File(..., description="Loss Run Excel or JSON file (.xlsx, .xls, or .json)"),
     download: bool = Query(True, description="Return a .txt file (true) or JSON (false)"),
     model: str = Query("gpt-4o", description="OpenAI model to use"),
     temperature: float = Query(0.2, description="Sampling temperature"),
@@ -708,10 +845,10 @@ async def generate_management_dashboard(
         raise HTTPException(status_code=400, detail="Filename is required.")
 
     ext = Path(filename).suffix.lower()
-    if ext not in (".xlsx", ".xls"):
+    if ext not in (".xlsx", ".xls", ".json"):
         raise HTTPException(
             status_code=400,
-            detail=f"Unsupported file type '{ext}'. Only .xlsx and .xls are accepted.",
+            detail=f"Unsupported file type '{ext}'. Only .xlsx, .xls, and .json are accepted.",
         )
 
     tmp_input_path = None
@@ -735,16 +872,15 @@ async def generate_management_dashboard(
 
         # Process
         analyzer = ManagementDashboardAnalyzer()
-        excel_text, metrics_json, filter_metadata = analyzer.excel_to_text(tmp_input_path, year_filter=year_filter)
+        if ext == ".json":
+            excel_text, metrics_json, filter_metadata = analyzer.json_to_text(tmp_input_path, year_filter=year_filter)
+            empty_err_msg = f"No data found for year {year_filter} in JSON." if year_filter is not None else "JSON file has no readable data."
+        else:
+            excel_text, metrics_json, filter_metadata = analyzer.excel_to_text(tmp_input_path, year_filter=year_filter)
+            empty_err_msg = f"No data found for year {year_filter}. The Excel file may not contain claims from this year." if year_filter is not None else "Excel file has no readable data."
 
         if not excel_text.strip():
-            if year_filter is not None:
-                raise HTTPException(
-                    status_code=400, 
-                    detail=f"No data found for year {year_filter}. The Excel file may not contain claims from this year."
-                )
-            else:
-                raise HTTPException(status_code=400, detail="Excel file has no readable data.")
+            raise HTTPException(status_code=400, detail=empty_err_msg)
 
         dashboard_text = analyzer.generate_dashboard(
             excel_text=excel_text,
