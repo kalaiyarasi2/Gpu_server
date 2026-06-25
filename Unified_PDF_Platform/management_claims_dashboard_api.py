@@ -325,6 +325,75 @@ class ManagementDashboardAnalyzer:
         self.client = OpenAI(api_key=self.api_key)
 
     @staticmethod
+    def filter_by_year(df: pd.DataFrame, year: Optional[int] = None) -> pd.DataFrame:
+        """
+        Filter DataFrame to include only rows from the specified year.
+        
+        Args:
+            df: Input DataFrame
+            year: Year to filter by (e.g., 2025). If None, returns all data but still shows year distribution.
+            
+        Returns:
+            Filtered DataFrame containing only claims from the specified year (or all data if year=None)
+        """
+        # List of possible date column names
+        date_columns = ["Date of Loss", "Accident Date", "Loss Date", "DOL", "Incident Date"]
+        year_columns = ["Accident Year", "Loss Year", "Year"]  # Direct year columns
+        
+        date_column = None
+        year_column = None
+        
+        # First, check if there's a direct year column (faster and more accurate)
+        for col in year_columns:
+            if col in df.columns:
+                year_column = col
+                break
+        
+        # If no year column, look for date columns
+        if year_column is None:
+            for col in date_columns:
+                if col in df.columns:
+                    date_column = col
+                    break
+        
+        # If neither found, return original DataFrame
+        if year_column is None and date_column is None:
+            print(f"⚠️  Warning: No date or year column found in {df.columns.tolist()}. Cannot filter by year.")
+            return df
+        
+        # Create a copy to avoid modifying original
+        df_copy = df.copy()
+        
+        # Extract year based on column type
+        if year_column is not None:
+            # Direct year column - use as is
+            print(f"✓ Using year column: '{year_column}' for year filtering")
+            df_copy['_temp_year'] = pd.to_numeric(df_copy[year_column], errors='coerce')
+        else:
+            # Date column - extract year from date
+            print(f"✓ Using date column: '{date_column}' for year filtering")
+            df_copy[date_column] = pd.to_datetime(df_copy[date_column], errors='coerce')
+            df_copy['_temp_year'] = df_copy[date_column].dt.year
+        
+        # Log year distribution before filtering
+        year_counts = df_copy['_temp_year'].value_counts().sort_index()
+        print(f"📊 Year distribution in data: {year_counts.to_dict()}")
+        
+        # Filter by year if specified, otherwise return all data
+        if year is not None:
+            filtered = df_copy[df_copy['_temp_year'] == year].copy()
+            print(f"🔍 Filtered by year {year}: {len(df)} rows → {len(filtered)} rows")
+        else:
+            filtered = df_copy.copy()
+            print(f"🔍 No year filter applied (year=0): {len(df)} rows → {len(df)} rows (all years included)")
+        
+        # Remove temporary year column
+        if '_temp_year' in filtered.columns:
+            filtered = filtered.drop(columns=['_temp_year'])
+        
+        return filtered
+
+    @staticmethod
     def calculate_dashboard_metrics(df: pd.DataFrame) -> str:
         # Ensure money columns are numeric
         for col in ["Total Net Incurred", "Total Paid", "Total Reserve", "Indemnity Paid", "Medical Paid"]:
@@ -401,7 +470,7 @@ class ManagementDashboardAnalyzer:
                 bins = [-1, 30, 90, 180, 365, float("inf")]
                 labels = ["0-30 Days", "31-90 Days", "91-180 Days", "181-365 Days", "Over 365 Days"]
                 open_df["Aging Bucket"] = pd.cut(open_df["Days Open"], bins=bins, labels=labels)
-                aging_summary = open_df.groupby("Aging Bucket").agg(
+                aging_summary = open_df.groupby("Aging Bucket", observed=True).agg(
                     Claim_Count=("Claim Number", "count") if "Claim Number" in df.columns else ("Total Net Incurred", "count"),
                     Total_Reserve=("Total Reserve", "sum") if "Total Reserve" in df.columns else ("Total Net Incurred", "sum"),
                     Total_Incurred=("Total Net Incurred", "sum") if "Total Net Incurred" in df.columns else ("Total Net Incurred", "sum")
@@ -512,13 +581,23 @@ class ManagementDashboardAnalyzer:
         return json.dumps(metrics, indent=2)
 
     @staticmethod
-    def excel_to_text(file_path: str) -> Tuple[str, str]:
+    def excel_to_text(file_path: str, year_filter: Optional[int] = None) -> Tuple[str, str, Dict[str, Any]]:
         """
         Read every sheet in the Excel workbook and convert to a
         pipe-delimited text representation, and calculate metrics.
+        
+        Args:
+            file_path: Path to Excel file
+            year_filter: Optional year to filter by (e.g., 2025). If None, all years are included.
+            
+        Returns:
+            Tuple of (text_data, metrics_json, filter_metadata)
         """
         parts: list[str] = []
         all_dfs = []
+        total_rows_before = 0
+        total_rows_after = 0
+        
         try:
             with pd.ExcelFile(file_path, engine="openpyxl") as xls:
                 for sheet_name in xls.sheet_names:
@@ -528,6 +607,18 @@ class ManagementDashboardAnalyzer:
 
                         if df.empty:
                             continue
+                        
+                        total_rows_before += len(df)
+                        
+                        # Always call filter function to show logs (even for year_filter=None)
+                        df = ManagementDashboardAnalyzer.filter_by_year(df, year_filter)
+                        
+                        # Skip sheet if no data after filtering
+                        if df.empty:
+                            print(f"Sheet {sheet_name}: No data for year {year_filter}, skipping.")
+                            continue
+                        
+                        total_rows_after += len(df)
 
                         parts.append(f"=== Sheet: {sheet_name} ===")
                         parts.append(df.to_csv(sep="|", index=False, na_rep=""))
@@ -540,8 +631,18 @@ class ManagementDashboardAnalyzer:
 
         full_df = pd.concat(all_dfs, ignore_index=True) if all_dfs else pd.DataFrame()
         metrics_json = ManagementDashboardAnalyzer.calculate_dashboard_metrics(full_df)
+        
+        # Build filter metadata
+        filter_metadata = {
+            "year_filter_applied": year_filter is not None,
+            "year": year_filter,
+            "total_claims_before_filter": total_rows_before,
+            "total_claims_after_filter": total_rows_after,
+            "filtered_claims_excluded": total_rows_before - total_rows_after if year_filter else 0,
+            "message": f"Analysis includes only claims from year {year_filter}" if year_filter else "All years included in analysis"
+        }
 
-        return "\n".join(parts), metrics_json
+        return "\n".join(parts), metrics_json, filter_metadata
 
     def generate_dashboard(
         self,
@@ -549,11 +650,17 @@ class ManagementDashboardAnalyzer:
         metrics_json: str,
         model: str = "gpt-4o",
         temperature: float = 0.2,
+        year_filter: Optional[int] = None,
     ) -> str:
         """
         Send textualised Excel data to OpenAI and return the report.
         """
         try:
+            # Add year filter note if applicable
+            year_note = ""
+            if year_filter is not None:
+                year_note = f"\n\n**IMPORTANT: This analysis is filtered to include ONLY claims from year {year_filter}. All metrics and calculations reflect data from {year_filter} exclusively.**\n\n"
+            
             response = self.client.chat.completions.create(
                 model=model,
                 messages=[
@@ -561,6 +668,7 @@ class ManagementDashboardAnalyzer:
                     {
                         "role": "user",
                         "content": (
+                            f"{year_note}"
                             "Analyze the following Loss Run data and generate "
                             "the full Management Claims Dashboard as specified.\n\n"
                             f"=== PRE-CALCULATED METRICS (JSON) ===\n{metrics_json}\n\n=== RAW TEXT DATA ===\n{excel_text}"
@@ -583,7 +691,8 @@ router = APIRouter()
     summary="Generate Management Claims Dashboard from Excel",
     description=(
         "Upload a Loss Run Excel file and receive a comprehensive "
-        "AI-generated Management Claims Dashboard following the 10-section structure."
+        "AI-generated Management Claims Dashboard following the 10-section structure. "
+        "Optionally filter by year to analyze only claims from a specific year."
     ),
     tags=["Management Dashboard"],
 )
@@ -592,6 +701,7 @@ async def generate_management_dashboard(
     download: bool = Query(True, description="Return a .txt file (true) or JSON (false)"),
     model: str = Query("gpt-4o", description="OpenAI model to use"),
     temperature: float = Query(0.2, description="Sampling temperature"),
+    year: int = Query(..., description="Filter by accident year. Use 0 for all years, or specify a year (e.g., 2025, 2026)"),
 ):
     filename = (file.filename or "").strip()
     if not filename:
@@ -606,6 +716,18 @@ async def generate_management_dashboard(
 
     tmp_input_path = None
     try:
+        # year=0 means all years, otherwise filter by specific year
+        year_filter = None if year == 0 else year
+        
+        # Validate year if not 0
+        if year != 0:
+            current_year = pd.Timestamp.today().year
+            if year < 1900 or year > current_year + 1:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid year '{year}'. Year must be 0 (all years) or between 1900 and {current_year + 1}."
+                )
+        
         # Save upload to temp
         with tempfile.NamedTemporaryFile(delete=False, suffix=ext, prefix="management_lossrun_") as tmp_input:
             tmp_input.write(await file.read())
@@ -613,17 +735,39 @@ async def generate_management_dashboard(
 
         # Process
         analyzer = ManagementDashboardAnalyzer()
-        excel_text, metrics_json = analyzer.excel_to_text(tmp_input_path)
+        excel_text, metrics_json, filter_metadata = analyzer.excel_to_text(tmp_input_path, year_filter=year_filter)
 
         if not excel_text.strip():
-            raise HTTPException(status_code=400, detail="Excel file has no readable data.")
+            if year_filter is not None:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"No data found for year {year_filter}. The Excel file may not contain claims from this year."
+                )
+            else:
+                raise HTTPException(status_code=400, detail="Excel file has no readable data.")
 
         dashboard_text = analyzer.generate_dashboard(
             excel_text=excel_text,
             metrics_json=metrics_json,
             model=model,
             temperature=temperature,
+            year_filter=year_filter,
         )
+        
+        # Add filter information to dashboard text
+        if year is not None:
+            filter_header = (
+                f"\n{'='*80}\n"
+                f"DATA FILTER APPLIED\n"
+                f"{'='*80}\n"
+                f"Year Filter: {year}\n"
+                f"Total Claims (Before Filter): {filter_metadata['total_claims_before_filter']}\n"
+                f"Total Claims (After Filter): {filter_metadata['total_claims_after_filter']}\n"
+                f"Claims Excluded: {filter_metadata['filtered_claims_excluded']}\n"
+                f"Note: {filter_metadata['message']}\n"
+                f"{'='*80}\n\n"
+            )
+            dashboard_text = filter_header + dashboard_text
 
         if download:
             tmp_output = tempfile.NamedTemporaryFile(
@@ -639,10 +783,18 @@ async def generate_management_dashboard(
                 media_type="text/plain",
             )
 
-        return JSONResponse({"success": True, "dashboard": dashboard_text})
+        return JSONResponse({
+            "success": True, 
+            "dashboard": dashboard_text,
+            "filter_info": filter_metadata
+        })
 
+    except HTTPException:
+        # Re-raise HTTP exceptions (they're already properly formatted)
+        raise
     except Exception as e:
         print(f"ERROR: {e}")
+        traceback.print_exc()
         return JSONResponse({"success": False, "error": str(e)}, status_code=500)
     finally:
         if tmp_input_path and os.path.exists(tmp_input_path):

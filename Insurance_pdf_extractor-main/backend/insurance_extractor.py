@@ -221,7 +221,8 @@ class EnhancedInsuranceExtractor:
                 print(f"   Raw LLM response content (first 500 chars): {response_content[:500]}")
                 print(f"   JSON string (first 500 chars): {json_str[:500]}")
                 print(f"   Fixed JSON string (first 500 chars): {fixed_json_str[:500]}")
-                raise # Re-raise the exception if still not fixed
+                # Instead of re-raising, return an empty dictionary to allow graceful fallback
+                return {}
 
     def extract_text_from_pdf(self, pdf_path: str, is_scanned: Optional[bool] = None) -> Tuple[str, List[Dict]]:
         """
