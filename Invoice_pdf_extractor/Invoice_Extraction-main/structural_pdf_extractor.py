@@ -45,7 +45,8 @@ def map_and_segment_text(text):
     
     refined_chunks = []
     detail_buffer = []  # Buffer to merge consecutive detail pages
-    MAX_MERGE = 2       # Efficiently group pages for complex documents
+    is_wellmark = "WELLMARK" in text.upper() or "WELLMARK.COM" in text.upper()
+    MAX_MERGE = 1 if is_wellmark else 2       # Process pages individually for Wellmark to avoid truncation
     
     # GIS 23 Optimization: Check if this document has the detailed "Payroll File Number" pages
     has_payroll = any("Payroll File Number" in p for p in pages)
@@ -56,7 +57,7 @@ def map_and_segment_text(text):
         if detail_buffer:
             merged_text = "\n\n".join(detail_buffer)
             # SUB-CHUNKING: If the text is long, split into parts to avoid JSON truncation (max ~25 items per chunk)
-            chunk_size = 6000
+            chunk_size = 12000 if is_wellmark else 6000 # Prevent mid-page splits for Wellmark to keep headers intact
             if len(merged_text) > chunk_size:
                 print(f"  [Layer] Chunk is very large ({len(merged_text)} chars). Split-chunking into smaller pieces...")
                 lines = merged_text.split("\n")
@@ -400,6 +401,45 @@ def process_with_structural_layer(pdf_path, output_excel=None):
                     "\n   - Member IDs starting with **101** -> PLAN_NAME: 'Legal Plan', PLAN_TYPE: 'VOLUNTARY'"
                     "\n   - Member IDs starting with **700** -> PLAN_NAME: 'Identity Theft Plan', PLAN_TYPE: 'VOLUNTARY'"
                     "\n4. Preserve any row-level date in the `INV_DATE` field for that line item."
+                )
+            elif "WELLMARK" in pdf_path.upper() or "Wellmark" in chunk_text or "wellmark.com" in chunk_text.lower():
+                carrier_name = "Wellmark Blue Cross"
+                # Determine which section this chunk contains to tell the AI where amounts go
+                is_retro_chunk = "Retroactive Adjustments" in chunk_text or "RETROACTIVE ADJUSTMENTS" in chunk_text.upper()
+                is_current_chunk = "Summary of Current Charges" in chunk_text or "SUMMARY OF CURRENT CHARGES" in chunk_text.upper()
+                # If both sections are in the same chunk, we need both labels
+                section_label = ""
+                if is_retro_chunk and is_current_chunk:
+                    section_label = "\n[CHUNK CONTAINS BOTH SECTIONS: Read section headers carefully!]"
+                elif is_retro_chunk:
+                    section_label = "\n[SECTION: RETROACTIVE ADJUSTMENTS — all amounts go to ADJUSTMENT_PREMIUM]"
+                elif is_current_chunk:
+                    section_label = "\n[SECTION: SUMMARY OF CURRENT CHARGES — all amounts go to CURRENT_PREMIUM]"
+                prompt_hint = (
+                    f"{section_label}"
+                    "\n[CRITICAL INSTRUCTIONS FOR WELLMARK BLUE CROSS GROUP INVOICE]"
+                    "\n1. **TWO SECTIONS — DIFFERENT FIELD MAPPING (ABSOLUTE PRIORITY)**:"
+                    "\n   - Rows under 'Retroactive Adjustments' header => ADJUSTMENT_PREMIUM. CURRENT_PREMIUM=null."
+                    "\n   - Rows under 'Summary of Current Charges' header => CURRENT_PREMIUM. ADJUSTMENT_PREMIUM=null."
+                    "\n   - Every member row following a section header belongs to that section until a NEW header appears."
+                    "\n2. **COLUMN STRUCTURE** (table header: Member | ID | Date | Health Premiums* | Dental Premiums | Vision Premiums | Fees | TOC | Total):"
+                    "\n   - 'Member' => LASTNAME/FIRSTNAME (format: LASTNAME, FIRSTNAME)."
+                    "\n   - 'ID' (e.g. W02449109) => MEMBERID."
+                    "\n   - 'Date' (e.g. Mar-26, Jun-26) => BILLING_PERIOD per row."
+                    "\n   - 'Health Premiums*' (non-zero) => PLAN_NAME='Health Premiums', PLAN_TYPE='MEDICAL'."
+                    "\n   - 'Dental Premiums' (non-zero) => PLAN_NAME='Dental Premiums', PLAN_TYPE='DENTAL'."
+                    "\n   - 'Vision Premiums' (non-zero) => PLAN_NAME='Vision Premiums', PLAN_TYPE='VISION'."
+                    "\n   - 'Fees' => IGNORE."
+                    "\n   - 'TOC' => COVERAGE: 101=EE, 111=ES, 119=EC, 127=FAM."
+                    "\n   - 'Total' => IGNORE (row sum — never extract it)."
+                    "\n3. **PLAN_NAME IS COLUMN-DERIVED**: There is NO per-row plan column. Use column header as PLAN_NAME."
+                    "\n4. **PARENTHESES = NEGATIVE**: (376.96) => -376.96. Apply to ALL parenthesized values."
+                    "\n5. **SKIP SUMMARY ROWS**: Skip 'Total Adjustments' and 'Total Charges' rows entirely."
+                    "\n6. **SKIP ZERO COLUMNS**: Do NOT create rows for columns that are 0.00."
+                    "\n7. **100% CAPTURE**: Extract EVERY member row from BOTH sections. Do NOT skip any."
+                    "\n8. **STRICT NULLS**: This invoice does NOT contain SSN or Policy ID in the member rows. You MUST set SSN=null and POLICYID=null for EVERY row."
+                    "\n9. **NO HALLUCINATION**: NEVER invent members (e.g., 'John Doe'). Only extract members exactly as they appear in the table."
+                    "\n10. **EMPTY PAGES**: If the text contains NO member names and is just a summary or instruction page, you MUST return an empty LINE_ITEMS array: []. Do NOT invent or hallucinate dummy data (e.g., 'John Smith', 'Jane Doe', 'Alice Brown')."
                 )
 
         

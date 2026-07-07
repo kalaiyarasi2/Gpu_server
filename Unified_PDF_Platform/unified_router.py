@@ -1075,7 +1075,7 @@ class UnifiedRouter:
             return "INSURANCE_CLAIMS", "Filename loss run keyword"
 
         # RULE F3: Explicit insurance billing / health carrier keywords in filename
-        health_carrier_fn_kw = ["medlink", "medsupp", "cobra", "group benefit", "beneficiary", "uhc", "unitedhealthcare", "bcbs", "bluecross", "blue cross", "blueshield", "anthem", "humana", "aetna", "cigna", "angle", "angle health", "principal", "guardian", "metlife"]
+        health_carrier_fn_kw = ["medlink", "medsupp", "cobra", "group benefit", "beneficiary", "uhc", "unitedhealthcare", "bcbs", "bluecross", "blue cross", "blueshield", "anthem", "humana", "aetna", "cigna", "angle", "angle health", "principal", "guardian", "metlife", "wellmark"]
         if any(kw in filename_lower for kw in health_carrier_fn_kw):
             # Health carriers / group benefits usually mean INVOICE (premium billing), unless explicitly a loss run
             # Since F2 already catches loss runs, we can safely assume these are invoices

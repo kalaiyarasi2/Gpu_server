@@ -1746,6 +1746,43 @@ Extract data from the document text provided below.
         - Member IDs starting with **700** -> PLAN_NAME: "Identity Theft Plan", PLAN_TYPE: "VOLUNTARY"
     - Preserve the row-level date in the `INV_DATE` field for that line item.
 
+- **Wellmark Blue Cross (Group Invoice)**:
+    - **DOCUMENT STRUCTURE (CRITICAL)**: This is a Wellmark Blue Cross Group Invoice. It contains TWO distinct member sections that MUST be treated differently:
+        1. **"Retroactive Adjustments"** section: ALL member dollar amounts in this section MUST be placed in `ADJUSTMENT_PREMIUM`. Set `CURRENT_PREMIUM` to null for every row in this section.
+        2. **"Summary of Current Charges"** section: ALL member dollar amounts in this section MUST be placed in `CURRENT_PREMIUM`. Set `ADJUSTMENT_PREMIUM` to null for every row in this section.
+    - **SECTION IDENTIFICATION (ABSOLUTE PRIORITY)**: The section title appears as a bold header ABOVE the table:
+        - "Retroactive Adjustments" or "RETROACTIVE ADJUSTMENTS" header => this is the ADJUSTMENT section. Every member row that follows belongs here until a NEW section header appears.
+        - "Summary of Current Charges" or "SUMMARY OF CURRENT CHARGES" header => this is the CURRENT CHARGES section. Every member row that follows belongs here until a NEW section header appears.
+    - **COLUMN STRUCTURE (WIDE FORMAT — MULTI-PLAN)**:
+      Table header: `Member | ID | Date | Health Premiums* | Dental Premiums | Vision Premiums | Fees | TOC | Total`
+        - `Member`             => Split into `LASTNAME` and `FIRSTNAME`. Names are in `LASTNAME, FIRSTNAME` format (comma-separated).
+        - `ID` (e.g. W02449109) => `MEMBERID`.
+        - `Date` (e.g. Mar-26, Jun-26) => `BILLING_PERIOD` for that row.
+        - `Health Premiums*` (non-zero) => Create a row with `PLAN_NAME`: "Health Premiums", `PLAN_TYPE`: "MEDICAL".
+        - `Dental Premiums` (non-zero) => Create a row with `PLAN_NAME`: "Dental Premiums", `PLAN_TYPE`: "DENTAL".
+        - `Vision Premiums` (non-zero) => Create a row with `PLAN_NAME`: "Vision Premiums", `PLAN_TYPE`: "VISION".
+        - `Fees`               => IGNORE completely. Do NOT extract to any field.
+        - `TOC`                => Map to `COVERAGE` using this legend:
+            - `101` => **EE**  (Single)
+            - `111` => **ES**  (Two Person)
+            - `119` => **EC**  (Subscriber+child(ren))
+            - `127` => **FAM** (Family)
+        - `Total`              => IGNORE completely (row sum — NEVER extract it).
+    - **PLAN_NAME IS COLUMN-DERIVED (CRITICAL)**: There is NO per-row plan name column in this invoice. You MUST use the column header as `PLAN_NAME`. For each member, create SEPARATE JSON objects for each non-zero premium column (Health Premiums, Dental Premiums, Vision Premiums).
+    - **PARENTHESES = NEGATIVE (CRITICAL)**: Values in parentheses like `(376.96)` or `$(2,804.84)` MUST be extracted as negative numbers (e.g., -376.96). These represent credits/charges in the retroactive section.
+    - **SKIP SUMMARY ROWS (STRICT)**: Rows labeled `"Total Adjustments"` or `"Total Charges"` MUST be skipped entirely. Do NOT extract them as member rows.
+    - **SKIP ZERO COLUMNS**: If a premium column is 0.00 for a member, do NOT create a row for it. Only create rows for columns with non-zero values.
+    - **STRICT NULLS**: This invoice does NOT contain SSN or Policy ID in the member rows. You MUST set SSN=null and POLICYID=null for EVERY row.
+    - **NO HALLUCINATION**: NEVER invent members (e.g., 'John Doe'). Only extract members exactly as they appear in the table.
+    - **EMPTY PAGES**: If the text contains NO member names and is just a summary or instruction page, you MUST return an empty LINE_ITEMS array: []. Do NOT invent or hallucinate dummy data (e.g., 'John Smith', 'Jane Doe', 'Alice Brown').
+    - **HEADER FIELDS**:
+        - `INV_NUMBER`        <= "Invoice Number" field (e.g., `261310025010`).
+        - `BILLING_PERIOD`   <= "Billing Period" field (e.g., `06/01/2026 - 06/30/2026`).
+        - `INV_DATE`         <= "Billing Date" field (e.g., `05/11/2026`).
+        - `AMOUNT_DUE`       <= "Amount Due" field (e.g., `64808.86`).
+        - `TOTAL_BILLED`     <= "Current Health Premiums*" line in Account Summary (e.g., `67613.70`).
+        - `TOTAL_ADJUSTMENTS` <= "Retroactive Health Costs*" line in Account Summary (negative, e.g., `-2804.84`).
+
 - **Delta Dental**:
     - **SECTION PRIORITY (CRITICAL)**: Look for the injected markers `### SECTION: ... ###`.
         1. **`### SECTION: DELTA_DENTAL_CURRENT ###`**: Find member names and capture their amount into **CURRENT_PREMIUM**.
@@ -2949,6 +2986,14 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
     if is_principal_invoice:
         global_carrier = "Principal"
         print(f"  [V6][PRINCIPAL] Principal Life Insurance Company detected.")
+
+    # Wellmark Blue Cross Detection
+    is_wellmark_invoice = any("WELLMARK" in p.upper() for p in pages) or \
+                          any("wellmark.com" in p.lower() for p in pages) or \
+                          "WELLMARK" in str(pdf_path).upper()
+    if is_wellmark_invoice:
+        global_carrier = "Wellmark Blue Cross"
+        print(f"  [WELLMARK] Wellmark Blue Cross invoice detected. Carrier context will be passed to all chunks.")
 
     print(f"  [V3] Splitting large document into {len(pages)} pages for reliable extraction...")
     
