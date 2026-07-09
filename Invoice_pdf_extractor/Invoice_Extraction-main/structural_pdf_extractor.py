@@ -198,6 +198,33 @@ def apply_markdown_structure(text: str) -> str:
     print(f"  [MARKDOWN_PROC] Restructured {len(lines)} lines into Markdown format.")
     return result
 
+def restructure_guardian_tabs(text: str) -> str:
+    """
+    Specifically for Guardian's wide 'Current Premiums' table which uses tabs for empty columns.
+    Converts consecutive tabs into explicit empty markdown columns so the LLM doesn't miscount.
+    """
+    lines = text.splitlines()
+    structured = []
+    in_current_table = False
+    
+    for line in lines:
+        if "Current Premiums" in line and "Premium Adjustments" not in line:
+            in_current_table = True
+        
+        if in_current_table and '\t' in line:
+            # Replace each tab with a pipe separator to enforce strict column structure
+            parts = line.split('\t')
+            # If line has more than 5 parts, it's likely a data row
+            if len(parts) > 5:
+                md_row = '| ' + ' | '.join(p if p.strip() else '   ' for p in parts) + ' |'
+                structured.append(md_row)
+            else:
+                structured.append(line)
+        else:
+            structured.append(line)
+            
+    return '\n'.join(structured)
+
 def process_with_structural_layer(pdf_path, output_excel=None):
     """Process PDF with structural analysis layer.
     
@@ -261,6 +288,11 @@ def process_with_structural_layer(pdf_path, output_excel=None):
             text = apply_markdown_structure(text)
         else:
             print(f"  [QUALITY] Score >= 90% -> Text quality OK. Using as-is.")
+            
+        # [GUARDIAN FIX] Fix tab-delimited empty columns in wide tables
+        if "Guardian" in pdf_path:
+            print(f"  [GUARDIAN] Applying tab restructuring to preserve empty columns...")
+            text = restructure_guardian_tabs(text)
     
     # Save the final text to verification folder
     try:
@@ -271,6 +303,44 @@ def process_with_structural_layer(pdf_path, output_excel=None):
         print(f"  [WARN] Could not save extracted text: {e}")
 
     print(f"  [Debug] Text extraction complete. Length: {len(text)} chars.")
+    
+    # [V7][FIX] Route Guardian and MOO directly to the Direct Parser pipeline!
+    if "Guardian" in pdf_path or "mutual of omaha" in pdf_path.lower() or "moo" in pdf_path.lower():
+        print(f"  [V7][ROUTER] Guardian/MOO detected in structural layer! Routing to process_verified_text_file for Direct Parser support...")
+        
+        source_filename = os.path.basename(pdf_path)
+        data = v3.process_verified_text_file(str(initial_text_path), client, source_filename=source_filename)
+        
+        rows = v3.flatten_extracted_data(data, source_filename)
+        if not rows:
+            print(f"  [WARNING] No rows extracted from {pdf_path}")
+            return output_excel
+            
+        
+        df = pd.DataFrame(rows)
+        
+        # Ensure only required fields are present in the final output
+        cols = v3.REQUIRED_FIELDS
+        cols = [c for c in cols if c in df.columns]
+        df = df[cols]
+        
+        json_output = str(output_excel).replace(".xlsx", ".json")
+        try:
+            import json as json_lib
+            # Filter the dicts in rows as well to match the Excel output
+            filtered_rows = [{k: row[k] for k in cols if k in row} for row in rows]
+            with open(json_output, "w", encoding="utf-8") as f:
+                json_lib.dump(filtered_rows, f, indent=4)
+        except:
+            pass
+            
+        # Write Excel
+        writer = pd.ExcelWriter(output_excel, engine='xlsxwriter')
+        df.to_excel(writer, sheet_name='Extracted Data', index=False)
+        writer.close()
+        
+        print(f"  [SUCCESS] Saved Direct Parser results to {output_excel}")
+        return output_excel
     
     # 2. Segment text using structural logic
     chunks = map_and_segment_text(text)
@@ -309,11 +379,52 @@ def process_with_structural_layer(pdf_path, output_excel=None):
             # Refined prompt hint for Guardian and GIS 23
             prompt_hint = ""
             if "Guardian" in pdf_path or "Basic Term Life" in chunk_text:
+                # Detect which section this chunk belongs to
+                is_adjustment_section = "Premium Adjustments Since Last Bill" in chunk_text or "Premium Adjustment" in chunk_text
+                is_current_premiums_section = "Current Premiums" in chunk_text and "Premium Adjustments" not in chunk_text
+                
+                section_context = ""
+                if is_adjustment_section:
+                    section_context = (
+                        "\n[SECTION: PREMIUM ADJUSTMENTS SINCE LAST BILL]"
+                        "\nThis section lists NEW employees. Column layout:"
+                        "\n  Employee | Eff. Date | Coverage | Ins. | New Volume | New Premium | Premium Adjustment"
+                        "\nMapping rules:"
+                        "\n  - 'Employee' -> LASTNAME,FIRSTNAME (format: Last,First)"
+                        "\n  - 'Eff. Date' -> BILLING_PERIOD"
+                        "\n  - 'Coverage' -> PLAN_NAME"
+                        "\n  - 'Ins.' -> COVERAGE (Emp=EE, Fam=FAM, Emp/Sp=ES, Emp/Ch=EC, Sp=ES, Ch=EC)"
+                        "\n  - 'New Premium' -> CURRENT_PREMIUM"
+                        "\n  - 'Premium Adjustment' -> ADJUSTMENT_PREMIUM"
+                        "\n  - IGNORE subtotal rows (lines that start with '$' amounts only)"
+                        "\n  - Continuation rows (indented, no employee name) belong to the employee above"
+                    )
+                elif is_current_premiums_section:
+                    section_context = (
+                        "\n[SECTION: CURRENT PREMIUMS - WIDE MULTI-COLUMN TABLE]"
+                        "\nThis is a wide table that has been pre-formatted as a Markdown table with explicit pipe '|' delimiters."
+                        "\nThe columns IN ORDER (separated by '|') are:"
+                        "\n  | Employee | Dental Premium | Dental Ins. | ManagedDentalCare-Mdc Premium | Mdc Ins. | "
+                        "ManagedDentalCare-Mdg Premium | Mdg Ins. | Std Premium/Volume | Vision Premium | Vision Ins. | "
+                        "VoluntaryAd&D Premium/Volume | Ad&D Ins. | VoluntaryTermLife Premium/Volume | Life Ins. | TotalPremium |"
+                        "\n\nCRITICAL COLUMN MAPPING RULES:"
+                        "\n  1. Rely STRICTLY on the pipe '|' delimiters to count column position. Each number's position determines its plan."
+                        "\n  2. Empty cells (e.g., '| |') = employee does NOT have that plan -> do NOT create a row."
+                        "\n  3. TotalPremium (last column, starts with $) = row sum -> NEVER extract as a plan."
+                        "\n  4. For ALL rows in this section: ADJUSTMENT_PREMIUM = null."
+                        "\n  5. Multi-tier entries (Emp+Sp+Ch on same plan) should be SUMMED into one premium."
+                        "\n  6. Volume numbers (e.g., '200,000') are NOT premiums - they appear after Premium in Ad&D/Life columns."
+                        "\n  7. Set BILLING_PERIOD to the current billing period from the page footer."
+                    )
+                
                 prompt_hint = (
-                    "\n[HINT] This document may have multiple premium columns: Basic Term Life, Dental, Std, Vision. "
-                    "Please map each member's premium correctly to the PLAN_NAME and CURRENT_PREMIUM. "
-                    "If you see 'Premium Adjustments', capture them in ADJUSTMENT_PREMIUM. "
-                    "IMPORTANT: Do NOT extract 'TOTAL' rows or summary table rows as line items."
+                    f"{section_context}"
+                    "\n\n[GUARDIAN GLOBAL RULES]"
+                    "\n1. Do NOT extract 'TOTAL', 'TotalPremiumAdjustments', 'TotalCurrentPremium', 'continued', or summary rows as line items."
+                    "\n2. Each coverage type for each employee must be a SEPARATE line item."
+                    "\n3. Plan name normalization: Use 'Voluntary Ad&D' and 'Voluntary Term Life' (with spaces) consistently."
+                    "\n4. Coverage tier mapping: Emp=EE, Fam=FAM, Emp/Sp=ES, Emp/Ch=EC"
+                    "\n5. If an employee has multiple tiers within one plan (e.g., Emp + Sp), SUM the premiums and use the broadest coverage code."
                 )
             elif "GIS 23" in pdf_path or "Restaurant Services" in pdf_path or "Payroll File Number" in chunk_text:
                 prompt_hint = (

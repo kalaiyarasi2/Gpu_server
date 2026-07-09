@@ -3,8 +3,69 @@
     "guardian",
     "GuardianAnytime",
     "ROCCA TAMPA LLC",
-    "CHOICEHR"
+    "CHOICEHR",
+    "FOURTH PEO",
+    "CHOICEAP"
   ],
+  "DOCUMENT_STRUCTURE": {
+    "DESCRIPTION": "Guardian FOURTH PEO / CHOICEAP invoices have TWO main data sections that OVERLAP in content. The extractor MUST handle them correctly to avoid doubling premiums.",
+    "SECTIONS": [
+      {
+        "NAME": "Summary of Activity (Page 1)",
+        "PAGES": "1",
+        "CONTENT": "Summary table with coverage totals. SKIP for line items - use only for HEADER (INV_DATE, INV_NUMBER etc.)",
+        "ACTION": "HEADER ONLY - do NOT extract line items"
+      },
+      {
+        "NAME": "Premium Adjustments Since Last Bill (Pages 2-6)",
+        "PAGES": "2-6",
+        "CONTENT": "Lists NEW employees added since last bill. Each employee has one or more coverages with New Premium and Premium Adjustment columns.",
+        "ACTION": "Extract each coverage as a separate line item. Map 'New Premium' -> CURRENT_PREMIUM, 'Premium Adjustment' -> ADJUSTMENT_PREMIUM. Set BILLING_PERIOD to the Eff. Date (05/01/26).",
+        "COLUMN_MAP": {
+          "Employee": "LASTNAME,FIRSTNAME (format: LastName,FirstName)",
+          "Eff. Date": "BILLING_PERIOD",
+          "Coverage": "PLAN_NAME",
+          "Ins.": "COVERAGE (Emp=EE, Fam=FAM, Emp/Sp=ES, Emp/Ch=EC, Sp=ES, Ch=EC)",
+          "New Volume": "ignore",
+          "New Premium": "CURRENT_PREMIUM",
+          "Premium Adjustment": "ADJUSTMENT_PREMIUM"
+        }
+      },
+      {
+        "NAME": "Current Premiums (Pages 7-9)",
+        "PAGES": "7-9",
+        "CONTENT": "Wide multi-column table showing ALL employees' current premiums across all plans. CRITICAL: Employees who already appeared in the Adjustments section will appear here too with the SAME premium values.",
+        "ACTION": "Extract each non-zero plan as a separate line item. Set ADJUSTMENT_PREMIUM=null for all rows from this section. Set BILLING_PERIOD to the current billing period (06/01/26).",
+        "TABLE_COLUMNS_IN_ORDER": [
+          "Col1: Employee (Name)",
+          "Col2: Dental Premium", "Col3: Dental Ins.",
+          "Col4: ManagedDentalCare- Mdc Premium", "Col5: ManagedDentalCare- Mdc Ins.",
+          "Col6: ManagedDentalCare- Mdg Premium", "Col7: ManagedDentalCare- Mdg Ins.",
+          "Col8: Std Premium/WeeklyBenefit Volume",
+          "Col9: Vision Premium", "Col10: Vision Ins.",
+          "Col11: VoluntaryAd&D Premium/Volume", "Col12: VoluntaryAd&D Ins.",
+          "Col13: VoluntaryTermLife Premium/Volume", "Col14: VoluntaryTermLife Ins.",
+          "Col15: TotalPremium (IGNORE this — it is the row sum)"
+        ],
+        "CRITICAL_RULES": [
+          "RULE A: Use PIPE DELIMITERS (|) to count column positions. Each | separates one column. The plan is determined ONLY by position, NEVER by the value.",
+          "RULE B: Col8 is ALWAYS Std (Short Term Disability). Do NOT confuse it with Vision. Vision is Col9.",
+          "RULE C: Col11 is ALWAYS VoluntaryAd&D. Col13 is ALWAYS VoluntaryTermLife. Do NOT confuse these with Vision.",
+          "RULE D: Empty cells (| | or |     |) mean the employee does NOT have that plan — do NOT create a row for it.",
+          "RULE E: Col15 (TotalPremium) is the row sum — NEVER extract it as a plan. It always starts with $.",
+          "RULE F — MULTI-TIER CELLS: Col11 and Col13 may contain MULTIPLE premium+volume pairs on the SAME LINE, e.g., '2.50 100,000 1.25 50,000 0.50 10,000'. This means Emp=2.50 (vol 100k), Sp=1.25 (vol 50k), Ch=0.50 (vol 10k). You MUST SUM the premiums: 2.50+1.25+0.50=4.25. The coverage tiers are in Col12/Col14 as 'Emp Sp Ch'.",
+          "RULE G — MULTI-LINE ROWS: Some employees span 2 lines. The second line contains volume data (e.g., '10,000' or '865'). This is just metadata — it does NOT create a new plan row.",
+          "RULE H — COVERAGE TIER: When multiple tiers appear (Emp Sp Ch), use the broadest tier: 3 tiers=FAM, 2 tiers with Sp=ES, 2 tiers with Ch=EC."
+        ]
+      }
+    ],
+    "MERGE_RULES": {
+      "CRITICAL": "DO NOT SUM premiums from the Adjustments section with the Current Premiums section for the same employee+plan. They represent the SAME charge, not additive charges.",
+      "RULE_1": "If an employee+plan appears in BOTH sections with the SAME CURRENT_PREMIUM value, keep ONLY the Adjustments row (which has both CURRENT_PREMIUM and ADJUSTMENT_PREMIUM populated).",
+      "RULE_2": "If an employee appears ONLY in the Current Premiums section (no Adjustments entry), keep that row with ADJUSTMENT_PREMIUM=null.",
+      "RULE_3": "The Adjustments section uses the Eff. Date as BILLING_PERIOD (e.g., 5/1/2026). The Current Premiums section uses the current billing period (e.g., 6/1/2026)."
+    }
+  },
   "EXAMPLES": [
     {
       "RAW_TEXT": "AcevedoHilario,Maricruz 4.00 $4.00",
@@ -16,7 +77,7 @@
           "PLAN_NAME": "Basic Term Life",
           "PLAN_TYPE": "LIFE",
           "COVERAGE": "",
-          "CURRENT_PREMIUM": 4.00
+          "CURRENT_PREMIUM": 4.0
         }
       ]
     },
@@ -38,7 +99,7 @@
           "PLAN_NAME": "Short Term Disability",
           "PLAN_TYPE": "STD",
           "COVERAGE": "",
-          "CURRENT_PREMIUM": 9.50
+          "CURRENT_PREMIUM": 9.5
         }
       ]
     },
@@ -52,7 +113,7 @@
           "PLAN_NAME": "Basic Term Life",
           "PLAN_TYPE": "LIFE",
           "COVERAGE": "",
-          "CURRENT_PREMIUM": 4.00
+          "CURRENT_PREMIUM": 4.0
         },
         {
           "LASTNAME": "Bonsack",
@@ -82,7 +143,7 @@
           "PLAN_NAME": "Basic Term Life",
           "PLAN_TYPE": "LIFE",
           "COVERAGE": "",
-          "CURRENT_PREMIUM": 2.50
+          "CURRENT_PREMIUM": 2.5
         },
         {
           "LASTNAME": "Feld",
@@ -98,7 +159,7 @@
           "PLAN_NAME": "Short Term Disability",
           "PLAN_TYPE": "STD",
           "COVERAGE": "",
-          "CURRENT_PREMIUM": 9.50
+          "CURRENT_PREMIUM": 9.5
         },
         {
           "LASTNAME": "Feld",
@@ -189,6 +250,219 @@
           "PLAN_TYPE": "VISION",
           "COVERAGE": "ES",
           "CURRENT_PREMIUM": 19.33
+        }
+      ]
+    },
+    {
+      "RAW_TEXT": "Beebee,Mellifora\t05/01/26\tManagedDentalCare- Mdc\tEmp\t\t11.97\t11.97\n\t\tVoluntaryTermLife\tEmp\t10,000\t0.90\t0.90\n\t\t\t\t\t$12.87\t$12.87",
+      "NOTES": "FOURTH PEO Adjustments section. Two separate coverages for one employee. 'New Premium' = CURRENT_PREMIUM, 'Premium Adjustment' = ADJUSTMENT_PREMIUM. The subtotal row ($12.87) must be IGNORED.",
+      "MAPPING": [
+        {
+          "LASTNAME": "Beebee",
+          "FIRSTNAME": "Mellifora",
+          "PLAN_NAME": "ManagedDentalCare- Mdc",
+          "PLAN_TYPE": "DENTAL",
+          "COVERAGE": "EE",
+          "CURRENT_PREMIUM": 11.97,
+          "ADJUSTMENT_PREMIUM": 11.97
+        },
+        {
+          "LASTNAME": "Beebee",
+          "FIRSTNAME": "Mellifora",
+          "PLAN_NAME": "Voluntary Term Life",
+          "PLAN_TYPE": "LIFE",
+          "COVERAGE": "EE",
+          "CURRENT_PREMIUM": 0.90,
+          "ADJUSTMENT_PREMIUM": 0.90
+        }
+      ]
+    },
+    {
+      "RAW_TEXT": "Arzeno,AlanA\t\t\t\t\t11.97\tEmp\t\t\t\t0.25\tEmp\t2.20\tEmp\t$14.42",
+      "NOTES": "FOURTH PEO Current Premiums wide table. Column order: Dental|Ins|Mdc|Ins|Mdg|Ins|Std|Vision|Ins|Ad&D|Ins|Life|Ins|Total. Here: Mdg=11.97, Ad&D=0.25, Life=2.20. Empty columns = no plan. $14.42 is row total to IGNORE. ADJUSTMENT_PREMIUM=null for Current Premiums section.",
+      "MAPPING": [
+        {
+          "LASTNAME": "Arzeno",
+          "FIRSTNAME": "AlanA",
+          "PLAN_NAME": "ManagedDentalCare- Mdg",
+          "PLAN_TYPE": "DENTAL",
+          "COVERAGE": "EE",
+          "CURRENT_PREMIUM": 11.97,
+          "ADJUSTMENT_PREMIUM": null
+        },
+        {
+          "LASTNAME": "Arzeno",
+          "FIRSTNAME": "AlanA",
+          "PLAN_NAME": "Voluntary Ad&D",
+          "PLAN_TYPE": "AD&D",
+          "COVERAGE": "EE",
+          "CURRENT_PREMIUM": 0.25,
+          "ADJUSTMENT_PREMIUM": null
+        },
+        {
+          "LASTNAME": "Arzeno",
+          "FIRSTNAME": "AlanA",
+          "PLAN_NAME": "Voluntary Term Life",
+          "PLAN_TYPE": "LIFE",
+          "COVERAGE": "EE",
+          "CURRENT_PREMIUM": 2.20,
+          "ADJUSTMENT_PREMIUM": null
+        }
+      ]
+    },
+    {
+      "RAW_TEXT": "Bennardo,KristiL\t73.14\tEmp/Sp\t\t\t\t\t38.70 1,500\t11.84\tEmp/Sp\t\t\t\t\t$123.68",
+      "NOTES": "FOURTH PEO Current Premiums wide table. Dental=73.14(ES), Std=38.70(volume 1500), Vision=11.84(ES). Other columns empty. Total $123.68 = IGNORE.",
+      "MAPPING": [
+        {
+          "LASTNAME": "Bennardo",
+          "FIRSTNAME": "KristiL",
+          "PLAN_NAME": "Dental",
+          "PLAN_TYPE": "DENTAL",
+          "COVERAGE": "ES",
+          "CURRENT_PREMIUM": 73.14,
+          "ADJUSTMENT_PREMIUM": null
+        },
+        {
+          "LASTNAME": "Bennardo",
+          "FIRSTNAME": "KristiL",
+          "PLAN_NAME": "Std",
+          "PLAN_TYPE": "STD",
+          "COVERAGE": "",
+          "CURRENT_PREMIUM": 38.70,
+          "ADJUSTMENT_PREMIUM": null
+        },
+        {
+          "LASTNAME": "Bennardo",
+          "FIRSTNAME": "KristiL",
+          "PLAN_NAME": "Vision",
+          "PLAN_TYPE": "VISION",
+          "COVERAGE": "ES",
+          "CURRENT_PREMIUM": 11.84,
+          "ADJUSTMENT_PREMIUM": null
+        }
+      ]
+    },
+    {
+      "RAW_TEXT": "Fedorovich,StephanieA\t\t\t\t\t\t\t\t\t\t0.50 20,000 0.25 10,000\tEmp Sp\t6.80 20,000 3.40 10,000\tEmp Sp\t$10.95",
+      "NOTES": "FOURTH PEO Current Premiums. Multi-tier: Ad&D has Emp=0.50 + Sp=0.25 = 0.75 total. Life has Emp=6.80 + Sp=3.40 = 10.20 total. Coverage = ES (Employee+Spouse). The individual amounts on the same line should be SUMMED per plan.",
+      "MAPPING": [
+        {
+          "LASTNAME": "Fedorovich",
+          "FIRSTNAME": "StephanieA",
+          "PLAN_NAME": "Voluntary Ad&D",
+          "PLAN_TYPE": "AD&D",
+          "COVERAGE": "ES",
+          "CURRENT_PREMIUM": 0.75,
+          "ADJUSTMENT_PREMIUM": null
+        },
+        {
+          "LASTNAME": "Fedorovich",
+          "FIRSTNAME": "StephanieA",
+          "PLAN_NAME": "Voluntary Term Life",
+          "PLAN_TYPE": "LIFE",
+          "COVERAGE": "ES",
+          "CURRENT_PREMIUM": 10.20,
+          "ADJUSTMENT_PREMIUM": null
+        }
+      ]
+    },
+    {
+      "RAW_TEXT": "Lubelski,RebeccaE\t20.64\tEmp\t\t\t\t\t23.36\t\t\t\t\t\t\t$44.00\n\t\t\t\t\t\t\t865",
+      "NOTES": "FOURTH PEO Current Premiums. Count the pipes: Col2=20.64(Dental), Col8=23.36(Std). Std is the 8th column. Do NOT mistake it for Vision (Col9 is EMPTY). '865' on line 2 is just Std volume data.",
+      "MAPPING": [
+        {
+          "LASTNAME": "Lubelski",
+          "FIRSTNAME": "RebeccaE",
+          "PLAN_NAME": "Dental",
+          "PLAN_TYPE": "DENTAL",
+          "COVERAGE": "EE",
+          "CURRENT_PREMIUM": 20.64,
+          "ADJUSTMENT_PREMIUM": null
+        },
+        {
+          "LASTNAME": "Lubelski",
+          "FIRSTNAME": "RebeccaE",
+          "PLAN_NAME": "Std",
+          "PLAN_TYPE": "STD",
+          "COVERAGE": "",
+          "CURRENT_PREMIUM": 23.36,
+          "ADJUSTMENT_PREMIUM": null
+        }
+      ]
+    },
+    {
+      "RAW_TEXT": "Jensen,BrandonD\t20.64\tEmp\t\t\t\t\t\t\t\t2.50 100,000 1.25 50,000 0.50 10,000\tEmp Sp Ch\t10.00 100,000 5.00 50,000 1.60 10,000\tEmp Sp Ch\t$41.49",
+      "NOTES": "FOURTH PEO Current Premiums. CRITICAL MULTI-TIER EXAMPLE. Col2=Dental 20.64. Col11=VoluntaryAd&D with THREE tiers packed into one cell: Emp=2.50(vol 100k) + Sp=1.25(vol 50k) + Ch=0.50(vol 10k) = SUM 4.25. Col13=VoluntaryTermLife with THREE tiers: Emp=10.00(vol 100k) + Sp=5.00(vol 50k) + Ch=1.60(vol 10k) = SUM 16.60. Coverage=FAM (3 tiers). $41.49 is row total = IGNORE. Do NOT create Vision from the 2.50 — it is Ad&D.",
+      "MAPPING": [
+        {
+          "LASTNAME": "Jensen",
+          "FIRSTNAME": "BrandonD",
+          "PLAN_NAME": "Dental",
+          "PLAN_TYPE": "DENTAL",
+          "COVERAGE": "EE",
+          "CURRENT_PREMIUM": 20.64,
+          "ADJUSTMENT_PREMIUM": null
+        },
+        {
+          "LASTNAME": "Jensen",
+          "FIRSTNAME": "BrandonD",
+          "PLAN_NAME": "Voluntary Ad&D",
+          "PLAN_TYPE": "AD&D",
+          "COVERAGE": "FAM",
+          "CURRENT_PREMIUM": 4.25,
+          "ADJUSTMENT_PREMIUM": null
+        },
+        {
+          "LASTNAME": "Jensen",
+          "FIRSTNAME": "BrandonD",
+          "PLAN_NAME": "Voluntary Term Life",
+          "PLAN_TYPE": "LIFE",
+          "COVERAGE": "FAM",
+          "CURRENT_PREMIUM": 16.60,
+          "ADJUSTMENT_PREMIUM": null
+        }
+      ]
+    },
+    {
+      "RAW_TEXT": "Peckham,ChaceG\t\t\t\t\t11.97\tEmp\t\t10.00\tEmp\t5.00 200,000\tEmp\t20.00 200,000\tEmp\t$46.97",
+      "NOTES": "FOURTH PEO Current Premiums. Col6=ManagedDentalCare-Mdg 11.97, Col9=Vision 10.00, Col11=VoluntaryAd&D 5.00 (single tier, ignore volume 200000), Col13=VoluntaryTermLife 20.00 (single tier). $46.97 row total = IGNORE.",
+      "MAPPING": [
+        {
+          "LASTNAME": "Peckham",
+          "FIRSTNAME": "ChaceG",
+          "PLAN_NAME": "ManagedDentalCare- Mdg",
+          "PLAN_TYPE": "DENTAL",
+          "COVERAGE": "EE",
+          "CURRENT_PREMIUM": 11.97,
+          "ADJUSTMENT_PREMIUM": null
+        },
+        {
+          "LASTNAME": "Peckham",
+          "FIRSTNAME": "ChaceG",
+          "PLAN_NAME": "Vision",
+          "PLAN_TYPE": "VISION",
+          "COVERAGE": "EE",
+          "CURRENT_PREMIUM": 10.00,
+          "ADJUSTMENT_PREMIUM": null
+        },
+        {
+          "LASTNAME": "Peckham",
+          "FIRSTNAME": "ChaceG",
+          "PLAN_NAME": "Voluntary Ad&D",
+          "PLAN_TYPE": "AD&D",
+          "COVERAGE": "EE",
+          "CURRENT_PREMIUM": 5.00,
+          "ADJUSTMENT_PREMIUM": null
+        },
+        {
+          "LASTNAME": "Peckham",
+          "FIRSTNAME": "ChaceG",
+          "PLAN_NAME": "Voluntary Term Life",
+          "PLAN_TYPE": "LIFE",
+          "COVERAGE": "EE",
+          "CURRENT_PREMIUM": 20.00,
+          "ADJUSTMENT_PREMIUM": null
         }
       ]
     }

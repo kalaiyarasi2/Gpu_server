@@ -2431,6 +2431,102 @@ def extract_text_to_file(pdf_path: str, output_txt: Optional[str] = None, use_oc
         print(f"  [ERROR] Error saving text to {output_txt}: {e}")
         return None
 
+def parse_guardian_current_premiums_direct(full_raw_text: str, source_filename: str = "") -> list:
+    """
+    Deterministic direct parser for Guardian's wide 'Current Premiums' table (Pages 7-9).
+    Bypasses LLM to flawlessly parse multi-tier cells and 15 columns based on | delimiters.
+    """
+    items = []
+    lines = full_raw_text.splitlines()
+    in_table = False
+    
+    # Extract billing period from page footer (e.g., BillingPeriod:06/01/26to06/30/26)
+    billing_period = "06/01/2026"
+    bp_match = re.search(r'BillingPeriod:(\d{2}/\d{2}/\d{2,4})', full_raw_text)
+    if bp_match:
+        bp_raw = bp_match.group(1)
+        if len(bp_raw) == 8: # MM/DD/YY -> MM/DD/YYYY
+            parts = bp_raw.split('/')
+            billing_period = f"{parts[0]}/{parts[1]}/20{parts[2]}"
+        else:
+            billing_period = bp_raw
+            
+    col_mapping = {
+        2: {"name": "Dental", "type": "DENTAL", "cov_col": 3},
+        4: {"name": "ManagedDentalCare- Mdc", "type": "DENTAL", "cov_col": 5},
+        6: {"name": "ManagedDentalCare- Mdg", "type": "DENTAL", "cov_col": 7},
+        8: {"name": "Std", "type": "STD", "cov_col": None},
+        9: {"name": "Vision", "type": "VISION", "cov_col": 10},
+        11: {"name": "Voluntary Ad&D", "type": "AD&D", "cov_col": 12},
+        13: {"name": "Voluntary Term Life", "type": "LIFE", "cov_col": 14},
+    }
+    
+    def map_coverage(cov_raw: str) -> str:
+        cov = cov_raw.strip().upper()
+        if not cov: return ""
+        if "FAM" in cov or ("SP" in cov and "CH" in cov): return "FAM"
+        if "SP" in cov: return "ES"
+        if "CH" in cov: return "EC"
+        return "EE"
+
+    current_lastname = ""
+    current_firstname = ""
+    
+    for line in lines:
+        line = line.strip()
+        if line == "| Current Premiums |" or line == "| Current Premiums (cont'd.) |":
+            in_table = True
+            current_lastname = ""
+            current_firstname = ""
+        elif "Summary of Current Premiums" in line:
+            in_table = False
+        
+        # Valid member row: must start with | and not be a header/footer
+        if in_table and line.startswith("|") and not line.startswith("| Employee |") and not line.startswith("| - |") and not line.startswith("| TOTAL |") and not line.startswith("| TotalCurrentPremium"):
+            cols = [c.strip() for c in line.split("|")]
+            
+            # The row should have around 16 columns (indices 0 to 15)
+            if len(cols) >= 14:
+                fullname = cols[1]
+                if fullname and not fullname.lower() in ["premium", "ins.", "continued", ""]:
+                    if "," in fullname:
+                        current_lastname, current_firstname = [p.strip() for p in fullname.split(",", 1)]
+                    else:
+                        current_lastname, current_firstname = fullname.strip(), ""
+                
+                lastname = current_lastname
+                firstname = current_firstname
+                
+                if not lastname and not firstname:
+                    continue
+                    
+                for col_idx, plan_info in col_mapping.items():
+                    if col_idx < len(cols):
+                        val_raw = cols[col_idx]
+                        if not val_raw: continue
+                        
+                        # Find all premium amounts (strict match for floats with 2 decimal places to ignore volume like 100,000)
+                        premiums = re.findall(r'(\d+\.\d{2})', val_raw)
+                        if premiums:
+                            total_prem = sum(to_float(p) for p in premiums)
+                            if total_prem > 0:
+                                cov_raw = ""
+                                if plan_info["cov_col"] and plan_info["cov_col"] < len(cols):
+                                    cov_raw = cols[plan_info["cov_col"]]
+                                
+                                items.append({
+                                    "LASTNAME": lastname,
+                                    "FIRSTNAME": firstname,
+                                    "PLAN_NAME": plan_info["name"],
+                                    "PLAN_TYPE": plan_info["type"],
+                                    "COVERAGE": map_coverage(cov_raw),
+                                    "CURRENT_PREMIUM": round(total_prem, 2),
+                                    "ADJUSTMENT_PREMIUM": None,
+                                    "BILLING_PERIOD": billing_period,
+                                    "SOURCE_FILE": source_filename
+                                })
+    return items
+
 
 def process_verified_text_file(txt_path: str, client: OpenAI, source_filename: Optional[str] = None) -> Dict:
     """
@@ -2445,9 +2541,9 @@ def process_verified_text_file(txt_path: str, client: OpenAI, source_filename: O
     
     try:
         with open(txt_path, 'r', encoding='utf-8') as f:
-            text = f.read()
+            raw_text = f.read()
             
-        text = clean_ocr_noise(text)
+        text = clean_ocr_noise(raw_text)
         print(f"  [OK] Read {len(text)} characters from verified file")
         
     except Exception as e:
@@ -2456,13 +2552,19 @@ def process_verified_text_file(txt_path: str, client: OpenAI, source_filename: O
     
     # [V5] MOO Context Preservation: 
     # Page-by-page processing with overlap to handle member context inheritance.
+    page_markers = bool(re.search(r'\[\[PAGE_\d+\]\]', text))
     is_moo = "MUTUAL OF OMAHA" in text.upper() or "MUTUALOFOMAHA" in text.upper() or "MOO" in str(txt_path).upper()
     
     parts = []
+    raw_parts = []
     if page_markers:
         parts = re.split(r'\[\[PAGE_\d+\]\]', text)
         if parts and not parts[0].strip():
             parts.pop(0)
+            
+        raw_parts = re.split(r'\[\[PAGE_\d+\]\]', raw_text)
+        if raw_parts and not raw_parts[0].strip():
+            raw_parts.pop(0)
 
     if is_moo and len(parts) > 1:
         print(f"  [V7][MOO] Using Direct Parser (LLM-free) for member rows.")
@@ -2545,16 +2647,21 @@ def process_verified_text_file(txt_path: str, client: OpenAI, source_filename: O
         all_line_items = []
         is_uhc = "UNITEDHEALTH" in text.upper() or "UHC" in text.upper()
         is_legal_shield = "LEGAL SHIELD" in text.upper() or "LEGALSHIELD" in text.upper()
-        global_carrier = "Legal Shield" if is_legal_shield else None
+        
+        # [GUARDIAN FIX] Route Guardian Pages 7-9 to direct parser
+        is_guardian = "GUARDIAN" in source_filename.upper() if source_filename else "GUARDIAN" in str(txt_path).upper() or "FOURTH PEO" in text[:500].upper()
+        
+        global_carrier = "Legal Shield" if is_legal_shield else ("Guardian" if is_guardian else None)
         
         allied_inv_context = "9835"
-        is_allied = "ALLIED" in str(pdf_path).upper() or "PRIMESOUTH" in str(pdf_path).upper() or "PRIMESOUTH" in text[:2000].upper()
+        is_allied = "ALLIED" in str(txt_path).upper() or "PRIMESOUTH" in str(txt_path).upper() or "PRIMESOUTH" in text[:2000].upper()
 
         
         current_section = "CURRENT"
-        for i, page_text in enumerate(parts):
+        for page_idx, page_text in enumerate(parts):
             if not page_text.strip(): continue
-            page_num = i + 1
+            page_num = page_idx + 1
+            raw_page_text = raw_parts[page_idx] if page_idx < len(raw_parts) else page_text
             is_delta = "DELTA DENTAL" in str(txt_path).upper() or "DELTA DENTAL" in text[:500].upper()
             
             # --- [Sub-Page Section Splitting] ---
@@ -2603,8 +2710,12 @@ def process_verified_text_file(txt_path: str, client: OpenAI, source_filename: O
                 print(f"  [AI] Extracting from Page {page_num} (Section: {section_type})...")
                 contextual_text = f"### CURRENT SECTION: {section_type} ###\n\n{section_text}"
                 
-                # UHC Summary Skip logic remains page-level usually, but we keep it safe here
-                if is_allied:
+                is_current_premium_page = "| Current Premiums |" in raw_page_text or "| Current Premiums (cont'd.) |" in raw_page_text
+                if is_guardian and is_current_premium_page:
+                    print(f"  [V7][GUARDIAN] Using Direct Parser for Page {page_num}...")
+                    guardian_items = parse_guardian_current_premiums_direct(raw_page_text, source_filename or os.path.basename(txt_path))
+                    page_data = {"LINE_ITEMS": guardian_items}
+                elif is_allied:
                     print(f"  [V7][ALLIED] Using Direct Parser for Page {page_num}...")
                     allied_items, allied_inv_context = parse_allied_direct_page(page_text, allied_inv_context)
                     
@@ -2618,6 +2729,18 @@ def process_verified_text_file(txt_path: str, client: OpenAI, source_filename: O
                      page_data = extract_fields_with_llm(contextual_text, client, f"Page {page_num} (Summary)", mode="standard", detected_carrier=global_carrier) or {}
                 else:
                      page_data = extract_fields_with_llm(contextual_text, client, f"Page {page_num}", mode="standard", detected_carrier=global_carrier) or {}
+                     
+                     if is_guardian and page_data.get("LINE_ITEMS"):
+                         # Guardian LLM results are strictly Adjustments/Summary since Current Premiums uses direct parser.
+                         for row in page_data["LINE_ITEMS"]:
+                             # Only touch rows that have an employee name
+                             if str(row.get("LASTNAME") or "").strip() or str(row.get("FIRSTNAME") or "").strip():
+                                 cp = to_float(row.get("CURRENT_PREMIUM"))
+                                 ap = to_float(row.get("ADJUSTMENT_PREMIUM"))
+                                 if cp != 0:
+                                     if ap == 0:
+                                         row["ADJUSTMENT_PREMIUM"] = cp
+                                     row["CURRENT_PREMIUM"] = None
                 
                 # --- [Section-Level Recovery] ---
                 # If we are in "Enrollee adjustment" section but AI returned zero items, 
@@ -3578,8 +3701,32 @@ def process_single_pdf_to_excel(pdf_path: str, output_excel: str):
     # Initialize OpenAI client
     client = OpenAI(api_key=OPENAI_API_KEY)
     
-    # Process the PDF
-    data = process_single_pdf(pdf_path, client)
+    # [V7][FIX] The UI runs this function when processing PDFs directly.
+    # However, MOO and Guardian require the Direct Parsers, which only live inside
+    # process_verified_text_file. So if we detect MOO or Guardian, we must route the extraction there.
+    is_guardian_or_moo = False
+    try:
+        import fitz
+        doc = fitz.open(pdf_path)
+        first_page = (doc[0].get_text() or "").lower()
+        if "guardian" in first_page or "fourth peo" in first_page or "mutual of omaha" in first_page or "moo" in first_page:
+            is_guardian_or_moo = True
+        doc.close()
+    except Exception as e:
+        print(f"  [WARN] Failed to read PDF for carrier detection: {e}")
+        pass
+        
+    if is_guardian_or_moo:
+        print("\n  [V7][ROUTER] Guardian/MOO detected. Routing to process_verified_text_file for Direct Parser support...")
+        txt_path = pdf_path.replace(".pdf", "_extracted.txt")
+        if not os.path.exists(txt_path):
+            raw_text = extract_text_from_pdf_pymupdf(pdf_path)
+            with open(txt_path, "w", encoding="utf-8") as f:
+                f.write(raw_text)
+        data = process_verified_text_file(txt_path, client, source_filename=os.path.basename(pdf_path))
+    else:
+        # Process the PDF
+        data = process_single_pdf(pdf_path, client)
     
     # Flatten data for Excel
     source_filename = os.path.basename(pdf_path)
@@ -3800,6 +3947,14 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                 # Check for exact matches of total keywords as standalone words
                 return any(re.search(fr'\b{kw}\b', t) for kw in keywords)
 
+            def canonicalize_plan(name):
+                if not name: return ""
+                name_str = str(name).strip().lower()
+                # Only apply aggressive space/punctuation stripping for Guardian
+                if "GUARDIAN" in source_filename.upper() or "FOURTH PEO" in source_filename.upper():
+                    return re.sub(r'[\s\-\&_,\.]+', '', name_str)
+                return name_str
+
             last_processed_member = None # For cross-page continuity
             for item in line_items:
                 # [V4][MOO] Cross-Page Continuity Repair
@@ -3815,8 +3970,8 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                     print(f"    [V5][MOO] Skipping header/noise row: {_ln_upper} {_fn_upper}")
                     continue
 
-                # [V5][MOO] Aggressive Orphan Row Repair
-                is_moo_doc = any(kw in source_filename.upper() for kw in ["MUTUAL OF OMAHA", "MOO"])
+                # [V5] Aggressive Orphan Row Repair (MOO & Guardian)
+                is_orphan_repair_eligible = any(kw in source_filename.upper() for kw in ["MUTUAL OF OMAHA", "MOO", "GUARDIAN", "FOURTH PEO"])
                 
                 # Identify if this is a "placeholder" or "weak" name record that needs contextual repair
                 _pn = str(item.get("PLAN_NAME") or "").upper()
@@ -3829,14 +3984,15 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                 is_placeholder = (_ln in ["MISSING", "UNKNOWN", "N/A", "PARTICIPANT", "PPT", "PPT/DEP", "DEPENDENT", "SPOUSE"] and \
                                  _fn in ["FROM_PREVIOUS_PAGE", "UNKNOWN", "N/A", "PARTICIPANT"]) or \
                                 (_ln == "MISSING") or (_fn == "FROM_PREVIOUS_PAGE") or \
-                                (_ln in ["PARTICIPANT", "PPT", "SPOUSE", "DEPENDENT"] and not _fn)
+                                (_ln in ["PARTICIPANT", "PPT", "SPOUSE", "DEPENDENT"] and not _fn) or \
+                                (is_weak_name and not _fn and not _ln) # Truly blank name
                 
                 # Case where LLM didn't use placeholder but just left name empty except for "Participant" keyword
-                if is_moo_doc and is_weak_name and not is_placeholder:
+                if is_orphan_repair_eligible and is_weak_name and not is_placeholder:
                     if to_float(item.get("CURRENT_PREMIUM")) != 0 or to_float(item.get("ADJUSTMENT_PREMIUM")) != 0:
                         is_placeholder = True
                 
-                if is_moo_doc and is_placeholder:
+                if is_orphan_repair_eligible and is_placeholder:
                     print(f"    [V5][MOO] Found orphan row placeholder: {_pn}")
                     
                     # 1. Skip summary/aggregate labels that are NOT member rows
@@ -3913,7 +4069,14 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                 
                 norm_date = format_date_clean(row_date).lower() if row_date else "no_date"
                 norm_period = clean_billing_period(row_period).lower() if row_period else "no_period"
-                date_key = f"{norm_date}|{norm_period}"
+                
+                # [GUARDIAN] Guardian invoices have Adjustments (period 5/1) and Current (period 6/1)
+                # for the SAME employee+plan. They MUST merge across periods, so exclude date from key.
+                is_guardian_doc = "GUARDIAN" in source_filename.upper() or "FOURTH PEO" in source_filename.upper()
+                if is_guardian_doc:
+                    date_key = "guardian_merged"
+                else:
+                    date_key = f"{norm_date}|{norm_period}"
                 
                 # [V5] LEDGER MODE: For UHC and BCBS, do NOT generate matching keys for adjustment rows.
                 # This ensures they are never merged by the key-matching logic.
@@ -3934,9 +4097,10 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                     # PRIMARY KEY: Name + ID + Plan + Date Key (Strict match for multi-plan/multi-date differentiation)
                     plan_name = str(item.get("PLAN_NAME") or "").strip().lower()
                     clean_plan = plan_name if plan_name not in ["n/a", "none", ""] else None
+                    canon_plan = canonicalize_plan(clean_plan) if clean_plan else None
                     
-                    key_id_strict = f"{fname}|{lname}|{member_id}|{clean_plan}|{date_key}" if not is_weak_id and clean_plan else None
-                    key_ssn_strict = f"{fname}|{lname}|{ssn}|{clean_plan}|{date_key}" if not is_weak_ssn and clean_plan else None
+                    key_id_strict = f"{fname}|{lname}|{member_id}|{canon_plan}|{date_key}" if not is_weak_id and canon_plan else None
+                    key_ssn_strict = f"{fname}|{lname}|{ssn}|{canon_plan}|{date_key}" if not is_weak_ssn and canon_plan else None
                     
                     # SECONDARY KEY: Name + ID + Date Key (Relaxed for merging adjustments without plan name but with date)
                     key_id_loose = f"{fname}|{lname}|{member_id}|{date_key}" if not is_weak_id else None
@@ -3973,7 +4137,7 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                          ex_type = str(existing.get("PLAN_TYPE") or "").upper()
                          type_mismatch = curr_type and ex_type and curr_type != ex_type
 
-                         if not type_mismatch and (not clean_plan or not ex_clean or clean_plan == ex_clean or is_adj_or_total(clean_plan) or is_adj_or_total(ex_clean)):
+                         if not type_mismatch and (not clean_plan or not ex_clean or canonicalize_plan(clean_plan) == canonicalize_plan(ex_clean) or is_adj_or_total(clean_plan) or is_adj_or_total(ex_clean)):
                              match_index = potential_idx
                 
                 # 3. Try Name-Only Match (ULTRA-LOOSE) if one side is a "shell" record (missing identifiers)
@@ -4019,7 +4183,7 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                                 ex_type = str(ex.get("PLAN_TYPE") or "").upper()
                                 type_mismatch = curr_type and ex_type and curr_type != ex_type
 
-                                if not type_mismatch and (not clean_plan or not ex_clean or clean_plan == ex_clean or is_adj_or_total(clean_plan) or is_adj_or_total(ex_clean)):
+                                if not type_mismatch and (not clean_plan or not ex_clean or canonicalize_plan(clean_plan) == canonicalize_plan(ex_clean) or is_adj_or_total(clean_plan) or is_adj_or_total(ex_clean)):
                                     matched_by_name_idx = idx
                                     break
                     
@@ -4054,8 +4218,10 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                     is_uhc_doc = "UHC" in fn_upper or "CHILL" in fn_upper
                     is_kcl_doc = "KCL" in fn_upper or "KANSAS" in fn_upper
                     
-                    pn1 = str(item.get("PLAN_NAME") or "").upper()
-                    pn2 = str(existing.get("PLAN_NAME") or "").upper()
+                    pn1_raw = str(item.get("PLAN_NAME") or "").upper()
+                    pn2_raw = str(existing.get("PLAN_NAME") or "").upper()
+                    pn1 = canonicalize_plan(pn1_raw)
+                    pn2 = canonicalize_plan(pn2_raw)
                     
                     # Also consider periods
                     per1 = str(item.get("BILLING_PERIOD") or "").strip().lower()
@@ -4065,8 +4231,8 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                     cov2 = str(existing.get("COVERAGE") or "").strip().upper()
                     
                     detail_keywords = ["ADD", "TRM", "CHANGE", "CHG", "RETRO", "ADJUSTMENT", "ADJ"]
-                    is_adj1 = any(kw in pn1 for kw in detail_keywords)
-                    is_adj2 = any(kw in pn2 for kw in detail_keywords)
+                    is_adj1 = any(kw in pn1_raw for kw in detail_keywords)
+                    is_adj2 = any(kw in pn2_raw for kw in detail_keywords)
                     
                     # Also consider a row an adjustment if ADJUSTMENT_PREMIUM is filled 
                     # and CURRENT_PREMIUM is NOT (or vice-versa)
@@ -4150,12 +4316,21 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                                 # This prevents doubling premiums from 1-page overlapping chunks.
                                 # Use a more robust check for MOO detection here.
                                 _is_moo = "MUTUAL OF OMAHA" in source_filename.upper() or "MOO" in source_filename.upper()
+                                _is_guardian = "GUARDIAN" in source_filename.upper() or "FOURTH PEO" in source_filename.upper()
                                 is_global_fee = (not fname and not lname) or any(kw in str(fname).upper() or kw in str(lname).upper() for kw in ["CREDIT", "FEE", "TOTAL", "SUMMARY"])
                                 
-                                if (_is_moo or is_global_fee) and v1 == v2:
-                                    print(f"      [V5][DUP] Skipping sum for identical overlapping row ({fname} {lname} {k}={v2})")
-                                    # Already have the value, skip summing
-                                    pass
+                                if (_is_moo or _is_guardian or is_global_fee):
+                                    comps_key = f"{k}_COMPONENTS"
+                                    if comps_key not in existing:
+                                        existing[comps_key] = [v1] if v1 != 0 else []
+                                    
+                                    if v2 in existing[comps_key]:
+                                        print(f"      [V5][DUP] Skipping sum for identical overlapping row/component ({fname} {lname} {k}={v2})")
+                                        pass
+                                    else:
+                                        print(f"      [V3][SUM] Adding {v2} to {v1} for {k} ({fname} {lname})")
+                                        existing[k] = round(v1 + v2, 2)
+                                        existing[comps_key].append(v2)
                                 else:
                                     print(f"      [V3][SUM] Adding {v2} to {v1} for {k} ({fname} {lname})")
                                     existing[k] = round(v1 + v2, 2)
@@ -4173,8 +4348,12 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                                 if k == "PLAN_NAME" and is_incoming_adj and ex_v and not any(kw in ex_v.upper() for kw in adj_keywords):
                                     # Existing name is a real plan, incoming is a label. Skip concatenation.
                                     pass
-                                elif ex_v and new_v and new_v.lower() not in ex_v.lower():
-                                    existing[k] = f"{ex_v} {new_v}"
+                                elif ex_v and new_v:
+                                    # Use canonicalize_plan to prevent redundant concatenation of same plan names
+                                    if k == "PLAN_NAME" and canonicalize_plan(new_v) in canonicalize_plan(ex_v):
+                                        pass
+                                    elif new_v.lower() not in ex_v.lower():
+                                        existing[k] = f"{ex_v} {new_v}"
                                 elif not ex_v:
                                     existing[k] = new_v
                             else:
@@ -4398,7 +4577,7 @@ def flatten_extracted_data(data: Dict, source_filename: str) -> List[Dict]:
                 # ------------------------------------------------------------------
                 # -------------------------------------------------------
                 # Remove internal fields that shouldn't be in Excel
-                for internal_field in ["PRICING_MODEL", "RELATIONSHIP"]:
+                for internal_field in ["PRICING_MODEL", "RELATIONSHIP", "CURRENT_PREMIUM_COMPONENTS", "ADJUSTMENT_PREMIUM_COMPONENTS"]:
                     if internal_field in row:
                         del row[internal_field]
                 
