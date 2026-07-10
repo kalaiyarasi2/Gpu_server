@@ -2962,7 +2962,7 @@ Return ONLY the company name or UNKNOWN:"""
                     should_fallback = False
                     result = {"error": "Skipped standard extraction"}
                     
-                    if is_guardian or is_gis23 or is_angle or is_uhc or is_legal_shield or is_bcbs:
+                    if is_guardian or is_gis23 or is_angle or is_legal_shield or is_bcbs:
                          should_fallback = True
                          if is_guardian:
                              reason = "Guardian"

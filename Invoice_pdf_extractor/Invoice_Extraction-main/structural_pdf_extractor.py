@@ -501,6 +501,7 @@ def process_with_structural_layer(pdf_path, output_excel=None):
                     "\n2. Map 'Charge Amount' to CURRENT_PREMIUM and 'Adjustment Detail Amount' to ADJUSTMENT_PREMIUM."
                     "\n3. Extract all package savings credits and fees as standalone line items."
                     "\n4. If a single row has BOTH a charge and an adjustment, output them BOTH in the SAME single JSON record (populate both CURRENT_PREMIUM and ADJUSTMENT_PREMIUM)."
+                    "\n5. **EXTRACT ALL ROWS (100% CAPTURE & LEDGER DETAIL)**: If a member has multiple adjustments for the same plan (e.g. Gale Alana having two '-$2.75' rows or Rios Caleb having multiple ADD rows for different periods like 2/01-2/28 and 3/01-3/31), YOU MUST output EACH as a separate JSON object. Do NOT sum or consolidate them."
                 )
             elif "LEGALSHIELD" in pdf_path.upper() or "LEGAL SHIELD" in pdf_path.upper() or "LEGAL SHIELD" in chunk_text.upper() or "LEGALSHIELD" in chunk_text.upper():
                 carrier_name = "legal_shield"
