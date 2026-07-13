@@ -11,6 +11,8 @@ import sys
 import json
 import tempfile
 import traceback
+import time
+import uuid
 from typing import Optional, Dict, Any, Tuple
 from pathlib import Path
 
@@ -21,6 +23,8 @@ from dotenv import load_dotenv
 from fastapi import APIRouter, File, UploadFile, Query, HTTPException
 from fastapi.responses import JSONResponse, FileResponse
 
+from shared_configs import file_path_cache, _save_cache
+
 # ── Environment ──────────────────────────────────────────────────────────────
 load_dotenv()
 current_dir = Path(__file__).resolve().parent
@@ -29,6 +33,11 @@ for parent in current_dir.parents:
     if env_path.exists():
         load_dotenv(env_path)
         break
+
+# ── Permanent Storage Directory for Dashboard Cases ───────────────────────────
+CASES_DIR = current_dir / "management_cases"
+CASES_DIR.mkdir(exist_ok=True)
+
 
 # ── Management Claims Dashboard System Prompt ────────────────────────────────
 MANAGEMENT_DASHBOARD_PROMPT = r"""You are an expert Workers' Compensation Claims Analytics and Risk Management AI specializing in loss run analysis, portfolio management, underwriting intelligence, claims management, and executive reporting.
@@ -698,9 +707,9 @@ class ManagementDashboardAnalyzer:
             "Indemnity Paid": ["indemnity_paid", "indemnitypaid"],
             "Medical Paid": ["medical_paid", "medicalpaid"],
             "Litigation?": ["litigation", "litigation?", "litigated", "litigation_indicator"],
-            "NCCI Class Code": ["ncci_class_code", "ncci_class", "class_code", "classcode"],
-            "NCCI Class Description": ["ncci_class_description", "class_description", "class_desc"],
-            "Accident Cause": ["accident_cause", "cause", "cause_of_injury", "injury_cause"],
+            "NCCI Class Code": ["ncci_class_code", "ncci_class", "class_code", "classcode", "ncciclasscode"],
+            "NCCI Class Description": ["ncci_class_description", "class_description", "class_desc", "ncciclassdescription"],
+            "Accident Cause": ["accident_cause", "cause", "cause_of_injury", "injury_cause", "accidentcause"],
             "Date of Loss": ["date_of_loss", "dateofloss", "loss_date", "accident_date", "date_of_injury", "injury_date", "dol"],
             "ValuationDate": ["valuation_date", "valuationdate"],
             "Account": ["account", "employer_name", "employername"]
@@ -851,7 +860,16 @@ async def generate_management_dashboard(
             detail=f"Unsupported file type '{ext}'. Only .xlsx, .xls, and .json are accepted.",
         )
 
-    tmp_input_path = None
+    # 1. Create a unique case directory
+    case_id = f"case_{time.strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}"
+    case_dir = CASES_DIR / case_id
+    case_dir.mkdir(parents=True, exist_ok=True)
+
+    # 2. Sanitize and save the uploaded input file directly inside case_dir
+    import re
+    safe_filename = re.sub(r'[\\/:*?"<>|]', "_", filename)
+    input_file_path = case_dir / safe_filename
+
     try:
         # year=0 means all years, otherwise filter by specific year
         year_filter = None if year == 0 else year
@@ -865,18 +883,17 @@ async def generate_management_dashboard(
                     detail=f"Invalid year '{year}'. Year must be 0 (all years) or between 1900 and {current_year + 1}."
                 )
         
-        # Save upload to temp
-        with tempfile.NamedTemporaryFile(delete=False, suffix=ext, prefix="management_lossrun_") as tmp_input:
-            tmp_input.write(await file.read())
-            tmp_input_path = tmp_input.name
+        # Write uploaded file directly to permanent storage
+        with open(input_file_path, "wb") as buffer:
+            buffer.write(await file.read())
 
         # Process
         analyzer = ManagementDashboardAnalyzer()
         if ext == ".json":
-            excel_text, metrics_json, filter_metadata = analyzer.json_to_text(tmp_input_path, year_filter=year_filter)
+            excel_text, metrics_json, filter_metadata = analyzer.json_to_text(str(input_file_path), year_filter=year_filter)
             empty_err_msg = f"No data found for year {year_filter} in JSON." if year_filter is not None else "JSON file has no readable data."
         else:
-            excel_text, metrics_json, filter_metadata = analyzer.excel_to_text(tmp_input_path, year_filter=year_filter)
+            excel_text, metrics_json, filter_metadata = analyzer.excel_to_text(str(input_file_path), year_filter=year_filter)
             empty_err_msg = f"No data found for year {year_filter}. The Excel file may not contain claims from this year." if year_filter is not None else "Excel file has no readable data."
 
         if not excel_text.strip():
@@ -905,22 +922,48 @@ async def generate_management_dashboard(
             )
             dashboard_text = filter_header + dashboard_text
 
-        if download:
-            tmp_output = tempfile.NamedTemporaryFile(
-                mode="w", suffix="_management_dashboard.txt", delete=False, encoding="utf-8"
-            )
-            tmp_output.write(dashboard_text)
-            tmp_output.flush()
-            tmp_output.close()
+        # 3. Save the generated text output dashboard
+        output_filename = "management_claims_dashboard.txt"
+        output_file_path = case_dir / output_filename
+        with open(output_file_path, "w", encoding="utf-8") as out_f:
+            out_f.write(dashboard_text)
 
+        # 4. Save metadata JSON inside the case directory
+        metadata_filename = "case_metadata.json"
+        metadata_file_path = case_dir / metadata_filename
+        metadata = {
+            "case_id": case_id,
+            "timestamp": time.time(),
+            "input_file": safe_filename,
+            "output_file": output_filename,
+            "model": model,
+            "temperature": temperature,
+            "year": year,
+            "filter_info": filter_metadata
+        }
+        with open(metadata_file_path, "w", encoding="utf-8") as meta_f:
+            json.dump(metadata, meta_f, indent=2)
+
+        # 5. Cache the file paths for download endpoint and save cache
+        input_key = f"{case_id}_input{ext}"
+        output_key = f"{case_id}_dashboard.txt"
+        file_path_cache[input_key] = str(input_file_path)
+        file_path_cache[output_key] = str(output_file_path)
+        _save_cache(file_path_cache)
+
+        if download:
             return FileResponse(
-                path=tmp_output.name,
+                path=str(output_file_path),
                 filename="management_claims_dashboard.txt",
                 media_type="text/plain",
             )
 
         return JSONResponse({
             "success": True, 
+            "case_id": case_id,
+            "case_dir": str(case_dir),
+            "input_file": str(input_file_path),
+            "output_file": str(output_file_path),
             "dashboard": dashboard_text,
             "filter_info": filter_metadata
         })
@@ -932,9 +975,6 @@ async def generate_management_dashboard(
         print(f"ERROR: {e}")
         traceback.print_exc()
         return JSONResponse({"success": False, "error": str(e)}, status_code=500)
-    finally:
-        if tmp_input_path and os.path.exists(tmp_input_path):
-            os.unlink(tmp_input_path)
 
 if __name__ == "__main__":
     import uvicorn
