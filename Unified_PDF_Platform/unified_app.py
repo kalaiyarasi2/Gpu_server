@@ -331,6 +331,292 @@ async def serve_frontend(request: Request, path: str = ""):
             
     return HTMLResponse(content="<h1>Frontend not built</h1><p>Please run <code>npm run build</code> in the frontend directory.</p>", status_code=404)
 
+class DriveClassifyRequest(BaseModel):
+    input_folder: str
+    output_folder: str
+    max_pages: int = 3
+    min_score: float = 3.0
+    model: str = "gpt-4o"
+
+@app.get("/api/drive/status", include_in_schema=False)
+async def drive_status(input_folder: str):
+    input_dir = Path(input_folder)
+    if not input_dir.exists() or not input_dir.is_dir():
+        return {
+            "connected": False,
+            "pdf_count": 0,
+            "pdf_files": [],
+            "input_ok": False,
+            "output_ok": False
+        }
+    pdf_files = [p.name for p in input_dir.glob("*.pdf")]
+    return {
+        "connected": True,
+        "pdf_count": len(pdf_files),
+        "pdf_files": pdf_files,
+        "input_ok": True,
+        "output_ok": True
+    }
+
+@app.post("/api/drive/classify", include_in_schema=False)
+async def drive_classify(body: DriveClassifyRequest):
+    input_dir = Path(body.input_folder)
+    output_dir = Path(body.output_folder)
+    
+    if not input_dir.exists() or not input_dir.is_dir():
+        raise HTTPException(status_code=404, detail=f"Input directory not found: {body.input_folder}")
+        
+    pdf_files = list(input_dir.glob("*.pdf"))
+    if not pdf_files:
+        return {"message": "No PDF files found in input directory", "processed": 0, "results": []}
+        
+    results = []
+    from unified_router import UnifiedRouter
+    from shared_configs import file_path_cache
+    router = UnifiedRouter()
+    
+    for pdf_path in pdf_files:
+        try:
+            # Process document through the GPU UnifiedRouter
+            res = await router.process(str(pdf_path))
+            
+            # Copy outputs to the output directory organized by classified document type
+            doc_type = res.get("type") or res.get("document_type") or "Others"
+            if doc_type == "invoice_poc_extractor":
+                doc_type = "VENDOR_INVOICE"
+                
+            filename_stem = pdf_path.stem
+            dest_dir = output_dir / doc_type / filename_stem
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Copy original PDF
+            shutil.copy2(pdf_path, dest_dir / pdf_path.name)
+            
+            excel_out = res.get("excel")
+            excel_filename = None
+            if excel_out and os.path.exists(excel_out):
+                excel_filename = f"{filename_stem}_extracted.xlsx"
+                dest_excel = dest_dir / excel_filename
+                shutil.copy2(excel_out, dest_excel)
+                file_path_cache[excel_filename] = str(dest_excel)
+                
+            json_out = res.get("json")
+            json_filename = None
+            data = None
+            if json_out and os.path.exists(json_out):
+                json_filename = f"{filename_stem}_extracted.json"
+                dest_json = dest_dir / json_filename
+                shutil.copy2(json_out, dest_json)
+                file_path_cache[json_filename] = str(dest_json)
+                
+                # Load JSON contents
+                try:
+                    import json as json_lib
+                    with open(json_out, "r", encoding="utf-8") as f:
+                        data = json_lib.load(f)
+                except Exception as je:
+                    print(f"Error loading JSON data: {je}")
+            
+            # Extract metadata
+            insurer = "Unknown Document"
+            total_value = 0.0
+            claims_count = 0
+            work_comp_metadata = None
+            
+            if data is not None:
+                if doc_type == "VENDOR_INVOICE":
+                    try:
+                        if isinstance(data, list):
+                            vendor_names = []
+                            total_sum = 0.0
+                            for inv in data:
+                                header = (inv or {}).get("HEADER") or {}
+                                vn = header.get("VENDOR_NAME")
+                                if vn:
+                                    vendor_names.append(str(vn))
+                                ta = header.get("TOTAL_AMOUNT", 0) or 0
+                                if isinstance(ta, str):
+                                    try:
+                                        ta = float(ta.replace(",", "").replace("$", ""))
+                                    except:
+                                        ta = 0.0
+                                total_sum += float(ta)
+                            uniq = list(set(vendor_names))
+                            display_vendor = " | ".join(uniq[:3])
+                            insurer = f"Merged invoices ({len(data)}) - {display_vendor}" if data else "Merged invoices"
+                            total_value = total_sum
+                        else:
+                            header = data.get("HEADER", {})
+                            insurer = header.get("VENDOR_NAME", "N/A")
+                            total_amount = header.get("TOTAL_AMOUNT", 0)
+                            if isinstance(total_amount, str):
+                                try:
+                                    total_amount = float(total_amount.replace(",", "").replace("$", ""))
+                                except:
+                                    total_amount = 0
+                            total_value = total_amount
+                    except Exception as me:
+                        print(f"Error parsing vendor invoice metadata: {me}")
+                        
+                elif doc_type == "INVOICE":
+                    insurer = "Insurance Document"
+                    try:
+                        items = data if isinstance(data, list) else data.get("line_items", [])
+                        total_val = 0.0
+                        if items:
+                            for item in items:
+                                it = item.get("INV_TOTAL")
+                                if it and str(it).lower() not in ["n/a", "none", "", "nan"]:
+                                    try:
+                                        total_val = float(str(it).replace(",", "").replace("$", ""))
+                                        if total_val > 0:
+                                            break
+                                    except: pass
+                            if not total_val:
+                                priority_order = ["AMOUNT DUE", "INVOICED AMOUNT", "BALANCE DUE", "REPORTED INVOICE TOTAL", "GRAND TOTAL"]
+                                found = False
+                                for label in priority_order:
+                                    for item in reversed(items):
+                                        pn = str(item.get("PLAN_NAME") or "").upper()
+                                        fn = str(item.get("FIRSTNAME") or "").upper()
+                                        if label in pn or label in fn:
+                                            try:
+                                                val = float(str(item.get("CURRENT_PREMIUM", 0)).replace(",", "").replace("$", ""))
+                                                if val > 0:
+                                                    total_val = val
+                                                    found = True
+                                                    break
+                                            except: pass
+                                    if found: break
+                            if not total_val:
+                                total_val = sum(float(str(i.get("CURRENT_PREMIUM", 0)).replace(",", "").replace("$", "")) for i in items if i.get("FIRSTNAME"))
+                        total_value = total_val
+                    except Exception as me:
+                        print(f"Error parsing invoice metadata: {me}")
+
+                elif doc_type in ["INSURANCE_CLAIMS", "INSURANCE"]:
+                    insurer = "Insurance Document"
+                    try:
+                        claims = data.get("claims", []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
+                        claims_count = len(claims)
+                        if isinstance(data, dict) and data.get("carrier"):
+                            insurer = data.get("carrier")
+                    except Exception as me:
+                        print(f"Error parsing claims metadata: {me}")
+                        
+                elif doc_type == "WORK_COMPENSATION":
+                    insurer = "Workers Comp Application"
+                    try:
+                        inner = data.get("data", {})
+                        demographics = inner.get("demographics", {})
+                        premium_calc = inner.get("premiumCalculation", {})
+                        rating_by_state = inner.get("ratingByState", [])
+                        wc_states_raw = demographics.get("wcStates", "") or ""
+                        wc_states = [s.strip().upper() for s in wc_states_raw.replace(",", " ").split() if s.strip()]
+                        
+                        if "CA" in wc_states:
+                            form_type = "California ACORD"
+                        elif "FL" in wc_states:
+                            form_type = "Florida ACORD"
+                        elif wc_states:
+                            form_type = f"ACORD ({', '.join(wc_states[:3])})"
+                        else:
+                            form_type = "Standard ACORD 130"
+                            
+                        total_premium = premium_calc.get("totalEstimatedAnnualPremium", 0) or 0
+                        if not total_premium and rating_by_state:
+                            total_premium = sum(float(r.get("estimatedAnnualPremium", 0) or 0) for r in rating_by_state)
+                            
+                        insurer = demographics.get("applicantName", "Workers Comp Application")
+                        work_comp_metadata = {
+                            "form_type": form_type,
+                            "total_premium": total_premium,
+                            "applicant_name": demographics.get("applicantName", "N/A"),
+                            "wc_states": wc_states
+                        }
+                        total_value = total_premium
+                    except Exception as me:
+                        print(f"Error parsing work comp metadata: {me}")
+
+                elif doc_type == "BANK_STATEMENT":
+                    insurer = "Bank Statement"
+                    try:
+                        deposits = data.get("deposits_and_credits", []) or []
+                        debits = data.get("checks_and_other_debits", []) or []
+                        claims_count = len(deposits) + len(debits)
+                    except Exception as me:
+                        print(f"Error parsing bank statement metadata: {me}")
+            
+            results.append({
+                "file_name": pdf_path.name,
+                "status": "success",
+                "document_type": doc_type,
+                "output_dir": str(dest_dir),
+                "excel_path": excel_filename,
+                "json_path": json_filename,
+                "excel_url": f"http://localhost:8000/api/gpu/api/download/{excel_filename}" if excel_filename else None,
+                "json_url": f"http://localhost:8000/api/gpu/api/download/{json_filename}" if json_filename else None,
+                "result": data,
+                "metadata": {
+                    "insurer": insurer,
+                    "format": doc_type.lower(),
+                    "confidence": 95,
+                    "claims_count": claims_count,
+                    "total_value": total_value,
+                    "documentType": doc_type,
+                    "work_comp_metadata": work_comp_metadata
+                }
+            })
+
+            # Log to unified converter.db
+            try:
+                import sys
+                from pathlib import Path
+                workspace_root = str(Path(__file__).resolve().parent.parent.parent)
+                if workspace_root not in sys.path:
+                    sys.path.append(workspace_root)
+                from database import poc_db
+                poc_db.log_universal(
+                    module="DRIVE",
+                    action=f"Watch Folder GPU Extraction ({doc_type})",
+                    file_name=pdf_path.name,
+                    status="SUCCESS",
+                    details=f"Extracted claims count: {claims_count}, Total value: {total_value}"
+                )
+            except Exception as db_err:
+                print(f"Failed to log watch folder classification to converter.db: {db_err}")
+
+        except Exception as e:
+            results.append({
+                "file_name": pdf_path.name,
+                "status": "failed",
+                "error": str(e)
+            })
+
+            # Log error to unified converter.db
+            try:
+                import sys
+                from pathlib import Path
+                workspace_root = str(Path(__file__).resolve().parent.parent.parent)
+                if workspace_root not in sys.path:
+                    sys.path.append(workspace_root)
+                from database import poc_db
+                poc_db.log_universal(
+                    module="DRIVE",
+                    action="Watch Folder GPU Extraction",
+                    file_name=pdf_path.name,
+                    status="FAILED",
+                    details=str(e)
+                )
+            except Exception as db_err:
+                print(f"Failed to log watch folder failure to converter.db: {db_err}")
+            
+    return {
+        "message": f"Processed {len(pdf_files)} files",
+        "processed": len(pdf_files),
+        "results": results
+    }
+
 if __name__ == "__main__":
     import uvicorn
     import sys

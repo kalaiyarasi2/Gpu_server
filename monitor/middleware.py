@@ -107,7 +107,14 @@ class RequestMonitoringMiddleware(BaseHTTPMiddleware):
                 source_ip=source_ip
             )
             
-            logger.info(f"Monitoring started for request {request_id}: {file_info['filename']}")
+            # Save trigger source module
+            source_module = request.headers.get("X-Source-Module") or request.query_params.get("source_module")
+            if source_module:
+                with request_monitor.lock:
+                    if request_id in request_monitor.active_requests:
+                        request_monitor.active_requests[request_id]['source_module'] = source_module
+            
+            logger.info(f"Monitoring started for request {request_id}: {file_info['filename']} | Source Module: {source_module}")
             
             # Add request_id to request state for use in handlers
             request.state.monitoring_request_id = request_id

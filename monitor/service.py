@@ -122,6 +122,23 @@ class RequestMonitor:
         """Complete a request successfully."""
         end_time = datetime.now(timezone.utc)
         
+        # Retrieve details for universal database logging before they are cleared
+        filename = "Unknown"
+        doc_type = "GPU_SERVER"
+        source_module = None
+        with self.lock:
+            if request_id in self.active_requests:
+                req_data = self.active_requests[request_id]
+                filename = req_data.get("filename") or "Unknown"
+                doc_type = req_data.get("document_type") or "GPU_SERVER"
+                source_module = req_data.get("source_module")
+        
+        if filename == "Unknown" or doc_type == "GPU_SERVER":
+            db_data = monitor_db.get_request(request_id)
+            if db_data:
+                filename = db_data.get("filename") or filename
+                doc_type = db_data.get("document_type") or doc_type
+
         with self.lock:
             if request_id in self.active_requests:
                 request_data = self.active_requests[request_id]
@@ -151,6 +168,37 @@ class RequestMonitor:
             if request_id in self.active_requests:
                 del self.active_requests[request_id]
         
+        # Log to the unified converter.db
+        try:
+            import sys
+            from pathlib import Path
+            workspace_root = str(Path(__file__).resolve().parent.parent.parent)
+            if workspace_root not in sys.path:
+                sys.path.append(workspace_root)
+            from database import poc_db
+            
+            doc_type_upper = (doc_type or "").upper()
+            if source_module:
+                poc_db.log_universal(
+                    module=source_module.upper(),
+                    action=f"GPU Document Extraction ({doc_type_upper})",
+                    file_name=filename,
+                    status="SUCCESS",
+                    details=f"Extracted via GPU. Output files: {', '.join(output_files) if output_files else 'None'}"
+                )
+            elif "PARITY" in doc_type_upper or "SBC" in doc_type_upper:
+                poc_db.log_parity_run(request_id, filename, "SUCCESS", "Extracted via GPU")
+            elif "RENEWAL" in doc_type_upper:
+                poc_db.log_renewal_run(request_id, "N/A", filename, "SUCCESS", ", ".join(output_files) if output_files else "")
+            elif "CLAIMS" in doc_type_upper or "WORK" in doc_type_upper or "RESOURCING" in doc_type_upper:
+                poc_db.log_resourcing_run(filename, "SUCCESS", "Extracted via GPU", ", ".join(output_files) if output_files else "")
+            elif "INVOICE" in doc_type_upper or "RPVE" in doc_type_upper:
+                poc_db.log_rpve_run(request_id, filename, "SUCCESS", "", "")
+            else:
+                poc_db.log_universal("GPU_SERVER", "Unified GPU Extraction", filename, "SUCCESS", f"Duration: {processing_time:.2f}s")
+        except Exception as e:
+            logger.warning(f"Failed to log completed request to converter.db: {e}")
+        
         if success1 and success2 and success3:
             logger.info(f"Completed monitoring for request {request_id} in {processing_time:.2f}s")
             return True
@@ -161,6 +209,23 @@ class RequestMonitor:
         """Mark a request as failed."""
         end_time = datetime.now(timezone.utc)
         
+        # Retrieve details for universal database logging before they are cleared
+        filename = "Unknown"
+        doc_type = "GPU_SERVER"
+        source_module = None
+        with self.lock:
+            if request_id in self.active_requests:
+                req_data = self.active_requests[request_id]
+                filename = req_data.get("filename") or "Unknown"
+                doc_type = req_data.get("document_type") or "GPU_SERVER"
+                source_module = req_data.get("source_module")
+        
+        if filename == "Unknown" or doc_type == "GPU_SERVER":
+            db_data = monitor_db.get_request(request_id)
+            if db_data:
+                filename = db_data.get("filename") or filename
+                doc_type = db_data.get("document_type") or doc_type
+
         with self.lock:
             if request_id in self.active_requests:
                 request_data = self.active_requests[request_id]
@@ -183,6 +248,37 @@ class RequestMonitor:
         with self.lock:
             if request_id in self.active_requests:
                 del self.active_requests[request_id]
+        
+        # Log to the unified converter.db
+        try:
+            import sys
+            from pathlib import Path
+            workspace_root = str(Path(__file__).resolve().parent.parent.parent)
+            if workspace_root not in sys.path:
+                sys.path.append(workspace_root)
+            from database import poc_db
+            
+            doc_type_upper = (doc_type or "").upper()
+            if source_module:
+                poc_db.log_universal(
+                    module=source_module.upper(),
+                    action=f"GPU Document Extraction ({doc_type_upper})",
+                    file_name=filename,
+                    status="FAILED",
+                    details=error_details or "GPU Extraction failed"
+                )
+            elif "PARITY" in doc_type_upper or "SBC" in doc_type_upper:
+                poc_db.log_parity_run(request_id, filename, "FAILED", error_message=error_details)
+            elif "RENEWAL" in doc_type_upper:
+                poc_db.log_renewal_run(request_id, "N/A", filename, "FAILED", error_message=error_details)
+            elif "CLAIMS" in doc_type_upper or "WORK" in doc_type_upper or "RESOURCING" in doc_type_upper:
+                poc_db.log_resourcing_run(filename, "FAILED", error_message=error_details)
+            elif "INVOICE" in doc_type_upper or "RPVE" in doc_type_upper:
+                poc_db.log_rpve_run(request_id, filename, "FAILED", error_message=error_details)
+            else:
+                poc_db.log_universal("GPU_SERVER", "Unified GPU Extraction", filename, "FAILED", error_details)
+        except Exception as e:
+            logger.warning(f"Failed to log failed request to converter.db: {e}")
         
         if success:
             logger.error(f"Failed monitoring for request {request_id}: {error_details}")
