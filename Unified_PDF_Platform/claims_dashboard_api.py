@@ -29,6 +29,12 @@ for parent in current_dir.parents:
         load_dotenv(env_path)
         break
 
+# Add parent to path for security module
+parent_dir_str = str(current_dir.parent)
+if parent_dir_str not in sys.path:
+    sys.path.append(parent_dir_str)
+from security import SecurityGateway, Status
+
 # ── Claims Dashboard System Prompt ──────────────────────────────────────────
 CLAIMS_DASHBOARD_PROMPT = r"""You are an expert Workers' Compensation Claims Analytics and Risk Management AI specializing in loss run analysis, portfolio management, underwriting intelligence, claims management, and executive reporting.
 
@@ -639,9 +645,24 @@ async def generate_claims_dashboard(
 
         print(f"[Claims Dashboard] Saved upload to {tmp_input.name}")
 
+        # ── Run Security Scan ────────────────────────────────────────────
+        security_gateway = SecurityGateway()
+        sec_result = security_gateway.process(tmp_input.name)
+        
+        if sec_result.status == Status.REJECTED or sec_result.status == Status.INFECTED:
+            raise HTTPException(
+                status_code=400 if sec_result.status == Status.REJECTED else 403, 
+                detail=f"Security check failed: {sec_result.reason}"
+            )
+        elif sec_result.status == Status.ERROR:
+            raise HTTPException(status_code=503, detail="Security service unavailable or encountered an error")
+            
+        safe_file_path = sec_result.file_path
+        print(f"[Claims Dashboard] Security scan passed: {sec_result.status}")
+
         # ── Convert Excel → text ─────────────────────────────────────────
         analyzer = ClaimsDashboardAnalyzer()
-        excel_text = analyzer.excel_to_text(tmp_input.name)
+        excel_text = analyzer.excel_to_text(safe_file_path)
 
         if not excel_text.strip():
             raise HTTPException(

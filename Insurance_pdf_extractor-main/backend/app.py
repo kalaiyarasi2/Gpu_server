@@ -14,6 +14,18 @@ from werkzeug.utils import secure_filename
 from dataclasses import asdict
 from dotenv import load_dotenv
 from pathlib import Path
+import sys
+
+# Add root path to import universal_trash
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+try:
+    from universal_trash.trash_manager import move_to_trash
+except ImportError:
+    # Fallback if module is missing
+    def move_to_trash(file_path, module_name, file_type="processed"):
+        try: os.remove(file_path)
+        except: pass
+        return True
 
 load_dotenv()
 
@@ -180,10 +192,10 @@ def run_extraction_task(job_id, filepath, target_claim):
         JOBS[job_id]['error'] = str(e)
         JOBS[job_id]['traceback'] = error_trace
     finally:
-        # Clean up uploaded file
+        # Clean up uploaded file by moving to Universal Trash
         try:
             if os.path.exists(filepath):
-                os.remove(filepath)
+                move_to_trash(filepath, "Insurance_Pipeline", "input")
         except:
             pass
 
@@ -298,9 +310,9 @@ def extract_batch():
             else:
                 result = {'error': 'Extractor not initialized'}
             
-            # Clean up
+            # Clean up by moving to Universal Trash
             try:
-                os.remove(filepath)
+                move_to_trash(filepath, "Insurance_Pipeline", "input")
             except:
                 pass
                 

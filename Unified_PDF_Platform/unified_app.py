@@ -98,6 +98,15 @@ email_process = None
 def startup_event():
     global email_process
     print("[SYSTEM] Starting Unified Application...")
+    
+    # Start Universal Trash Cleanup Service
+    try:
+        from universal_trash.cleanup_service import start_scheduled_cleanup
+        start_scheduled_cleanup()
+        print("[SYSTEM] Universal Trash cleanup service scheduled.")
+    except ImportError as e:
+        print(f"[WARNING] Universal Trash module not found or failed to load: {e}")
+        
     email_pipeline_dir = os.path.join(parent_dir, "Email_pipeline")
     script_path = os.path.join(email_pipeline_dir, "main.py")
     

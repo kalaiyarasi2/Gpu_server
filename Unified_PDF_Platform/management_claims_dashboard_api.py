@@ -23,7 +23,7 @@ from dotenv import load_dotenv
 from fastapi import APIRouter, File, UploadFile, Query, HTTPException
 from fastapi.responses import JSONResponse, FileResponse
 
-from shared_configs import file_path_cache, _save_cache
+from shared_configs import file_path_cache
 
 # ── Environment ──────────────────────────────────────────────────────────────
 load_dotenv()
@@ -33,6 +33,12 @@ for parent in current_dir.parents:
     if env_path.exists():
         load_dotenv(env_path)
         break
+
+# Add parent to path for security module
+parent_dir_str = str(current_dir.parent)
+if parent_dir_str not in sys.path:
+    sys.path.append(parent_dir_str)
+from security import SecurityGateway, Status
 
 # ── Permanent Storage Directory for Dashboard Cases ───────────────────────────
 CASES_DIR = current_dir / "management_cases"
@@ -347,7 +353,7 @@ class ManagementDashboardAnalyzer:
         """
         # List of possible date column names
         date_columns = ["Date of Loss", "Accident Date", "Loss Date", "DOL", "Incident Date"]
-        year_columns = ["Accident Year", "Loss Year", "Year"]  # Direct year columns
+        year_columns = ['AccidentYear',"Accident Year", "Loss Year", "Year"]  # Direct year columns
         
         date_column = None
         year_column = None
@@ -887,6 +893,21 @@ async def generate_management_dashboard(
         with open(input_file_path, "wb") as buffer:
             buffer.write(await file.read())
 
+        # ── Run Security Scan ────────────────────────────────────────────
+        security_gateway = SecurityGateway()
+        sec_result = security_gateway.process(str(input_file_path))
+        
+        if sec_result.status == Status.REJECTED or sec_result.status == Status.INFECTED:
+            raise HTTPException(
+                status_code=400 if sec_result.status == Status.REJECTED else 403, 
+                detail=f"Security check failed: {sec_result.reason}"
+            )
+        elif sec_result.status == Status.ERROR:
+            raise HTTPException(status_code=503, detail="Security service unavailable or encountered an error")
+            
+        input_file_path = Path(sec_result.file_path)
+        print(f"[Management Dashboard] Security scan passed: {sec_result.status}")
+
         # Process
         analyzer = ManagementDashboardAnalyzer()
         if ext == ".json":
@@ -949,7 +970,6 @@ async def generate_management_dashboard(
         output_key = f"{case_id}_dashboard.txt"
         file_path_cache[input_key] = str(input_file_path)
         file_path_cache[output_key] = str(output_file_path)
-        _save_cache(file_path_cache)
 
         if download:
             return FileResponse(

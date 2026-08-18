@@ -45,6 +45,20 @@ from tools import get_new_unread_pdf_emails, get_attachments, download_pdf, mark
 from extraction_model import ExtractionModel
 from tracker import get_processed_ids, mark_processed, summary as tracker_summary
 
+import sys
+import os
+# Add root path to import universal_trash
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+try:
+    from universal_trash.trash_manager import move_to_trash
+except ImportError:
+    # Fallback if module is missing
+    def move_to_trash(file_path, module_name, file_type="processed"):
+        try: os.remove(file_path)
+        except: pass
+        return True
+
+
 load_dotenv()
 
 RESULTS_DIR = "results"
@@ -203,15 +217,13 @@ def save_and_cleanup(results: list[dict], pdf_paths: list[str], cleanup: bool = 
     df.to_csv(csv_path, index=False)
     print(f"\n   [SAVE] Results -> {csv_path}")
     
-    # Clean up downloaded PDFs
+    # Clean up downloaded PDFs by moving to Universal Trash
     if cleanup:
         for path in pdf_paths:
-            try:
-                os.remove(path)
-            except OSError:
-                pass
-        log.info("[CLEANUP] Cleaned %d PDF(s) from downloads/", len(pdf_paths))
+            move_to_trash(path, "Email_pipeline", "input")
+        log.info("[CLEANUP] Moved %d PDF(s) to Universal Trash.", len(pdf_paths))
 
+    return csv_path
 
 # ─────────────────────────────────────────────────────────────────────────────
 def poll(cleanup: bool = True, mark_read: bool = True) -> int:
@@ -256,8 +268,16 @@ def poll(cleanup: bool = True, mark_read: bool = True) -> int:
             body      = f"Attached are the extraction results for {len(results)} file(s)."
             send_email_with_results(recipient, subject, body, list(set(attachment_paths)))
 
-    save_and_cleanup(results, all_pdfs, cleanup=cleanup)
-
+    csv_path = save_and_cleanup(results, all_pdfs, cleanup=cleanup)
+    
+    # Move outputs to Universal Trash
+    if cleanup:
+        if csv_path and os.path.exists(csv_path):
+            move_to_trash(csv_path, "Email_pipeline", "output")
+        if 'attachment_paths' in locals():
+            for att_path in attachment_paths:
+                if os.path.exists(att_path):
+                    move_to_trash(att_path, "Email_pipeline", "output")
     filenames = [os.path.basename(p) for p in all_pdfs]
     from tracker import mark_processed as _mark
     # We use a batch tag, but for individual email tracking the agent already calls mark_as_read.

@@ -22,6 +22,17 @@ from dataclasses import asdict
 from dotenv import load_dotenv
 from pathlib import Path
 
+# Add root path to import universal_trash
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+try:
+    from universal_trash.trash_manager import move_to_trash
+except ImportError:
+    # Fallback if module is missing
+    def move_to_trash(file_path, module_name, file_type="processed"):
+        try: os.remove(file_path)
+        except: pass
+        return True
+
 load_dotenv()
 
 # Import enhanced extractor
@@ -119,9 +130,9 @@ def extract_full():
         
         result = extractor.process_pdf_with_verification(filepath, target_claim)
         
-        # Clean up uploaded file
+        # Clean up uploaded file by moving to Universal Trash
         try:
-            os.remove(filepath)
+            move_to_trash(filepath, "Work_Compensation", "input")
         except:
             pass
         
@@ -184,9 +195,9 @@ def extract_batch():
             # Process
             result = extractor.process_pdf_with_verification(filepath, target_claim)
             
-            # Clean up
+            # Clean up by moving to Universal Trash
             try:
-                os.remove(filepath)
+                move_to_trash(filepath, "Work_Compensation", "input")
             except:
                 pass
                 

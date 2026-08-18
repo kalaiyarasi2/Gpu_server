@@ -26,8 +26,13 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-class SecurityStatus(str, Enum) if sys.version_info >= (3, 11) else str:
-    pass # Enum string trick for older pythons
+from enum import Enum
+if sys.version_info >= (3, 11):
+    class SecurityStatus(str, Enum):
+        pass
+else:
+    class SecurityStatus(str):
+        pass
     
 class Status:
     CLEAN = "CLEAN"
