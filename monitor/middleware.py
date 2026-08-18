@@ -58,12 +58,35 @@ class RequestMonitoringMiddleware(BaseHTTPMiddleware):
     MONITORED_PATHS = {"/api/extract", "/cognethro", "/work-comp", "/bank-statement"}
 
     async def dispatch(self, request: Request, call_next: Callable):
-        # Monitor all extraction endpoints
-        if request.method == "POST" and request.url.path in self.MONITORED_PATHS:
+        # Monitor all extraction endpoints and download endpoint
+        path = request.url.path
+        if request.method == "POST" and path in self.MONITORED_PATHS:
             return await self.monitor_extract_request(request, call_next)
+        
+        if request.method == "GET" and path.startswith("/api/download/"):
+            return await self.monitor_download_request(request, call_next)
         
         # For other endpoints, proceed normally
         return await call_next(request)
+    
+    async def monitor_download_request(self, request: Request, call_next: Callable):
+        """Monitor file download requests."""
+        start_time = time.time()
+        path = request.url.path
+        filename = path.split("/")[-1]
+        source_ip = request.client.host if request.client else "unknown"
+        
+        logger.info(f"[Download] Request from {source_ip} for {filename}")
+        
+        response = await call_next(request)
+        
+        duration = time.time() - start_time
+        if response.status_code == 200:
+            logger.info(f"[Download] Successfully served {filename} in {duration:.2f}s")
+        else:
+            logger.warning(f"[Download] Failed to serve {filename} - Status: {response.status_code}")
+            
+        return response
     
     async def monitor_extract_request(self, request: Request, call_next: Callable):
         """Monitor the /api/extract endpoint specifically."""

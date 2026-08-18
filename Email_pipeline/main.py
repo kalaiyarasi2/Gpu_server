@@ -273,22 +273,48 @@ def poll(cleanup: bool = True, mark_read: bool = True) -> int:
 # ─────────────────────────────────────────────────────────────────────────────
 # WATCH MODE — continuous polling
 # ─────────────────────────────────────────────────────────────────────────────
-def watch(interval: int = 30, cleanup: bool = True, mark_read: bool = True):
+def watch(interval: int = 60, cleanup: bool = True, mark_read: bool = True):
     print(f"\n{'='*60}")
-    print(f"[WATCH] Gmail PDF Watcher  -  checking every {interval}s")
+    print(f"[WATCH] Gmail PDF Watcher  -  Base check every {interval}s")
     print(f"{'='*60}\n")
+
+    current_interval = interval
+    consecutive_empty = 0
+    MAX_INTERVAL = 300  # 5 minutes
 
     while True:
         try:
+            # ── Check for Automation Toggle ──
+            if os.getenv("EMAIL_AUTOMATION", "True").lower() == "false":
+                print("[PAUSED] Email automation is disabled (EMAIL_AUTOMATION=False). Waiting for reactivation...")
+                time.sleep(30)
+                continue
+            
             # ── Skip this poll if we are still within a rate-limit window ──
             if is_rate_limited():
                 wait_left = seconds_until_ok()
                 print(f"[SKIP] Still rate-limited by Gmail — {wait_left:.0f}s remaining. "
-                      f"Next check in {interval}s", flush=True)
+                      f"Next check in {current_interval}s", flush=True)
             else:
-                poll(cleanup=cleanup, mark_read=mark_read)
-            print(f"[WAIT] Next check in {interval}s  (Ctrl+C to stop)\n")
-            time.sleep(interval)
+                processed_count = poll(cleanup=cleanup, mark_read=mark_read)
+                
+                # ── Exponential Backoff Logic ──
+                if processed_count == 0:
+                    consecutive_empty += 1
+                    # After 3 empty cycles, start backing off
+                    if consecutive_empty >= 3:
+                        current_interval = min(current_interval * 2, MAX_INTERVAL)
+                        log.info("[BACKOFF] Inbox empty for %d cycles. Increasing interval to %ds", 
+                                 consecutive_empty, current_interval)
+                else:
+                    # Reset backoff if we found something
+                    if consecutive_empty > 0:
+                        log.info("[RESET] New emails found. Resetting interval to base %ds", interval)
+                    consecutive_empty = 0
+                    current_interval = interval
+
+            print(f"[WAIT] Next check in {current_interval}s  (Ctrl+C to stop)\n")
+            time.sleep(current_interval)
         except KeyboardInterrupt:
             print("\n[STOP] Watcher stopped.")
             break

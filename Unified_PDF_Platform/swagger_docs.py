@@ -68,14 +68,25 @@ window.addEventListener('load', function() {
                 // Always attach to the parent element
                 const targetElement = container.parentElement;
                 
-                if (targetElement && !targetElement.querySelector('.cognethro-dl-btns')) {
+                if (targetElement) {
                     try {
                         const match = textContent.match(/\{[\s\S]*\}/);
                         if (!match) return;
                         
                         const data = JSON.parse(match[0]);
+                        
+                        // Check if we already have buttons for THIS specific requestId to avoid duplicates/stale links
+                        const existingBtns = targetElement.querySelector('.cognethro-dl-btns');
+                        if (existingBtns) {
+                            if (existingBtns.getAttribute('data-request-id') === data.requestId) {
+                                return; // Already current
+                            }
+                            existingBtns.remove(); // Stale, remove them
+                        }
+
                         const btnContainer = document.createElement('div');
                         btnContainer.className = 'cognethro-dl-btns';
+                        btnContainer.setAttribute('data-request-id', data.requestId || 'unknown');
                         btnContainer.style = 'margin-top: 20px; display: flex; gap: 12px; padding: 15px; background: #111; border-radius: 10px; border: 1px solid #333; box-shadow: 0 4px 15px rgba(0,0,0,0.5);';
                         
                         if (data.excel) {
@@ -131,14 +142,25 @@ window.addEventListener('load', function() {
                 // Always attach to the parent element
                 const targetElement = container.parentElement;
                 
-                if (targetElement && !targetElement.querySelector('.wc-dl-btns')) {
+                if (targetElement) {
                     try {
                         const match = textContent.match(/\{[\s\S]*\}/);
                         if (!match) return;
                         
                         const data = JSON.parse(match[0]);
+                        
+                        // Check if we already have buttons for THIS specific requestId to avoid duplicates/stale links
+                        const existingBtns = targetElement.querySelector('.wc-dl-btns');
+                        if (existingBtns) {
+                            if (existingBtns.getAttribute('data-request-id') === data.requestId) {
+                                return; // Already current
+                            }
+                            existingBtns.remove(); // Stale, remove them
+                        }
+
                         const btnContainer = document.createElement('div');
                         btnContainer.className = 'wc-dl-btns';
+                        btnContainer.setAttribute('data-request-id', data.requestId || 'unknown');
                         btnContainer.style = 'margin-top: 20px; display: flex; gap: 12px; padding: 15px; background: #111; border-radius: 10px; border: 1px solid #333; box-shadow: 0 4px 15px rgba(0,0,0,0.5);';
                         
                         if (data.excel) {

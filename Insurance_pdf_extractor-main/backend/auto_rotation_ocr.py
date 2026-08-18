@@ -5,7 +5,23 @@ import cv2
 import numpy as np
 import os
 import shutil
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pypdf import PdfReader, PdfWriter
+from dotenv import load_dotenv
+from gpu_config import gpu_manager, gpu_concurrency_config
+
+# Load environment variables
+load_dotenv()
+
+# Configure Tesseract path if provided in environment
+TESSERACT_PATH = os.getenv("TESSERACT_PATH")
+if TESSERACT_PATH:
+    if os.path.isdir(TESSERACT_PATH):
+        tess_exe = os.path.join(TESSERACT_PATH, "tesseract.exe")
+        if os.path.exists(tess_exe):
+            pytesseract.pytesseract.tesseract_cmd = tess_exe
+    elif os.path.exists(TESSERACT_PATH):
+        pytesseract.pytesseract.tesseract_cmd = TESSERACT_PATH
 
 
 # ── 1. PDF → IMAGES ────────────────────────────────────────────────────────────
@@ -219,23 +235,6 @@ def run_pipeline(pdf_path,
     """
     Full pipeline:
       PDF → raw images → detect rotation → rotate → validate → PDF
-
-    Args:
-        pdf_path:           Input PDF.
-        work_dir:           Scratch folder for intermediate images.
-        output_pdf:         Final output PDF path.
-        dpi:                Render DPI for PDF → image conversion.
-        osd_conf_threshold: Preferred Tesseract OSD confidence (for reporting/tuning).
-        osd_min_conf:       Minimum OSD confidence floor used by dynamic logic.
-        skew_threshold:     Minimum skew angle (°) to apply fine correction.
-        max_correction_attempts:
-                            Max detect-rotate-validate cycles per page.
-        reprocess_failed_pages:
-                            If True, do one final safe reprocess for pages
-                            that still fail after normal attempts.
-
-    Returns:
-        Path to corrected PDF, plus a per-page report list.
     """
     raw_dir       = os.path.join(work_dir, 'raw')
     corrected_dir = os.path.join(work_dir, 'corrected')
@@ -244,15 +243,11 @@ def run_pipeline(pdf_path,
     # 1. PDF → images
     raw_paths = pdf_to_images(pdf_path, output_dir=raw_dir, dpi=dpi)
 
-    corrected_paths = []
-    page_reports    = []
-
-    for raw_path in raw_paths:
+    def process_page_full(raw_path):
+        """Worker function for parallel full page rotation/deskew pipeline."""
         page_name      = os.path.basename(raw_path)
         corrected_path = os.path.join(corrected_dir, page_name)
-
-        print(f"\n-- Page: {page_name} ----------------------")
-
+        
         attempts_used = 0
         passed = False
         report = {}
@@ -260,16 +255,10 @@ def run_pipeline(pdf_path,
         # 2-4. Detect -> Rotate -> Validate (dynamic attempts)
         for attempt in range(1, max_correction_attempts + 1):
             attempts_used = attempt
-            print(f"[2] Attempt {attempt}/{max_correction_attempts}")
-
-            # Always detect from the original raw image to avoid compounding
-            # rotation artifacts across retries.
             osd_angle, osd_conf = detect_rotation(raw_path)
             skew_angle = detect_skew(raw_path)
-            print(f"[2] OSD={osd_angle} deg (conf={osd_conf:.1f}) | skew={skew_angle:.2f} deg")
 
-            # On retries, apply a gentler skew angle so unstable pages do not
-            # get progressively over-rotated.
+            # On retries, apply a gentler skew angle
             skew_scale = max(0.0, 1.0 - (attempt - 1) * 0.35)
             applied_skew = skew_angle * skew_scale
 
@@ -291,15 +280,10 @@ def run_pipeline(pdf_path,
             if passed:
                 break
 
-            # Nothing actionable from latest validation; avoid pointless repeats.
             if report['osd_angle'] == 0 and abs(report['skew_angle']) < skew_threshold:
-                print("[4] Validation failed but no actionable correction left; stopping retries.")
                 break
 
-            print(f"[4] Retrying correction for {page_name}...")
-
         if not passed and reprocess_failed_pages:
-            print(f"[4] Reprocessing {page_name} with safe fallback (raw page).")
             shutil.copy2(raw_path, corrected_path)
             passed, report = validate_rotation(
                 corrected_path,
@@ -311,11 +295,29 @@ def run_pipeline(pdf_path,
         else:
             report['reprocessed'] = False
 
-        report['page'] = page_name
-        report['attempts'] = attempts_used
-        report['retried'] = attempts_used > 1
-        page_reports.append(report)
-        corrected_paths.append(corrected_path)
+        report.update({
+            'page': page_name,
+            'corrected_path': corrected_path,
+            'attempts': attempts_used,
+            'retried': attempts_used > 1
+        })
+        return report
+
+    # Parallel processing
+    max_workers = gpu_concurrency_config.get('pdf_rendering', {}).get('max_workers', 8)
+    print(f"\n🚀 Launching Parallel OCR Pipeline ({len(raw_paths)} pages, {max_workers} workers)...")
+    
+    page_reports = []
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(process_page_full, path): path for path in raw_paths}
+        for future in as_completed(futures):
+            report = future.result()
+            page_reports.append(report)
+            print(f"   ✓ Processed: {report['page']} | Attempts: {report['attempts']} | Pass: {report['passed']}")
+
+    # Maintain order
+    page_reports.sort(key=lambda x: x['page'])
+    corrected_paths = [r['corrected_path'] for r in page_reports]
 
     # 5. Images → PDF
     print("\n-- Building output PDF --------------------")
@@ -351,30 +353,52 @@ def run_pipeline_preserve_layout(pdf_path,
     writer = PdfWriter()
     page_reports = []
 
-    for idx, (raw_path, page) in enumerate(zip(raw_paths, reader.pages), start=1):
+    def process_page_rotation(idx, raw_path):
+        """Worker function for parallel rotation detection."""
         page_name = os.path.basename(raw_path)
-        print(f"\n-- Page: {page_name} ----------------------")
-
         osd_angle, osd_conf = detect_rotation(raw_path)
         skew_angle = detect_skew(raw_path)
         rotate_angle = osd_angle if (osd_angle != 0 and osd_conf >= osd_min_conf) else 0
-
-        print(
-            f"[2] OSD={osd_angle} deg (conf={osd_conf:.1f}) | "
-            f"skew={skew_angle:.2f} deg | apply_rotate={rotate_angle} deg"
-        )
-
-        if rotate_angle:
-            page.rotate(rotate_angle)
-
-        writer.add_page(page)
-        page_reports.append({
-            'page': page_name,
+        
+        return {
             'page_index': idx,
+            'page_name': page_name,
             'osd_angle': osd_angle,
             'osd_conf': round(osd_conf, 2),
             'skew_angle': round(skew_angle, 2),
             'applied_rotate': rotate_angle,
+            'passed': True
+        }
+
+    # Use ThreadPoolExecutor for parallel OCR orientation detection
+    max_workers = gpu_concurrency_config.get('pdf_rendering', {}).get('max_workers', 8)
+    print(f"\n🚀 Launching Parallel Orientation Detection ({len(raw_paths)} pages, {max_workers} workers)...")
+    
+    unordered_results = []
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = [executor.submit(process_page_rotation, i, path) for i, path in enumerate(raw_paths, 1)]
+        for future in as_completed(futures):
+            res = future.result()
+            unordered_results.append(res)
+            print(f"   ✓ Detected: {res['page_name']} | rotate={res['applied_rotate']} deg")
+
+    # Re-sort to maintain PDF page order
+    unordered_results.sort(key=lambda x: x['page_index'])
+
+    for r in unordered_results:
+        # pypdf pages are 0-indexed
+        page = reader.pages[r['page_index'] - 1]
+        if r['applied_rotate']:
+            page.rotate(r['applied_rotate'])
+
+        writer.add_page(page)
+        page_reports.append({
+            'page': r['page_name'],
+            'page_index': r['page_index'],
+            'osd_angle': r['osd_angle'],
+            'osd_conf': r['osd_conf'],
+            'skew_angle': r['skew_angle'],
+            'applied_rotate': r['applied_rotate'],
             'passed': True
         })
 

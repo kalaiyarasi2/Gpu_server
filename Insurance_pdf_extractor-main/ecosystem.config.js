@@ -7,7 +7,8 @@ module.exports = {
             env: {
                 PORT: 5000,
                 FLASK_ENV: "production",
-                PYTHONUTF8: "1"
+                PYTHONUTF8: "1",
+                PYTHONIOENCODING: "utf-8"
             }
         }
     ]
