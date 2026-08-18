@@ -65,9 +65,39 @@ async def _perform_extraction(file: UploadFile, request: Request):
             shutil.copyfileobj(file.file, buffer)
         print(f"[Unified][API] Saved to: {file_path}")
 
+        # --- Security Gateway ---
+        import sys
+        parent_dir = str(BASE_DIR.parent)
+        if parent_dir not in sys.path:
+            sys.path.append(parent_dir)
+            
+        from security import SecurityGateway, Status
+        security_gateway = SecurityGateway()
+        
+        print(f"[Unified][API] Running security scan on: {safe_filename}")
+        sec_result = await run_in_threadpool(security_gateway.process, str(file_path), request_id=request_id)
+        
+        if sec_result.status == Status.REJECTED or sec_result.status == Status.INFECTED:
+            # Add security scan failure to monitor
+            try:
+                if request_id:
+                    from monitor.service import request_monitor
+                    request_monitor.update_request_status(request_id=request_id, status=sec_result.status, error_details=sec_result.reason)
+            except Exception: pass
+            
+            status_code = 400 if sec_result.status == Status.REJECTED else 403
+            raise HTTPException(status_code=status_code, detail=f"Security check failed: {sec_result.reason}")
+            
+        elif sec_result.status == Status.ERROR:
+            raise HTTPException(status_code=503, detail="Security service unavailable or encountered an error")
+            
+        # File is safe, use the clean path for extraction
+        safe_file_path = sec_result.file_path
+        print(f"[Unified][API] File is {sec_result.status}. Proceeding to extraction.")
+
         # Run the unified router (async via threadpool)
         print(f"[Unified][API] Routing document...")
-        result = await run_in_threadpool(router_engine.process, str(file_path), request_id=request_id)
+        result = await run_in_threadpool(router_engine.process, str(safe_file_path), request_id=request_id)
 
         if "error" in result:
             print(f"[Unified][WARN] Extraction returned error: {result['error']}")

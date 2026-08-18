@@ -162,6 +162,40 @@ async def health_check():
         "example_curl": 'curl -X POST http://<host>:8007/api/extract -F "file=@yourfile.pdf"'
     }
 
+@app.get("/api/security/health")
+async def security_health_check():
+    """Check the status of the Security Gateway and ClamAV."""
+    import sys
+    parent_dir = str(BASE_DIR.parent)
+    if parent_dir not in sys.path:
+        sys.path.append(parent_dir)
+    from security.malware_scanner import MalwareScanner
+    
+    # We can use the default config or pass empty to use defaults
+    scanner = MalwareScanner({})
+    is_available = scanner.is_available()
+    version = scanner.get_version() if is_available else "N/A"
+    
+    return {
+        "status": "ok" if is_available else "warning",
+        "clamav_connected": is_available,
+        "clamav_version": version,
+        "message": "Security Gateway is active" if is_available else "Security Gateway running in validation-only/fallback mode"
+    }
+
+@app.get("/api/security/stats")
+async def security_stats():
+    """Get security event statistics."""
+    import sys
+    parent_dir = str(BASE_DIR.parent)
+    if parent_dir not in sys.path:
+        sys.path.append(parent_dir)
+    try:
+        from monitor.monitor_db import monitor_db
+        return monitor_db.get_security_stats()
+    except Exception as e:
+        return {"error": f"Could not retrieve stats: {e}"}
+
 @app.get("/docs", include_in_schema=False)
 async def custom_swagger_ui_html():
     response = get_swagger_ui_html(

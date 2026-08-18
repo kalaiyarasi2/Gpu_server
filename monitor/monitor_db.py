@@ -70,6 +70,25 @@ class MonitorDatabase:
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_requests_timestamp ON requests(timestamp)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_steps_request_id ON processing_steps(request_id)')
             
+            # Security events table
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS security_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    request_id TEXT,
+                    filename TEXT NOT NULL,
+                    file_hash TEXT,
+                    file_size INTEGER,
+                    scan_status TEXT NOT NULL,
+                    threat_name TEXT,
+                    action_taken TEXT,
+                    quarantine_path TEXT,
+                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    details TEXT
+                )
+            ''')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_security_status ON security_events(scan_status)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_security_hash ON security_events(file_hash)')
+            
             conn.commit()
             conn.close()
             logger.info("Database initialized successfully")
@@ -508,6 +527,55 @@ class MonitorDatabase:
             except Exception as e:
                 logger.error(f"Failed to cleanup old records: {e}")
                 return False
+
+    def create_security_event(self, request_id: str, filename: str, file_hash: str, file_size: int, 
+                              scan_status: str, threat_name: Optional[str], action_taken: str, 
+                              quarantine_path: Optional[str], details: str) -> bool:
+        """Create a new security event record."""
+        with self.lock:
+            try:
+                conn = sqlite3.connect(self.db_path)
+                cursor = conn.cursor()
+                
+                cursor.execute('''
+                    INSERT INTO security_events 
+                    (request_id, filename, file_hash, file_size, scan_status, threat_name, action_taken, quarantine_path, details)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (request_id, filename, file_hash, file_size, scan_status, threat_name, action_taken, quarantine_path, details))
+                
+                conn.commit()
+                conn.close()
+                return True
+            except Exception as e:
+                logger.error(f"Failed to create security event: {e}")
+                return False
+
+    def get_security_stats(self) -> Dict[str, Any]:
+        """Get statistics for security events."""
+        with self.lock:
+            try:
+                conn = sqlite3.connect(self.db_path)
+                cursor = conn.cursor()
+                
+                cursor.execute("SELECT COUNT(*) FROM security_events")
+                total_events = cursor.fetchone()[0]
+                
+                cursor.execute("SELECT scan_status, COUNT(*) FROM security_events GROUP BY scan_status")
+                status_counts = dict(cursor.fetchall())
+                
+                cursor.execute("SELECT action_taken, COUNT(*) FROM security_events GROUP BY action_taken")
+                action_counts = dict(cursor.fetchall())
+                
+                conn.close()
+                
+                return {
+                    'total_events': total_events,
+                    'status_breakdown': status_counts,
+                    'action_breakdown': action_counts
+                }
+            except Exception as e:
+                logger.error(f"Failed to get security stats: {e}")
+                return {}
 
 # Global database instance
 monitor_db = MonitorDatabase()

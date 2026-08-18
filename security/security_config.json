@@ -1,0 +1,9 @@
+{
+  "max_file_size_mb": 1024,
+  "allowed_extensions": [".pdf", ".xlsx", ".xls", ".csv"],
+  "clamav_host": "localhost",
+  "clamav_port": 3310,
+  "clamav_timeout": 30,
+  "clamav_fallback_mode": "warn_and_allow",
+  "quarantine_retention_days": 7
+}

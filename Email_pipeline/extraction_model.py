@@ -61,9 +61,42 @@ class ExtractionModel:
             }
 
         try:
+            # --- Security Gateway ---
+            import sys
+            if platform_path not in sys.path:
+                sys.path.append(platform_path)
+            
+            try:
+                from security import SecurityGateway, Status
+                security_gateway = SecurityGateway()
+                
+                print(f"   [SECURITY] Running security scan on: {os.path.basename(pdf_path)}")
+                # Process the file synchronously (ExtractionModel runs in ThreadPoolExecutor)
+                sec_result = security_gateway.process(pdf_path)
+                
+                if sec_result.status == Status.REJECTED or sec_result.status == Status.INFECTED:
+                    return {
+                        "filename": pdf_path,
+                        "status": "security_blocked",
+                        "error": f"Security check failed: {sec_result.reason}"
+                    }
+                elif sec_result.status == Status.ERROR:
+                    return {
+                        "filename": pdf_path,
+                        "status": "error",
+                        "error": "Security service unavailable or encountered an error"
+                    }
+                    
+                # File is safe, update pdf_path to the clean path
+                safe_pdf_path = sec_result.file_path
+                print(f"   [SECURITY] File is {sec_result.status}. Proceeding to extraction.")
+            except Exception as e:
+                print(f"   [SECURITY] Warning: Failed to run security gateway: {e}")
+                safe_pdf_path = pdf_path # Fallback to original if security module is somehow completely broken
+
             # Call the router directly (no subprocess overhead)
-            print(f"   [PROCESS] Routing with direct module call: {os.path.basename(pdf_path)}")
-            extracted_data = ExtractionModel._router_instance.process(pdf_path)
+            print(f"   [PROCESS] Routing with direct module call: {os.path.basename(safe_pdf_path)}")
+            extracted_data = ExtractionModel._router_instance.process(safe_pdf_path)
             
             # Ensure status is set
             if "error" in extracted_data:

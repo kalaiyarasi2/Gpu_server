@@ -26,3 +26,7 @@ openpyxl
 # Monitoring & Database
 sqlite3  # Usually built-in
 httpx
+
+# Security
+pyclamd>=0.4.0
+python-magic-bin>=0.4.14
