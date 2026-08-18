@@ -1,0 +1,17 @@
+{
+  "case_id": "case_20260713_141035_3c9355",
+  "timestamp": 1783951855.6506014,
+  "input_file": "Claims Summary For Json (1).json",
+  "output_file": "management_claims_dashboard.txt",
+  "model": "gpt-4o",
+  "temperature": 0.2,
+  "year": 0,
+  "filter_info": {
+    "year_filter_applied": false,
+    "year": null,
+    "total_claims_before_filter": 2,
+    "total_claims_after_filter": 2,
+    "filtered_claims_excluded": 0,
+    "message": "All years included in analysis"
+  }
+}

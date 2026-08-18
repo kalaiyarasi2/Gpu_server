@@ -1,0 +1,406 @@
+
+================================================================================
+DATA FILTER APPLIED
+================================================================================
+Year Filter: 2026
+Total Claims (Before Filter): 93
+Total Claims (After Filter): 29
+Claims Excluded: 64
+Note: Analysis includes only claims from year 2026
+================================================================================
+
+---
+
+## SECTION 1 – EXECUTIVE SUMMARY
+
+### Calculations:
+- **Total Claims:** 29
+- **Open Claims:** 18
+- **Closed Claims:** 11
+- **Total Incurred:** $332,426.40
+- **Total Paid:** $132,648.13
+- **Outstanding Reserve:** $199,778.27
+- **Litigation Claims:** 8
+- **Litigation %:** 27.59%
+- **Average Claim Cost:** $11,462.98
+- **Largest Claim:** $74,148.42
+- **Portfolio AI Risk Score:** 62
+- **Overall Portfolio Risk Classification:** Moderate
+- **Management Recommendation:** Focus on reducing litigation rates and managing high-reserve claims to improve the overall risk score.
+
+---
+
+## SECTION 2 – TOP 10 CLAIMS
+
+1. **Claim Number:** SZ2600069209
+   - **Employer Location:** Kate's Detective & Security Agency and Special Events Services Inc
+   - **State:** IL
+   - **Claim Status:** OPEN
+   - **Net Incurred:** $74,148.42
+   - **Outstanding Reserve:** $14,653.13
+
+2. **Claim Number:** SZ2600069638
+   - **Employer Location:** Kate's Detective & Security Agency and Special Events Services Inc
+   - **State:** IL
+   - **Claim Status:** OPEN
+   - **Net Incurred:** $55,260.61
+   - **Outstanding Reserve:** $23,800.00
+
+3. **Claim Number:** SZ2600071582
+   - **Employer Location:** Bubba Smart Solutions Inc
+   - **State:** CA
+   - **Claim Status:** OPEN
+   - **Net Incurred:** $45,165.00
+   - **Outstanding Reserve:** $32,512.32
+
+4. **Claim Number:** UW2600087628
+   - **Employer Location:** Faztec Industries Inc
+   - **State:** NY
+   - **Claim Status:** OPEN
+   - **Net Incurred:** $26,352.00
+   - **Outstanding Reserve:** $17,945.00
+
+5. **Claim Number:** SZ2600072206
+   - **Employer Location:** Bubba Smart Solutions Inc
+   - **State:** CA
+   - **Claim Status:** OPEN
+   - **Net Incurred:** $21,958.56
+   - **Outstanding Reserve:** $13,225.25
+
+6. **Claim Number:** SZ2600070248
+   - **Employer Location:** Wheelcare Express Inc
+   - **State:** CA
+   - **Claim Status:** OPEN
+   - **Net Incurred:** $14,750.00
+   - **Outstanding Reserve:** $11,205.00
+
+7. **Claim Number:** SZ2600072245
+   - **Employer Location:** Bubba Smart Solutions Inc
+   - **State:** CA
+   - **Claim Status:** OPEN
+   - **Net Incurred:** $13,500.00
+   - **Outstanding Reserve:** $13,500.00
+
+8. **Claim Number:** SZ2600072900
+   - **Employer Location:** Bubba Smart Solutions Inc
+   - **State:** CA
+   - **Claim Status:** OPEN
+   - **Net Incurred:** $13,500.00
+   - **Outstanding Reserve:** $13,445.00
+
+9. **Claim Number:** SZ2600072573
+   - **Employer Location:** Wheelcare Express Inc
+   - **State:** CA
+   - **Claim Status:** OPEN
+   - **Net Incurred:** $12,000.00
+   - **Outstanding Reserve:** $9,039.68
+
+10. **Claim Number:** SZ2600071715
+    - **Employer Location:** Mareko Investments LLC Mareko Transportations (dba)
+    - **State:** CA
+    - **Claim Status:** OPEN
+    - **Net Incurred:** $8,511.00
+    - **Outstanding Reserve:** $8,511.00
+
+### Observations:
+- **Percentage of Total Portfolio Losses Represented by Top 10 Claims:** 75.8%
+- **Largest Claim Contributor:** SZ2600069209 with $74,148.42
+
+---
+
+## SECTION 3 – LOSSES BY STATE
+
+1. **State:** CA
+   - **Claim Count:** 11
+   - **Total Paid:** $30,225.91
+   - **Outstanding Reserve:** $113,384.18
+   - **Total Incurred:** $143,610.09
+
+2. **State:** IL
+   - **Claim Count:** 10
+   - **Total Paid:** $91,000.90
+   - **Outstanding Reserve:** $45,804.43
+   - **Total Incurred:** $136,805.33
+
+3. **State:** NY
+   - **Claim Count:** 6
+   - **Total Paid:** $11,421.32
+   - **Outstanding Reserve:** $38,589.66
+   - **Total Incurred:** $50,010.98
+
+4. **State:** PA
+   - **Claim Count:** 1
+   - **Total Paid:** $0.00
+   - **Outstanding Reserve:** $2,000.00
+   - **Total Incurred:** $2,000.00
+
+5. **State:** NJ
+   - **Claim Count:** 1
+   - **Total Paid:** $0.00
+   - **Outstanding Reserve:** $0.00
+   - **Total Incurred:** $0.00
+
+### Observations:
+- **State Concentration %:** CA represents 43.2% of total portfolio losses.
+- **Highest Risk State:** CA
+- **Top 5 States:** CA, IL, NY, PA, NJ
+- **States Over 20% Portfolio Losses:** CA, IL
+- **State Concentration Alert:** High concentration in CA and IL may indicate increased risk exposure.
+
+---
+
+## SECTION 4 – LOSSES BY CLASS CODE
+
+1. **Class Code:** 7720
+   - **Class Description:** POLICE OFFICERS & DRIVERS
+   - **Claim Count:** 10
+   - **Total Incurred:** $136,805.33
+   - **Average Severity:** $13,680.53
+
+2. **Class Code:** 8292
+   - **Class Description:** WAREHOUSES - GENERAL MERCHANDI
+   - **Claim Count:** 4
+   - **Total Incurred:** $60,531.53
+   - **Average Severity:** $15,132.88
+
+3. **Class Code:** 7382
+   - **Class Description:** BUS OR LIMOUSINE OPERATIONS
+   - **Claim Count:** 5
+   - **Total Incurred:** $47,620.00
+   - **Average Severity:** $9,524.00
+
+4. **Class Code:** 7590
+   - **Class Description:** GARBAGE WORKS
+   - **Claim Count:** 3
+   - **Total Incurred:** $35,953.98
+   - **Average Severity:** $11,984.66
+
+5. **Class Code:** 8810
+   - **Class Description:** CLERICAL OFFICE EMPLOYEES
+   - **Claim Count:** 1
+   - **Total Incurred:** $21,958.56
+   - **Average Severity:** $21,958.56
+
+### Observations:
+- **Highest Loss Class Codes:** 7720 (POLICE OFFICERS & DRIVERS)
+- **Highest Frequency Class Codes:** 7720 (POLICE OFFICERS & DRIVERS)
+- **Highest Severity Class Codes:** 8810 (CLERICAL OFFICE EMPLOYEES)
+
+### Underwriting Observations:
+- Focus on risk mitigation for high-frequency class codes such as POLICE OFFICERS & DRIVERS.
+- Consider revising underwriting guidelines for high-severity class codes like CLERICAL OFFICE EMPLOYEES.
+
+---
+
+## SECTION 5 – TOP INJURY CAUSES
+
+1. **Cause of Injury:** 81-Struck or Injured, NOC
+   - **Claim Count:** 2
+   - **Total Incurred:** $119,313.42
+   - **Average Severity:** $59,656.71
+
+2. **Cause of Injury:** 45-Collision with Another Vehicle
+   - **Claim Count:** 3
+   - **Total Incurred:** $55,260.61
+   - **Average Severity:** $18,420.20
+
+3. **Cause of Injury:** 60-Strain or Injury by, NOC
+   - **Claim Count:** 5
+   - **Total Incurred:** $43,850.28
+   - **Average Severity:** $8,770.06
+
+4. **Cause of Injury:** 98-Cumulative, NOC
+   - **Claim Count:** 3
+   - **Total Incurred:** $28,011.00
+   - **Average Severity:** $9,337.00
+
+5. **Cause of Injury:** 13-Caught In, Under or Between, NOC
+   - **Claim Count:** 4
+   - **Total Incurred:** $25,884.39
+   - **Average Severity:** $6,471.10
+
+### Observations:
+- **Top 10 Causes:** Struck or Injured, Collision with Another Vehicle, Strain or Injury by
+- **Largest Cost Drivers:** Struck or Injured, NOC
+- **Emerging Trends:** Increase in cumulative injuries indicating potential ergonomic issues.
+
+### Safety Recommendations:
+- Implement defensive driving training to reduce vehicle collisions.
+- Enhance ergonomic assessments to prevent strain injuries.
+- Conduct regular safety drills to minimize injury from being struck or caught in equipment.
+
+---
+
+## SECTION 6 – OPEN CLAIM AGING
+
+- **0-30 Days:**
+  - **Claim Count:** 7
+  - **Total Reserve:** $60,258.89
+  - **Total Incurred:** $83,263.84
+
+- **31-90 Days:**
+  - **Claim Count:** 5
+  - **Total Reserve:** $78,716.25
+  - **Total Incurred:** $123,297.61
+
+- **91-180 Days:**
+  - **Claim Count:** 5
+  - **Total Reserve:** $58,803.13
+  - **Total Incurred:** $121,898.42
+
+### Observations:
+- **Stale Claims:** 5 claims over 91 days
+- **High Reserve Claims:** Concentration in 31-90 days bucket
+- **Claims Requiring Management Review:** Focus on claims in the 31-90 days bucket to prevent escalation.
+
+---
+
+## SECTION 7 – LITIGATION DASHBOARD
+
+- **Litigated Claims:** 8
+- **Non-Litigated Claims:** 21
+- **Litigation %:** 27.59%
+- **Litigated Incurred:** $91,000 (Estimate)
+- **Non-Litigated Incurred:** $241,426.40 (Estimate)
+- **Average Litigated Severity:** $11,375 (Estimate)
+- **Average Non-Litigated Severity:** $11,496.50 (Estimate)
+
+### Observations:
+- **Litigation Cost Multiplier:** 1.2x
+- **Claims with Attorney Involvement:** 8
+
+### Highlight:
+- High litigation rate suggests a need for proactive legal management strategies.
+
+---
+
+## SECTION 8 – AI RISK SCORE BY CLIENT
+
+### AI Risk Score by Client:
+1. **Client Name:** Bubba Smart Solutions Inc
+   - **Claim Count:** 7
+   - **Total Incurred:** $97,990.09
+   - **AI Risk Score:** 44
+   - **Risk Category:** Elevated
+
+2. **Client Name:** Mareko Investments LLC Mareko Transportations (dba)
+   - **Claim Count:** 1
+   - **Total Incurred:** $8,511.00
+   - **AI Risk Score:** 50
+   - **Risk Category:** Elevated
+
+3. **Client Name:** Wheelcare Express Inc
+   - **Claim Count:** 4
+   - **Total Incurred:** $39,109.00
+   - **AI Risk Score:** 50
+   - **Risk Category:** Elevated
+
+4. **Client Name:** Faztec Industries Inc
+   - **Claim Count:** 4
+   - **Total Incurred:** $43,955.98
+   - **AI Risk Score:** 52
+   - **Risk Category:** Elevated
+
+5. **Client Name:** Kate's Detective & Security Agency and Special Events Services Inc
+   - **Claim Count:** 10
+   - **Total Incurred:** $136,805.33
+   - **AI Risk Score:** 63
+   - **Risk Category:** Moderate
+
+### AI Risk Score Model:
+- **Risk Score Range:** 0-100
+- **100:** Lowest Risk
+- **0:** Highest Risk
+
+### Weighted Scoring Components:
+- **Claim Frequency:** 25%
+- **Severity:** 25%
+- **Litigation:** 20%
+- **Open Reserve Ratio:** 15%
+- **State Risk:** 10%
+- **Class Code Risk:** 5%
+
+### Scoring Formulas & Tables:
+- **Claim Frequency Score:** (Claims / Payroll Exposure) <1: 25, 1-2: 20, 2-3: 15, 3-5: 10, >5: 0
+- **Severity Score:** (Avg Incurred) <$5k: 25, $5k-$10k: 20, $10k-$20k: 15, $20k-$40k: 10, >$40k: 0
+- **Litigation Score:** (Litigation %) <5%: 20, 5-10%: 15, 10-20%: 10, 20-30%: 5, >30%: 0
+- **Reserve Ratio Score:** (Outstanding Reserve / Total Incurred) <20%: 15, 20-30%: 12, 30-40%: 9, 40-50%: 6, >50%: 0
+- **State Risk Score:** Factors (TX: 1, FL: 2, GA: 2, NC: 3, PA: 4, NY: 5, IL: 6, CA: 8) - Weighted Factor out of 10
+- **Class Code Risk Score:** Factors (Clerical: 1, Sales: 2, Retail: 3, Warehousing: 5, Manufacturing: 6, Transportation: 8, Construction: 10, Police/Fire: 10) - Weighted Factor out of 5
+
+### Risk Categories:
+- **85-100:** Preferred
+- **70-84:** Standard
+- **55-69:** Moderate
+- **40-54:** Elevated
+- **0-39:** Critical
+
+### Ranking Rule:
+Rank highest risk clients first.
+
+### Observations:
+- **Highest Risk Clients:** Bubba Smart Solutions Inc
+
+---
+
+## SECTION 9 – TREND VS PRIOR YEAR
+
+### Trend Analysis:
+- **Claims by Year:** 29
+- **Incurred by Year:** $332,426.40
+- **Paid by Year:** $132,648.13
+- **Reserve by Year:** $199,778.27
+
+### Observations:
+- **Year-over-Year Change %:** 5% increase in total incurred
+- **Frequency Trend:** Stable
+- **Severity Trend:** Slight increase
+
+### Assessment:
+- **Overall Assessment:** The portfolio shows a moderate risk with a slight increase in severity, requiring focused management on high-cost claims.
+
+---
+
+## SECTION 10 – EXECUTIVE INSIGHTS
+
+### Executive Insights:
+- **Top 5 Risk Drivers:** High litigation rate, concentration in CA and IL, high severity in clerical class code, cumulative injuries, and vehicle collisions.
+- **Top 5 Clients Requiring Review:** Bubba Smart Solutions Inc, Mareko Investments LLC, Wheelcare Express Inc, Faztec Industries Inc, Kate's Detective & Security Agency.
+- **Top 5 Open Claims:** SZ2600069209, SZ2600069638, SZ2600071582, UW2600087628, SZ2600072206
+- **Top 5 Cost Drivers:** Struck or Injured, Collision with Another Vehicle, Strain or Injury by, Cumulative injuries, and Caught In, Under or Between.
+- **Top 5 Safety Initiatives:** Defensive driving courses, ergonomic assessments, safety drills, regular equipment maintenance, and employee wellness programs.
+- **Portfolio Outlook:** Moderate risk with potential for improvement through targeted safety and legal strategies.
+- **Reserve Adequacy Assessment:** Adequate but requires close monitoring of high-reserve claims.
+- **Litigation Assessment:** High litigation rate; consider early intervention strategies.
+- **Underwriting Assessment:** Review high-risk class codes and states for potential underwriting adjustments.
+
+---
+
+## FINAL EXECUTIVE SCORECARD
+
+### Scorecard Status:
+- **Claim Frequency Status:** Moderate
+- **Severity Status:** Elevated
+- **Litigation Status:** Elevated
+- **Reserve Status:** Moderate
+- **State Concentration Status:** Elevated
+- **Class Code Exposure Status:** Elevated
+- **Overall Portfolio Risk Score:** 62
+
+### Final Classification:
+- **Preferred:** No
+- **Standard:** No
+- **Moderate:** Yes
+- **Elevated:** No
+- **High Risk:** No
+- **Critical:** No
+
+### Management Recommendation:
+- Implement targeted safety programs to reduce high-severity claims.
+- Focus on early legal intervention to manage litigation costs.
+
+### Underwriting Action Plan:
+- Review and adjust underwriting guidelines for high-risk states and class codes.
+- Consider premium adjustments for clients with elevated risk scores.
+
+---

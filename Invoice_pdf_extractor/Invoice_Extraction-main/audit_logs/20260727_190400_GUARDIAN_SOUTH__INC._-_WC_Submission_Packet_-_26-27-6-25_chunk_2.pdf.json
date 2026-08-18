@@ -1,0 +1,11 @@
+{
+  "timestamp": "2026-07-27T19:04:00.292783Z",
+  "source_file": "C:\\Users\\Administrator\\pdf_extractor\\Unified_PDF_Platform\\unified_outputs\\temp_splits\\GUARDIAN SOUTH, INC. - WC Submission Packet - 26-27-6-25_chunk_2.pdf",
+  "passes": 1,
+  "final_sum": 0.0,
+  "target_total": 0.0,
+  "discrepancy": 0.0,
+  "line_item_count": 0,
+  "validation_reason": "passed",
+  "outcome": "reconciled"
+}

@@ -1,0 +1,258 @@
+
+================================================================================
+DATA FILTER APPLIED
+================================================================================
+Year Filter: 0
+Total Claims (Before Filter): 2
+Total Claims (After Filter): 2
+Claims Excluded: 0
+Note: All years included in analysis
+================================================================================
+
+---
+
+## SECTION 1 – EXECUTIVE SUMMARY
+
+### Calculations:
+- **Total Claims:** 2
+- **Open Claims:** 0
+- **Closed Claims:** 2
+- **Total Incurred:** $176.51
+- **Total Paid:** $176.51
+- **Outstanding Reserve:** $0.0
+- **Litigation Claims:** 0
+- **Litigation %:** 0.00%
+- **Average Claim Cost:** $88.255
+- **Largest Claim:** $176.51
+- **Portfolio AI Risk Score:** 92
+- **Overall Portfolio Risk Classification:** Preferred
+- **Management Recommendation:** Maintain current risk management strategies as the portfolio is classified as "Preferred" with no open or litigated claims.
+
+---
+
+## SECTION 2 – TOP 10 CLAIMS
+
+1. **Claim Number:** SZ2500065664
+   - **Employer Location:** Veterans Delivery Workforce and Logistics LLC
+   - **State:** PA
+   - **Claim Status:** CLOSED
+   - **Net Incurred:** $176.51
+   - **Outstanding Reserve:** $0.0
+
+2. **Claim Number:** SZ2600070382
+   - **Employer Location:** Kate's Detective & Security Agency and Special Events Services Inc
+   - **State:** IL
+   - **Claim Status:** CLOSED
+   - **Net Incurred:** $0.0
+   - **Outstanding Reserve:** $0.0
+
+### Observations:
+- **Percentage of Total Portfolio Losses Represented by Top 10 Claims:** 100%
+- **Largest Claim Contributor:** Veterans Delivery Workforce and Logistics LLC with $176.51
+
+---
+
+## SECTION 3 – LOSSES BY STATE
+
+1. **State:** PA
+   - **Claim Count:** 1
+   - **Total Paid:** $176.51
+   - **Outstanding Reserve:** $0.0
+   - **Total Incurred:** $176.51
+
+2. **State:** IL
+   - **Claim Count:** 1
+   - **Total Paid:** $0.0
+   - **Outstanding Reserve:** $0.0
+   - **Total Incurred:** $0.0
+
+### Observations:
+- **State Concentration %:** PA represents 100% of total portfolio losses.
+- **Highest Risk State:** PA
+- **Top 5 States:** PA, IL
+- **States Over 20% Portfolio Losses:** PA
+- **State Concentration Alert:** High concentration in PA
+
+---
+
+## SECTION 4 – LOSSES BY CLASS CODE
+
+1. **Class Code:** 0808
+   - **Class Description:** PARCEL DELIVERY COMPANY
+   - **Claim Count:** 1
+   - **Total Incurred:** $176.51
+   - **Average Severity:** $176.51
+
+2. **Class Code:** 7720
+   - **Class Description:** POLICE OFFICERS & DRIVERS
+   - **Claim Count:** 1
+   - **Total Incurred:** $0.0
+   - **Average Severity:** $0.0
+
+### Observations:
+- **Highest Loss Class Codes:** 0808
+- **Highest Frequency Class Codes:** 0808, 7720
+- **Highest Severity Class Codes:** 0808
+
+### Underwriting Observations:
+- Focus on managing risks associated with parcel delivery operations.
+- Monitor police officer and driver roles for potential emerging risks.
+
+---
+
+## SECTION 5 – TOP INJURY CAUSES
+
+1. **Cause of Injury:** 70-Striking Against or Stepping On, NOC
+   - **Claim Count:** 1
+   - **Total Incurred:** $176.51
+   - **Average Severity:** $176.51
+
+2. **Cause of Injury:** 50-Motor Vehicle, NOC
+   - **Claim Count:** 1
+   - **Total Incurred:** $0.0
+   - **Average Severity:** $0.0
+
+### Observations:
+- **Top 10 Causes:** 70-Striking Against or Stepping On, NOC; 50-Motor Vehicle, NOC
+- **Largest Cost Drivers:** 70-Striking Against or Stepping On, NOC
+- **Emerging Trends:** No significant trends due to low claim volume.
+
+### Safety Recommendations:
+- Implement safety training for delivery personnel to prevent stepping and striking injuries.
+- Conduct regular vehicle safety checks and driver training to mitigate motor vehicle incidents.
+- Review and enhance workplace safety protocols regularly.
+
+---
+
+## SECTION 6 – OPEN CLAIM AGING
+
+### Observations:
+- **Stale Claims:** None
+- **High Reserve Claims:** None
+- **Claims Requiring Management Review:** None
+
+---
+
+## SECTION 7 – LITIGATION DASHBOARD
+
+- **Litigated Claims:** 0
+- **Non-Litigated Claims:** 2
+- **Litigation %:** 0.00%
+- **Litigated Incurred:** $0.0
+- **Non-Litigated Incurred:** $176.51
+- **Average Litigated Severity:** $0.0
+- **Average Non-Litigated Severity:** $88.255
+
+### Observations:
+- **Litigation Cost Multiplier:** 0x
+- **Claims with Attorney Involvement:** None
+
+### Highlight:
+- No litigation claims, indicating effective claims management and resolution.
+
+---
+
+## SECTION 8 – AI RISK SCORE BY CLIENT
+
+### AI Risk Score by Client:
+1. **Client Name:** Kate's Detective & Security Agency and Special Events Services Inc
+   - **Claim Count:** 1
+   - **Total Incurred:** $0.0
+   - **AI Risk Score:** 89
+   - **Risk Category:** Preferred
+
+2. **Client Name:** Veterans Delivery Workforce and Logistics LLC
+   - **Claim Count:** 1
+   - **Total Incurred:** $176.51
+   - **AI Risk Score:** 94
+   - **Risk Category:** Preferred
+
+### AI Risk Score Model:
+- **Risk Score Range:** 0-100
+- **100:** Lowest Risk
+- **0:** Highest Risk
+
+### Weighted Scoring Components:
+- **Claim Frequency:** 25%
+- **Severity:** 25%
+- **Litigation:** 20%
+- **Open Reserve Ratio:** 15%
+- **State Risk:** 10%
+- **Class Code Risk:** 5%
+
+### Risk Categories:
+- **85-100:** Preferred
+- **70-84:** Standard
+- **55-69:** Moderate
+- **40-54:** Elevated
+- **0-39:** Critical
+
+### Ranking Rule:
+Rank highest risk clients first.
+
+### Observations:
+- **Highest Risk Clients:** None, all clients are in the Preferred category.
+
+---
+
+## SECTION 9 – TREND VS PRIOR YEAR
+
+### Trend Analysis:
+- **Claims by Year:** 2025: 1, 2026: 1
+- **Incurred by Year:** $176.51
+- **Paid by Year:** $176.51
+- **Reserve by Year:** $0.0
+
+### Observations:
+- **Year-over-Year Change %:** 0%
+- **Frequency Trend:** Stable
+- **Severity Trend:** Stable
+
+### Assessment:
+- **Overall Assessment:** The portfolio remains stable with no significant changes in claim frequency or severity.
+
+---
+
+## SECTION 10 – EXECUTIVE INSIGHTS
+
+### Executive Insights:
+- **Top 5 Risk Drivers:** Parcel delivery operations, stepping/striking injuries, vehicle safety, state concentration in PA, class code exposure.
+- **Top 5 Clients Requiring Review:** None, all clients are Preferred.
+- **Top 5 Open Claims:** None
+- **Top 5 Cost Drivers:** Parcel delivery operations
+- **Top 5 Safety Initiatives:** Delivery safety training, vehicle safety checks, workplace safety protocols, employee safety engagement, regular safety audits.
+- **Portfolio Outlook:** Positive, with a Preferred risk classification and no open claims.
+- **Reserve Adequacy Assessment:** Adequate, with no outstanding reserves.
+- **Litigation Assessment:** Excellent, with no litigated claims.
+- **Underwriting Assessment:** Strong, with a focus on maintaining low-risk profiles.
+
+---
+
+## FINAL EXECUTIVE SCORECARD
+
+### Scorecard Status:
+- **Claim Frequency Status:** Stable
+- **Severity Status:** Low
+- **Litigation Status:** Non-existent
+- **Reserve Status:** Adequate
+- **State Concentration Status:** High in PA
+- **Class Code Exposure Status:** Managed
+- **Overall Portfolio Risk Score:** 92
+
+### Final Classification:
+- **Preferred:** Yes
+- **Standard:** No
+- **Moderate:** No
+- **Elevated:** No
+- **High Risk:** No
+- **Critical:** No
+
+### Management Recommendation:
+- Continue current risk management practices.
+- Focus on maintaining low claim frequency and severity.
+
+### Underwriting Action Plan:
+- Monitor state concentration and adjust strategies as necessary.
+- Enhance safety initiatives to prevent future claims.
+
+---

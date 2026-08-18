@@ -1,0 +1,17 @@
+{
+  "case_id": "case_20260714_065639_0256a1",
+  "timestamp": 1784012224.9931371,
+  "input_file": "ClaimsAdministration_2026.json",
+  "output_file": "management_claims_dashboard.txt",
+  "model": "gpt-4o",
+  "temperature": 0.2,
+  "year": 2026,
+  "filter_info": {
+    "year_filter_applied": true,
+    "year": 2026,
+    "total_claims_before_filter": 93,
+    "total_claims_after_filter": 29,
+    "filtered_claims_excluded": 64,
+    "message": "Analysis includes only claims from year 2026"
+  }
+}

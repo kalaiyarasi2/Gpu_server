@@ -1,0 +1,11 @@
+{
+  "timestamp": "2026-07-27T19:05:43.732382Z",
+  "source_file": "C:\\Windows\\TEMP\\tmp6xwnctp4\\GUARDIAN SOUTH, INC. - WC Submission Packet - 26-27-1-4.pdf",
+  "passes": 2,
+  "final_sum": 0.0,
+  "target_total": 0.0,
+  "discrepancy": 0.0,
+  "line_item_count": 0,
+  "validation_reason": "No items extracted from a document containing financial data.",
+  "outcome": "reconciled"
+}

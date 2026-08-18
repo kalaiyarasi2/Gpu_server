@@ -1,0 +1,17 @@
+{
+  "case_id": "case_20260713_162918_11a33d",
+  "timestamp": 1783960194.8093178,
+  "input_file": "Claim_Details_Template_Jul_2026.xlsx",
+  "output_file": "management_claims_dashboard.txt",
+  "model": "gpt-4o",
+  "temperature": 0.2,
+  "year": 0,
+  "filter_info": {
+    "year_filter_applied": false,
+    "year": null,
+    "total_claims_before_filter": 103,
+    "total_claims_after_filter": 103,
+    "filtered_claims_excluded": 0,
+    "message": "All years included in analysis"
+  }
+}

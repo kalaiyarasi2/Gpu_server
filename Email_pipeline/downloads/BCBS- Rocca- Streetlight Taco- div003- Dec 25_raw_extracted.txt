@@ -1,0 +1,44 @@
+
+[[PAGE_1]]
+STREETLIGHT TACO
+4004 HENDERSON BLVD
+TAMPA FL 33629-4940
+Invoice Due Date Invoice # Invoiced Amount Invoice Date Billing Period
+12/01/2025 78141453 $1,807.36 11/19/2025 12/01/2025-01/01/2026
+Org Id Group Division
+31250412794 K9042 003
+BILLING SUMMARY
+Original Totals
+TOTAL BILLED AMOUNT $1,807.36
+ON-BILL ADJUSTMENTS $0.00
+AMOUNT DUE $1,807.36
+For questions about your invoice, please contact your Florida Blue Service Advocate.
+Health insurance is offered by Blue Cross and Blue Shield of Florida, Inc., D/B/A Florida Blue. HMO coverage is offered by Health Options Inc., D/B/A Florida Blue HMO, an HMO subsidiary of Blue Cross
+and Blue Shield of Florida. Dental, Life and Disability are offered by Florida Combined Life, an affiliate of Blue Cross and Blue Shield of Florida, Inc. These companies are Independent Licensees of the Blue
+Cross and Blue Shield Association.
+Org Id: 31250412794 Group: K9042 Division: 003 Invoice #: 78141453 Billing Period: 12/01/2025-01/01/2026 Invoice Due Date: 12/01/2025 Page 1 of 2
+
+[[PAGE_2]]
+INVOICE DETAIL
+Last Name First Name MI SSN Subscriber ID Coverage Product Employee ID Total
+ANDERSON TYLER A *****6613 H47163854 SINGLE BLUECARE NFQ 188766613 $451.84
+LG GRP PLAN
+49-RC
+FAYSON BRYONNE *****2019 H44774273 SINGLE BLUECARE NFQ $451.84
+LG GRP PLAN
+49-RC
+ORTIZ- ALFREDO *****3976 H44774282 SINGLE BLUECARE NFQ 772093976 $451.84
+HERNANDEZ LG GRP PLAN
+49-RC
+TSEKHMEISTR VIKTOR *****5848 H47422702 SINGLE BLUECARE NFQ 317775848 $451.84
+LG GRP PLAN
+49-RC
+ON-BILL ADJUSTMENTS
+Last Name First Name SSN Subscriber ID Coverage Level Action Code Total Posted Date Eff/Cancel Date Post Bill
+Adjustments
+THIS INVOICE DOES NOT CONTAIN ANY DATA FOR ON-BILL ADJUSTMENTS
+ROSTER ADJUSTMENTS
+Last Name First Name MI SSN Subscriber ID Rel Age Product Reason Effective Date Old Premium Prorated Login ID Adjustment
+Premium Date
+THIS INVOICE DOES NOT CONTAIN ANY DATA FOR ROSTER ADJUSTMENTS
+Org Id: 31250412794 Group: K9042 Division: 003 Invoice #: 78141453 Billing Period: 12/01/2025-01/01/2026 Invoice Due Date: 12/01/2025 Page 2 of 2

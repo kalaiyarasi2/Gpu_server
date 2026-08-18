@@ -1,0 +1,121 @@
+
+[[PAGE_1]]
+000000000027716 000000005372 03012026 4
+PROVIDESCOVERAGEFROM3/1/2026-3/31/2026
+Group Number: 27716 AmountDue: $53.72
+PaymentDueDate: 3/1/2026 AmountEnclosed:
+BLANK
+Pleasesendpaymentalongwithremittancestubto:
+HendrikUiterwyk,PAdbaAbrahamson&Uiterwyk,PA Blank
+SydneyHaytread KCLGROUPBENEFITS
+900WestPlattStreet POBOX219846
+Tampa,FL33606 KANSASCITY,MO64121-9846
+Pleasedetachandreturnthisportionwithyourpaymenttoensureproperpaymentposting
+____ ____ ____ ____ ____ ____ ____ ____ ____ ____ ____ ____ ____ ____ ____ ____ ____ ____ ____ ____ ____ ____ ____ ____ ____ ____ ____ ____ ____ ____ ____ ____ ____ ____ ____ ____
+REMITTANCESTUB
+Pleasesendallcorrespondence(EmployeeAdds,Terms,Changes)to:
+KCLGroupBenefits
+ATTN:TakeshiaGriffin
+POBOX219425
+KANSASCITY,MO64121-9425
+Email:GRPAdmin@kclife.com
+Pleasesendpaymentalongwithremittancestubto:
+KCLGroupBenefits
+POBOX219846
+KANSASCITY,MO64121-9846
+Page1
+
+[[PAGE_2]]
+Page Intentionally Left Blank
+Page2
+
+[[PAGE_3]]
+HendrikUiterwyk,PAdbaAbrahamson&Uiterwyk,PA
+GroupNumber: 27716
+DueDate: 3/1/2026
+DatePrepared: 2/11/2026
+PROVIDESCOVERAGEFROM3/1/2026-3/31/2026
+Group Number: 27716 AmountDue: $53.72
+BLANK
+PaymentDueDate: 3/1/2026 AmountEnclosed:
+GroupContact KansasCityLifeContact
+HendrikUiterwyk,PAdbaAbrahamson&Uiterwyk,PA KCLGROUPBENEFITS
+ATTN:SydneyHaytread ATTN:TakeshiaGriffin-27716
+900WestPlattStreet POBOX219425
+Tampa,FL33606 KANSASCITY,MO64121-9425
+KCLGroupBenefitsContactInformation
+GroupCustomerAccountTeam TakeshiaGriffin Phone: 877-266-6767x8002
+POBOX219425 Takeshia.Griffin@kclife.com Blank 816-753-7299x8002
+KANSASCITY,MO64121-9425 www.kclgroupbenefits.com Fax: 816-753-2964
+MonthlyPremiumStatementSummary
+LastMonthsCharges $53.72
+Payments ($53.72)
+ExcessPremium $0.00
+Blank
+PastDue/Credit $0.00
+CurrentPremiumDue $53.72
+Adjustments/Fees $0.00
+EAPFee $0.00
+BalanceDue $53.72
+BASICADMINISTRATIVEINSTRUCTIONS
+-PLEASEPAYASBILLED
+-VERIFYYOURSTATEMENTFORACCURACY,VERIFYINGALLELIGIBLEEMPLOYEESARECOVERED
+-ENROLLMENTCARD(S)FORNEWEMPLOYEESMUSTBEPROVIDEDWITHIN31DAYSOFELIGIBILITYDATE
+-REPORTEMPLOYEESWHOHAVEDISCONTINUEDEMPLOYMENTIMMEDIATELYGIVINGDATEOFTERMINATION
+-REPORTALLSALARYANDCLASSCHANGESIMMEDIATELYPROVIDINGEFFECTIVEDATEOFCHANGE
+-ADJUSTMENTSWILLBEREFLECTEDONBILLINGSUMMARY
+-ADJUSTMENTSDETAILMAYBEVIEWEDAT:http://www.kclgroupbenefits.com
+Page3
+
+[[PAGE_4]]
+HendrikUiterwyk,PAdbaAbrahamson&
+CoverageCode Notes Cobra
+Uiterwyk,PA
+EE-EmployeeOnly 1-RateChange CE-CobraEmployee(EE)
+EF-Employee+Family 2-CoverageChange CF-CobraEE+Family
+GroupNumber: 27716
+SP-Spouse 3-Both CS-CobraEE+Spouse
+DueDate: 3/1/2026
+DE-Dependent(s) Thesechangeswill CD-CobraEE+Child(ren)
+DatePrepared: 2/11/2026
+EM-Employee+Member appearonthenextbill Blank
+ES-Employee+Spouse Blank
+Blank
+PROVIDESCOVERAGEFROM3/1/2026-3/31/2026
+Name Code Premium Volume Name Code Premium Volume Name Code Premium Volume
+BennettAndrew GacioTomas-Phillip PimentaJustin
+TGLife EE $2.99 $15,000 TGLife EE $2.99 $15,000 TGLife EE $2.99 $15,000
+TGAD&D EE $0.38 $15,000 TGAD&D EE $0.38 $15,000 TGAD&D EE $0.38 $15,000
+Total $3.37 Total $3.37 Total $3.37
+BlockDarleen GatlinAndrea ShalnaLeah
+TGLife EE $2.99 $15,000 TGLife EE $2.99 $15,000 TGLife EE $2.99 $15,000
+TGAD&D EE $0.38 $15,000 TGAD&D EE $0.38 $15,000 TGAD&D EE $0.38 $15,000
+Total $3.37 Total $3.37 Total $3.37
+CampbellCarla HarmonJanice WadsworthSarah
+TGLife EE $2.99 $15,000 TGLife EE $1.94 $9,750 TGLife EE $2.99 $15,000
+TGAD&D EE $0.38 $15,000 TGAD&D EE $0.24 $9,750 TGAD&D EE $0.38 $15,000
+Total $3.37 Total $2.18 Total $3.37
+CaseLori haytreadjacklyn
+GroupTotals
+TGLife EE $1.94 $9,750 TGLife EE $2.99 $15,000
+TGAD&D EE $0.24 $9,750 TGAD&D EE $0.38 $15,000 Product Premium Enrollees Volume
+Total $2.18 Total $3.37 Dental $0.00 0
+DavidsonHolly HuegelElise
+TGLife $47.68 17 $239,250
+TGLife EE $2.99 $15,000 TGLife EE $2.99 $15,000
+TGAD&D EE $0.38 $15,000 TGAD&D EE $0.38 $15,000 TGAD&D $6.04 17 $239,250
+Total $3.37 Total $3.37 VOLLife $0.00 0 $0
+EndsleyPatricia MELLAMANDI
+VOLAD&D $0.00 0 $0
+TGLife EE $1.94 $9,750 TGLife EE $2.99 $15,000
+STD $0.00 0 $0
+TGAD&D EE $0.24 $9,750 TGAD&D EE $0.38 $15,000
+Total $2.18 Total $3.37 LTD $0.00 0 $0
+GacioTomas PauleyGlen Vision $0.00 0
+TGLife EE $2.99 $15,000 TGLife EE $2.99 $15,000
+Accident $0.00 0
+TGAD&D EE $0.38 $15,000 TGAD&D EE $0.38 $15,000
+Total $3.37 Total $3.37 Critical $0.00 0 $0
+Illness
+GrandTotal $53.72
+Page4

@@ -1,0 +1,261 @@
+
+================================================================================
+DATA FILTER APPLIED
+================================================================================
+Year Filter: 0
+Total Claims (Before Filter): 1
+Total Claims (After Filter): 1
+Claims Excluded: 0
+Note: All years included in analysis
+================================================================================
+
+---
+
+## SECTION 1 – EXECUTIVE SUMMARY
+
+### Calculations:
+- **Total Claims:** 1
+- **Open Claims:** 1
+- **Closed Claims:** 0
+- **Total Incurred:** $9000.0
+- **Total Paid:** $596.5
+- **Outstanding Reserve:** $8403.5
+- **Litigation Claims:** 0
+- **Litigation %:** 0.00%
+- **Average Claim Cost:** $9000.0
+- **Largest Claim:** $9000.0
+- **Portfolio AI Risk Score:** 72
+- **Overall Portfolio Risk Classification:** Standard
+- **Management Recommendation:** Focus on closing the open claim efficiently to prevent reserve escalation and ensure timely resolution.
+
+---
+
+## SECTION 2 – TOP 10 CLAIMS
+
+1. **Claim Number:** SZ1200098765
+   - **Employer Location:** Test Development LLC
+   - **State:** PA
+   - **Claim Status:** OPEN
+   - **Net Incurred:** $9000.0
+   - **Outstanding Reserve:** $8403.5
+
+### Observations:
+- **Percentage of Total Portfolio Losses Represented by Top 10 Claims:** 100%
+- **Largest Claim Contributor:** SZ1200098765 with $9000.0
+
+---
+
+## SECTION 3 – LOSSES BY STATE
+
+1. **State:** PA
+   - **Claim Count:** 1
+   - **Total Paid:** $596.5
+   - **Outstanding Reserve:** $8403.5
+   - **Total Incurred:** $9000.0
+
+### Observations:
+- **State Concentration %:** PA represents 100% of total portfolio losses.
+- **Highest Risk State:** PA
+- **Top 5 States:** PA
+- **States Over 20% Portfolio Losses:** PA
+- **State Concentration Alert:** High concentration in PA requires monitoring for state-specific regulatory changes.
+
+---
+
+## SECTION 4 – LOSSES BY CLASS CODE
+
+1. **Class Code:** 808
+   - **Class Description:** TEST COMPANY
+   - **Claim Count:** 1
+   - **Total Incurred:** $9000.0
+   - **Average Severity:** $9000.0
+
+### Observations:
+- **Highest Loss Class Codes:** 808
+- **Highest Frequency Class Codes:** 808
+- **Highest Severity Class Codes:** 808
+
+### Underwriting Observations:
+- The single claim under class code 808 indicates a need for targeted risk management strategies.
+- Consider reviewing safety protocols specific to the operations classified under code 808.
+
+---
+
+## SECTION 5 – TOP INJURY CAUSES
+
+1. **Cause of Injury:** 31-Fall, Slip, Trip, NOC
+   - **Claim Count:** 1
+   - **Total Incurred:** $9000.0
+   - **Average Severity:** $9000.0
+
+### Observations:
+- **Top 10 Causes:** 31-Fall, Slip, Trip, NOC
+- **Largest Cost Drivers:** 31-Fall, Slip, Trip, NOC
+- **Emerging Trends:** Increased focus on slip and trip prevention could mitigate similar future claims.
+
+### Safety Recommendations:
+- Implement slip-resistant flooring and footwear requirements.
+- Conduct regular safety training focused on fall prevention.
+- Review and improve housekeeping practices to minimize trip hazards.
+
+---
+
+## SECTION 6 – OPEN CLAIM AGING
+
+- **0-30 Days:**
+  - **Claim Count:** 0
+  - **Total Reserve:** $0.0
+  - **Total Incurred:** $0.0
+
+- **31-90 Days:**
+  - **Claim Count:** 1
+  - **Total Reserve:** $8403.5
+  - **Total Incurred:** $9000.0
+
+- **91-180 Days:**
+  - **Claim Count:** 0
+  - **Total Reserve:** $0.0
+  - **Total Incurred:** $0.0
+
+- **181-365 Days:**
+  - **Claim Count:** 0
+  - **Total Reserve:** $0.0
+  - **Total Incurred:** $0.0
+
+- **Over 365 Days:**
+  - **Claim Count:** 0
+  - **Total Reserve:** $0.0
+  - **Total Incurred:** $0.0
+
+### Observations:
+- **Stale Claims:** None
+- **High Reserve Claims:** SZ1200098765
+- **Claims Requiring Management Review:** SZ1200098765
+
+---
+
+## SECTION 7 – LITIGATION DASHBOARD
+
+- **Litigated Claims:** 0
+- **Non-Litigated Claims:** 1
+- **Litigation %:** 0.00%
+- **Litigated Incurred:** $0.0
+- **Non-Litigated Incurred:** $9000.0
+- **Average Litigated Severity:** $0.0
+- **Average Non-Litigated Severity:** $9000.0
+
+### Observations:
+- **Litigation Cost Multiplier:** N/A
+- **Claims with Attorney Involvement:** 0
+
+### Highlight:
+- No litigation involvement, indicating effective claim management practices.
+
+---
+
+## SECTION 8 – AI RISK SCORE BY CLIENT
+
+### AI Risk Score by Client:
+1. **Client Name:** Test Development LLC
+   - **Claim Count:** 1
+   - **Total Incurred:** $9000.0
+   - **AI Risk Score:** 72
+   - **Risk Category:** Standard
+
+### AI Risk Score Model:
+- **Risk Score Range:** 0-100
+- **100:** Lowest Risk
+- **0:** Highest Risk
+
+### Weighted Scoring Components:
+- **Claim Frequency:** 25%
+- **Severity:** 25%
+- **Litigation:** 20%
+- **Open Reserve Ratio:** 15%
+- **State Risk:** 10%
+- **Class Code Risk:** 5%
+
+### Scoring Formulas & Tables:
+- **Claim Frequency Score:** (Claims / Payroll Exposure) <1: 25, 1-2: 20, 2-3: 15, 3-5: 10, >5: 0
+- **Severity Score:** (Avg Incurred) <$5k: 25, $5k-$10k: 20, $10k-$20k: 15, $20k-$40k: 10, >$40k: 0
+- **Litigation Score:** (Litigation %) <5%: 20, 5-10%: 15, 10-20%: 10, 20-30%: 5, >30%: 0
+- **Reserve Ratio Score:** (Outstanding Reserve / Total Incurred) <20%: 15, 20-30%: 12, 30-40%: 9, 40-50%: 6, >50%: 0
+- **State Risk Score:** Factors (TX: 1, FL: 2, GA: 2, NC: 3, PA: 4, NY: 5, IL: 6, CA: 8) - Weighted Factor out of 10
+- **Class Code Risk Score:** Factors (Clerical: 1, Sales: 2, Retail: 3, Warehousing: 5, Manufacturing: 6, Transportation: 8, Construction: 10, Police/Fire: 10) - Weighted Factor out of 5
+
+### Risk Categories:
+- **85-100:** Preferred
+- **70-84:** Standard
+- **55-69:** Moderate
+- **40-54:** Elevated
+- **0-39:** Critical
+
+### Ranking Rule:
+Rank highest risk clients first.
+
+### Observations:
+- **Highest Risk Clients:** Test Development LLC
+
+---
+
+## SECTION 9 – TREND VS PRIOR YEAR
+
+### Trend Analysis:
+- **Claims by Year:** 1
+- **Incurred by Year:** $9000.0
+- **Paid by Year:** $596.5
+- **Reserve by Year:** $8403.5
+
+### Observations:
+- **Year-over-Year Change %:** N/A (insufficient data for comparison)
+- **Frequency Trend:** Stable with only one claim
+- **Severity Trend:** High due to single claim impact
+
+### Assessment:
+- **Overall Assessment:** The portfolio is stable but requires monitoring due to the high severity of the single claim.
+
+---
+
+## SECTION 10 – EXECUTIVE INSIGHTS
+
+### Executive Insights:
+- **Top 5 Risk Drivers:** Concentration in PA, single high-severity claim, slip/trip incidents, reserve management, claim aging.
+- **Top 5 Clients Requiring Review:** Test Development LLC
+- **Top 5 Open Claims:** SZ1200098765
+- **Top 5 Cost Drivers:** Slip/trip incidents, reserve levels, claim severity, state concentration, class code exposure.
+- **Top 5 Safety Initiatives:** Slip prevention, safety training, housekeeping improvements, risk assessments, employee awareness programs.
+- **Portfolio Outlook:** Stable with potential for improvement through targeted safety initiatives.
+- **Reserve Adequacy Assessment:** Adequate but requires ongoing review.
+- **Litigation Assessment:** No current litigation concerns.
+- **Underwriting Assessment:** Maintain current underwriting standards with focus on risk mitigation.
+
+---
+
+## FINAL EXECUTIVE SCORECARD
+
+### Scorecard Status:
+- **Claim Frequency Status:** Stable
+- **Severity Status:** High
+- **Litigation Status:** Low
+- **Reserve Status:** Adequate
+- **State Concentration Status:** High
+- **Class Code Exposure Status:** High
+- **Overall Portfolio Risk Score:** 72
+
+### Final Classification:
+- **Preferred:** No
+- **Standard:** Yes
+- **Moderate:** No
+- **Elevated:** No
+- **High Risk:** No
+- **Critical:** No
+
+### Management Recommendation:
+- Focus on closing the open claim efficiently.
+- Implement targeted safety initiatives to prevent future incidents.
+
+### Underwriting Action Plan:
+- Review and adjust safety protocols for high-risk activities.
+- Monitor state-specific regulatory changes and adjust underwriting guidelines accordingly.
+
+---

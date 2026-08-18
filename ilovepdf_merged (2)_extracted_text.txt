@@ -1,0 +1,343 @@
+
+[[PAGE_1]]
+DATA SERVICES
+Original copy for Recipient: Tax Invoice
+Mailing Address Account Details
+Your Account Summary
+J. Mabu Basha
+Cognet Hr Solutions Pvt Ltd Customer Account Number 31-19494821
+No.7, M.T.H. Road, 2nd Floor, Karunaa Conquest IT Park, - Internal ID (Billable ID) 21-100199663
+Ambattur, ChennaiNo.7, M.T.H. Road, 2nd Floor, Karunaa
+Invoice Number BBL332602B088932
+Conquest IT Park, Ambattur,
+Invoice Date 16-FEB-2026
+Chennai - 600058
+Due Date 09-MAR-2026
+Tamil Nadu
+21-100199663 BBL332602B088932
+Billing Address Invoice Summary
+Cognet Hr Solutions Pvt Ltd
+Amount(`)
+No.7, M.T.H. Road, 2nd Floor, Karunaa Conquest IT Park,
+Recurring charges 48,333.33
+Ambattur, ChennaiNo.7, M.T.H. Road, 2nd Floor, Karunaa
+Conquest IT Park, Ambattur, - One time charges 0.00
+Discount 0.00
+Chennai - 600058
+Sub-Total 48,333.33
+Tamil Nadu CGST 4,350.00
+SGST/UTGST 4,350.00
+Total Taxes 8,700.00
+GSTIN Details
+Total (`) 57,033.33
+Customer GSTIN. : 33AADCC0190K1ZW
+Amount in Words: ` Fifty Seven Thousand Thirty Three Rupees and
+Place of Supply : TAMIL NADU Thirty Three Paise Only
+State Code : 33 Detailed break-up available from page 3 onwards:
+Customer PAN No. : AADCC0190K
+Bharti Airtel Ltd
+Authorised Signatory
+Signature Not Verified
+Digitally signed by: Sumeet Chadha
+IRN Code: 67a1e4433017d88142d67b670ce946c95372283fa42060e4faaa51fa8a6508dD5ate: 2026.02.17 09:09:03 IST
+YOUR PAYMENT OPTIONS
+1) Pay Online via Airtel Thanks for Business : https://www.airtel.in/business/thanksforbusiness/login/. Login using your registered email id.
+2) EFT/RTGS Details: Beneficiary A/c Name: Bharti Airtel Ltd Bank Name: Citi Bank NA IFSC: CITI0000004
+Bank Account No. : BTELCC00000000029452 PAN No. : AAACB2894G
+3) To account your payments, Please share invoice and UTR details on : Collection.data@airtel.com
+No tax payable on reverse charge basis
+Airtel GSTIN Details: Bharti Airtel Ltd - 101, Oceanic Towers, Santhome High Road, Santhome, Chennai, Tamil Nadu- 600028
+STATE: Tamil Nadu, STATE CODE: 33, GST Number: 33AAACB2894G1ZU
+Regd Office : Airtel Center,Plot No.16,Udyog Vihar,Phase IV,Gurugram 122015,Haryana,India.
+Phone 0124 - 4222222; Fax 0124 - 4243252; Corporate identity Number-L74899HR1995PLC095967; www.airtel.in
+SAC / HSN CODE: 998422
+PPaaggee 11 ooff 33
+
+[[PAGE_2]]
+Terms & Conditions
+1)Bharti Airtel Ltd. has full right to change the terms and conditions applicable to tariff plans from time to time.
+2)Bharti Airtel Ltd. reserves the right to suspend service in case of non-payment by Due Date. The customer shall continue to be liable for the
+charges during the period of suspension.
+3)The invoice will be deemed accepted in case of variation/dispute not reported by Due Date of invoice. Any arbitration as result of such dispute
+shall be conducted exclusively in Delhi.
+4)In case of any changes (upgrade, downgrade or shifting) done on any live Circuit Id, the adjusted amount will be submitted in subsequent
+invoice after the implementation of changes delivered.
+5)In the event of termination of a link(s) or partial termination of the Data Services during the Service Order Term for the respective link(s)/Data
+Services by the Customer, Airtel reserves the right to charge for the residual term at the rates as mentioned in the Service Acquisition Form
+("Termination Charges") and Customer agrees to pay such Termination Charges along with charges for Data Services rendered up to the
+effective date of termination within Due Date of the date of the invoice.
+Nature Of Service : Telecommunication, broadcasting and information supply services, Information technology and software support services,
+On line information and data base access or retrieval,Management maintenance or repair, leasing or rental services with or without operator and
+erection Commissioning or installation.
+Charge calculation method
+For products which are charged annually:
+1 ) Full year charge = Annual Charges
+2 ) Prorated monthly charges =(Annual charges / 12*No of months)
+3 ) For Fractional months, the calculation has been done as follows: (Annual Charges/4) * (Days of Service in Quarter/Total No. of days in
+Quarter)
+4 ) Same calculations will be done for monthly billing cycle
+For any queries or concerns
+1 ) Kindly contact us on Airtel Thanks for Business: https://www.airtel.in/business/thanksforbusiness/login/. Login using your registered email
+id.
+OR
+2 ) Kindly write to us at datasupport@airtel.com. Please notify us of the disputed charges by the Due Date with the following information:
+Invoice Number
+Circuit ID (LSI)
+Amount of disputed charges
+Reason for disputing the charges
+Mails exchanged with Airtel team, if any
+How to disconnect
+1 ) K indly log in and raise request on Airtel Thanks for Business: https://www.airtel.in/business/thanksforbusiness/login/. Request for disconnection
+of Circuit id (LSI) on Airtel Thanks for Business can be raised by clicking on "Circuits" option present in the left hand navigation- menu bar under
+"Airtel Connectivity" tab.
+2 ) U pon receipt of request, a Service Request (SR) No. will be provided to you. Please note that in absence of SR number, no credit adjustment shall
+be made for the delay in disconnection and the customer shall be liable to pay for the charges. We request you to use Airtel Thanks for Business
+for raising disconnection request.
+Key contact points
+In case of queries reach out to your respective Relationship Manager / Account Manager.
+PPaaggee 22 ooff 33
+
+[[PAGE_3]]
+Invoice no : BBL332602B088932
+Invoice date : 16-FEB-2026
+Invoice Summary
+Product ILL
+HSN/SAC 998422
+Qty/UQM 1/Others
+Installation Address(A) Bharti Airtel Ltd 101Santhome High Road6th Foreshore Estate CHENNAI CHN TAMIL NADU
+Installation Address(B) 0 No 7 M T H Road Karuna Conquest IT Park 2nd Floor Ambattur Chennai TAMIL NADU
+Installation Annual Current
+Circuit Id(LSI)/ PO No / Bandwidth
+Date / Description Charges* Charges* CGST SGST/UTGST IGST
+Reference LSI PO Date Distance
+Service Period ( ` ) ( `
+Rate Amount Rate Amount Rate Amount
+5163560 SCUILLKTN0901250 18-Jan-2025 / 200 Mbps / 200 Mbps 5,80,000.00 48,333.33 9% 4,350.00 9% 4,350.00 0% 0.00
+219/ Unmanaged ILL 0
+01-Mar-2026 No 7 M T H Road
+09-JAN-2025 to Karuna Conquest
+31-Mar-2026 IT Park 2nd Floor
+Ambattur - Access
+Bandwidth ARC
+Total 5,80,000.00 48,333.33 4,350.00 4,350.00 0.00
+*Excluding Tax
+Tax Details
+Description1 SAC / HSN Taxable Value Rate Amount Total
+CGST 998422 48,333.33 9% 4,350.00
+8,700.00
+UTGST/SGST 998422 48,333.33 9% 4,350.00
+Total 8,700.00
+Acronyms Used
+QTY Quantity
+UoM Unit of Measure
+SAC Service Accounting Code
+HSN Harmonized System of
+Nomenclature
+PPaaggee 33 ooff 33
+
+[[PAGE_4]]
+Original for Recipient - Tax Invoice
+Cognet Hr Solutions Private Limited Customer Account Number (CAN) 9022778
+Bill Number BTNI002214/25-26
+Saleem
+Billing Frequency Quarterly Advance
+No.7, 2nd Floor, MTH road, Ambattur, HCL
+Bill Date 16 February, 2026
+Technologies , Chennai
+600098 , Tamilnadu Due Date 3 March, 2026
+Plan Code ENT_BIA200_QTR
+Mobile Number 9940103117
+Plan Name Business Internet Access 200Mbps
+Email ID Saleemy@cognethro.com QTR
+PAN Number
+State Tamil Nadu TAN Number CHEC06659C
+State Code 33 Tax Payable on Reverse Charge No
+GST Number 33AADCC0190K1ZW
+Customer PO Number 9508
+IRN: fba3a38acf387a3fe4a27c5e7e8792e10ccd730fdd6d8a3379aba6e37a204a4c
+Bill Summary
+Amount Payable
+Previous Balance Payment Adjustments Current Bill Charges Amount Payable Due Date
+After Due Date
+135,700.00 -135,700.00 00.00 135,700.00 135,700.00 3 March, 2026 139,771.00
+Summary of Charges
+Description Amount
+1. One Time Charges 00.00
+2. Recurring Charges 115,000.00
+3. Other Charges 00.00
+4. Discounts 00.00
+5. Gross Taxable Value 115,000.00
+6. GST 20,700.00
+Current Bill Charges 135,700.00
+Pay Your Bill Please deduct TDS as per LTDS Certificate otherwise under section 194 (C).
+Online www.spectra.co(Convenience charges along with GST as per Gateway partner applicable)
+Cheque/DD All cheque/DD to be issued in favour of "Shyam Spectra Private Limited"
+(Please write CAN: 9022778 & Bill Number: BTNI002214/25-26 on the back side of the cheque/DD).
+Through NEFT/RTGS Please make the payment as per details provided below (No convenience charge)
+Bank Name Bank Account No. IFSC Code
+Axis Bank Ltd. CITY9022778* UTIB0CCH274
+GST No. ( Tamil Nadu ) PAN Number
+33AADCC3694E1ZU AADCC3694E
+Please add as third party beneficiary (including Axis Bank Customer)
+Chennai Office : Shyam Spectra Pvt. Ltd. (Formerly known as Citycom Networks Pvt. Ltd.) , NO. 440/1, DOOR NO. 29,
+EKAMBHARAM INDUSTRIAL ESTATE, ALAPAKKAM, PORUR , Chennai, 600116, TAMIL NADU ,State Code - 33
+Registered Office : A-60, Naraina Industrial Area, Phase -1, New Delhi - 110028 (CIN : U72300DL2008PTC177873)
+This is a computer generated bill, paper bill will be charged at 100/- per bill copy Page 1 of 4
+
+[[PAGE_5]]
+Installation Address
+Installation Address No.7, 2nd Floor, MTH road, Ambattur, HCL Technologies , Chennai 600098 , Tamil Nadu
+Payment History
+Last Payment Instrument
+Payment Reference Date * TDS
+Mode Amount
+NEFT/HDFCH00624817376/9022778/COGNET
+Powerecoll 21 November, 2025 135,585.00 115.00
+HR SOLUTIONS
+Credit subject to TDS deposit in PAN Number as mentioned above (Form 26 AS)
+Description of Current Charges
+Current Bill
+Description HSN Code Period Amount Discount GST
+Charges
+Recurring Charges
+16 Feb 2026 to
+Additional IP 1 998422 00.00 00.00 00.00 00.00
+15 May 2026
+Business Internet 16 Feb 2026 to
+998422 115,000.00 00.00 20,700.00 135,700.00
+Access 200Mbps 15 May 2026
+Grand Total - - 115,000.00 00.00 20,700.00 135,700.00
+Description of Adjustments
+Description Period Amount Discount GST Total Charges
+Adjustments - 00.00 0.00 00.00 00.00
+Credit subject to TDS deposit in PAN Number as mentioned above (Form 26 AS)
+Chennai Office : Shyam Spectra Pvt. Ltd. (Formerly known as Citycom Networks Pvt. Ltd.) , NO. 440/1, DOOR NO. 29,
+EKAMBHARAM INDUSTRIAL ESTATE, ALAPAKKAM, PORUR , Chennai, 600116, TAMIL NADU ,State Code - 33
+Registered Office : A-60, Naraina Industrial Area, Phase -1, New Delhi - 110028 (CIN : U72300DL2008PTC177873)
+This is a computer generated bill, paper bill will be charged at 100/- per bill copy Page 2 of 4
+
+[[PAGE_6]]
+Tax for Current Charges
+Description Amount
+CGST @ 9% 10,350.00
+SGST/UTGST @ 9% 10,350.00
+Total 20,700.00
+TDS Account Statement (as per TAN Number)
+Acount Number TAN Number Payment date TDS Amount
+9022778 CHEC06659C 21 November, 2025 115.00
+9022778 CHEC06659C 20 August, 2025 115.00
+9022778 CHEC06659C 20 May, 2025 115.00
+9022778 CHEC06659C 25 February, 2025 98.00
+9022778 CHEC06659C 20 November, 2024 98.00
+9022778 CHEC06659C 27 August, 2024 100.00
+9022778 CHEC06659C 17 May, 2024 100.00
+9022778 CHEC06659C 22 February, 2024 100.00
+9022778 CHEC06659C 13 December, 2023 -291.01
+9022778 CHEC06659C 30 May, 2023 610.00
+Total 1,159.99
+Note
+The above statement is based on TAN Number mapped to your account vis-a-vis credit received in Form 26 AS.
+Credit of TDS amount given to respective account will be reversed in case the same does not reflect in Form 26 AS on
+quarterly basis
+Chennai Office : Shyam Spectra Pvt. Ltd. (Formerly known as Citycom Networks Pvt. Ltd.) , NO. 440/1, DOOR NO. 29,
+EKAMBHARAM INDUSTRIAL ESTATE, ALAPAKKAM, PORUR , Chennai, 600116, TAMIL NADU ,State Code - 33
+Registered Office : A-60, Naraina Industrial Area, Phase -1, New Delhi - 110028 (CIN : U72300DL2008PTC177873)
+This is a computer generated bill, paper bill will be charged at 100/- per bill copy Page 3 of 4
+
+[[PAGE_7]]
+General Information
+1. In case of changes in any details, email us at support@spectra.co from your registered email address.
+2. Bill is due and payable in full by the due date as specified in the bill.
+3. Payment can be made through internet banking or crossed cheque or demand draft payable at New Delhi in favour of "Shyam Spectra
+Private Limited". Payment through cheque are subject to realization. Cheque should be issued by the customer only.
+4. No other agency is authorized to accept payment in their name or on behalf of Shyam Spectra Pvt. Ltd. / Citycom Networks Private
+Limited
+5. Shyam Spectra Pvt. Ltd. (Formerly known as Citycom Networks Pvt. Ltd.) shall levy a charge of Rs.500/- (Rupees Five Hundred only) for
+any cheque dishonoured by the Customer's bank. This may also lead to service disconnection without any prior notice.
+6. Late payment will attract Late Payment Charges @ Rs.500/- (Rupees Five Hundred only) Or @ 3% of Outstanding amount(Whichever is
+higher) per month of the outstanding amount.
+7. Cheque payment will attract Cheque Processing Charges @ Rs.300/- (Rupees Three Hundred only) per Cheque.
+8. Payment made will be acknowledged in the next billing cycle.
+9. Taxes and levies shall be charged additionally, as applicable.
+10. Shyam Spectra Pvt. Ltd. (Formerly known as Citycom Networks Pvt. Ltd.) reserves the right to suspend the services for non-payment of
+the bill by due date without any prior notice. The Customer shall continue to be liable for the charges during the period of suspension.
+11. The Customer may bring into notice any discrepancies observed in the billed amount by sending a written notice within 10 days from the
+date of the bill. All bills shall be deemed to be correct and accepted by the Customer if no written communication is received from the
+Customer within 10 days of bill generated.
+12. In case of any disputes, the decision of Shyam Spectra Pvt. Ltd. (Formerly known as Citycom Networks Pvt. Ltd.) shall be final and
+binding upon the Customer. The Customer shall submit all relevant documents and satisfy the concerned officials before the bill due date,
+otherwise the Customer shall continue to be liable for payment of the bill.
+13. Shyam Spectra Pvt. Ltd. (Formerly known as Citycom Networks Pvt. Ltd.) reserves the right to change the terms and conditions applicable
+to tariff plans, at anytime without prior notice.
+14. These terms and conditions are in addition to and without prejudice to the Terms and Conditions contained in the Customer Agreement
+Form (CAF) and Service Level Agreement (SLA), if any, and accepted by the Customer.
+15. Spectra urges you to ensure that your children and other young adults at home are safe on the internet. For more information, please visit
+https://www.spectra.co/parental-control.
+16. A pro-rata charge appears on your bill based on your agreed plan from the date of activation or plan change till the next billing cycle date.
+For example, if your service has been activated on the 15th of a month, but the billing cycle date is from the 1st of every month, then you
+will be charged for 15 days of use on a proportional basis. The normal billing cycle will resume from the following month.
+Chennai Office : Shyam Spectra Pvt. Ltd. (Formerly known as Citycom Networks Pvt. Ltd.) , NO. 440/1, DOOR NO. 29,
+EKAMBHARAM INDUSTRIAL ESTATE, ALAPAKKAM, PORUR , Chennai, 600116, TAMIL NADU ,State Code - 33
+Registered Office : A-60, Naraina Industrial Area, Phase -1, New Delhi - 110028 (CIN : U72300DL2008PTC177873)
+This is a computer generated bill, paper bill will be charged at 100/- per bill copy Page 4 of 4
+
+[[PAGE_8]]
+
+[[PAGE_9]]
+*This is a computer generated invoice and does not require a physical copy
+ZOHO Corporation Private Limited
+942, Krisp IT Park, Vandalur Kelambakkam Road,
+Kizhakottaiyur Village, Vandalur Taluk,
+Chennai, Chengalpattu,
+Pin Code: 600127
+Tamil Nadu, India
+Phone: +91 4469656278
+Pan No: AAACZ4322M
+CIN: U40100TN2010PTC075961 TAX INVOICE
+Tan No: CHEZ03229C
+GSTIN: 33AAACZ4322M2Z9
+INVOICE# : 1025260549840 Name Of State : Tamil Nadu (33)
+DATE : 23 Feb 2026 License Order No : RPIN277000516686011
+TERMS : Due On Receipt License Sent to : COGNET HR SOLUTIONS PVT
+DUE DATE : 23 Feb 2026 LTD
+P.O.# : 277000609483150 UserMail : saleemy@cognethro.com
+Place Of Supply : Chennai
+Bill To Ship To
+COGNET HR SOLUTIONS PVT LTD COGNET HR SOLUTIONS PVT LTD
+Attn: saleemy@cognethro.com 2ND FLOOR, KARUNAA CONQUEST, 7 MTH ROAD, AMBATTUR
+2ND FLOOR, KARUNAA CONQUEST, 7 MTH ROAD, AMBATTUR INUDUSTRIAL ESTATE Chennai 600058
+INUDUSTRIAL ESTATE Chennai 600058 Tamil Nadu India
+Tamil Nadu India
+GSTIN 33AADCC0190K1ZW
+CGST SGST
+Item & Description Qty Rate % Amt % Amt Amount
+39503SM 1.00 6,000.00 9% 540.00 9% 540.00 6,000.00
+Service : Zoho Vault
+Plan : Standard
+USERS : 100
+Payment Duration : Monthly
+Start 23 February 2026 End 22 March
+2026
+SAC: 997331
+Sub Total 6,000.00
+Total In Words
+CGST9 (9%) 540.00
+Rupees Seven Thousand Eighty Only
+SGST9 (9%) 540.00
+Notes Total ₹7,080.00
+Thanks for your business. Payment Made (-) 7,080.00
+For GST queries, please contact : 91 +44 69656061
+Balance Due ₹0.00
+ZOHO Corporation Private Limited
+Authorized Signatory
+Scan the QR code to view the configured
+information.
+1
+
+[[PAGE_10]]
+*This is a computer generated invoice and does not require a physical copy
+IRN : 248a164868e6bfcb7650b3109a5ef28fbea1289fe03108455139ad307413021a
+Ack No. : 152624805739413
+Ack Date : 2026-02-23 06:57:00
+e-Invoicing detail(s) generated from the Government's e-Invoicing system.
+2

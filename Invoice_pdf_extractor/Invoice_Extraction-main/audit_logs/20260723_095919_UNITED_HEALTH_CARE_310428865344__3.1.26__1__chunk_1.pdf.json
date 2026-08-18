@@ -1,0 +1,11 @@
+{
+  "timestamp": "2026-07-23T09:59:19.441100Z",
+  "source_file": "C:\\Users\\Administrator\\pdf_extractor\\Unified_PDF_Platform\\unified_outputs\\temp_splits\\UNITED HEALTH CARE 310428865344  3.1.26 (1)_chunk_1.pdf",
+  "passes": 2,
+  "final_sum": 265391.67,
+  "target_total": 88958.63,
+  "discrepancy": 176433.04,
+  "line_item_count": 178,
+  "validation_reason": "Financial mismatch \u2014 document total $88958.63, extracted sum $265391.67, gap $176433.04.",
+  "outcome": "gap_remaining"
+}
