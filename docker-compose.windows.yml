@@ -1,0 +1,21 @@
+services:
+  pdf-extractor-windows:
+    build:
+      context: .
+      dockerfile: Dockerfile.windows
+    container_name: pdf-extractor-poc-windows
+    ports:
+      - "8008:8007"
+    volumes:
+      - ./Unified_PDF_Platform/uploads:C:/app/Unified_PDF_Platform/uploads
+      - ./Unified_PDF_Platform/unified_outputs:C:/app/Unified_PDF_Platform/unified_outputs
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PORT=8007
+      - POPPLER_PATH=C:\poppler\Library\bin
+      - TESSERACT_PATH=C:\Program Files\Tesseract-OCR\tesseract.exe
+    devices:
+      - "class/5B45201D-F2F2-4F3B-85BB-30FF1F953599"
+    restart: always

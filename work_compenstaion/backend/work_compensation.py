@@ -951,6 +951,10 @@ ACORD FORM SPECIFIC RULES:
    - "m trust vor th America" -> "AmTrust North America"
    - "Altas" -> "Atlas"
    - "State Fund" -> "State Compensation Insurance Fund"
+5. **Years in Business (yearsInBusiness)**:
+   - Extract the number of years the applicant has been in business (e.g. from a "YRS IN BUS" or "Years in Business" field) ONLY if it is explicitly filled with a realistic value (e.g. a small number of years like 0 to 100).
+   - **DO NOT** extract fake, hallucinated, or misaligned numbers from neighboring columns, headers, footers, or codes (for example, zip codes, NAICS codes like 621610, or other arbitrary numbers like 8082).
+   - If the field is blank, empty, not filled, or only contains misaligned noise/code, you MUST return it as an empty string `""`.
 6. **Rating Table Precision**:
    - **State-to-Value Alignment**: ALWAYS ensure the 'EST ANNUAL PAYROLL' (or REMUNERATION) matches the correct State (e.g., AR, CO, CA). Do NOT skip rows or shift values between states.
    - **LOC# Confusion**: Ignore 'LOC#' or 'LOC' numbers (like 004, 005) when determining the State. The State code (AR, CO, etc.) is the primary key.
