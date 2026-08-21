@@ -184,7 +184,7 @@ class OCRPDFExtractor:
 
                             if vis_text.strip():
                                 final_text = vis_text
-                                extraction_method = "gpt-4-vision-fallback"
+                                extraction_method = "gpt-5.5-vision-fallback"
                                 final_score = max(final_score, vis_conf)
                                 rec_hi = "ok"
                     except Exception as e:
@@ -357,7 +357,7 @@ class OCRPDFExtractor:
                 "page_number": i,
                 "text": header + page_text,
                 "is_scanned": True,
-                "extraction_method": "gpt-4-vision",
+                "extraction_method": "gpt-5.5-vision",
                 "confidence": conf
             })
         
@@ -382,7 +382,7 @@ class OCRPDFExtractor:
         )
 
         response = self.client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-5.5",
             messages=[{
                 "role": "user",
                 "content": [
@@ -390,8 +390,8 @@ class OCRPDFExtractor:
                     {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{img_base64}"}}
                 ]
             }],
-            max_tokens=4000,
-            temperature=0.0
+            max_completion_tokens=4000,
+            temperature=1
         )
 
         page_text = response.choices[0].message.content or ""

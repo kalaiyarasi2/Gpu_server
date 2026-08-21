@@ -81,10 +81,10 @@ class GeneralDataValidator:
 
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o", # Use gpt-4o for semantic auditing
+                model="gpt-5.5", # Use gpt-5.5 for semantic auditing
                 messages=messages,
                 response_format={"type": "json_object"},
-                temperature=0.0
+                temperature=1
             )
             report = json.loads(response.choices[0].message.content)
             suspicious = {item["claim_number"]: item for item in report.get("suspicious_claims", [])}

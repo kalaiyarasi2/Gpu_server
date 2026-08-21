@@ -1,28 +1,31 @@
 # ============================================================
-# UNIFIED PDF PLATFORM - requirements.txt
+# UNIFIED PDF PLATFORM - requirements.docker.txt
+# For Docker/Linux production deployment
 # Generated from working venv on 2026-08-21
 # ============================================================
 # IMPORTANT - PaddlePaddle GPU Note:
-#   This file specifies paddlepaddle-gpu==2.6.2 which requires
-#   a matching CUDA installation on the production server.
-#   Check your CUDA version with: nvidia-smi
-#   Then install the correct wheel from:
-#   https://www.paddlepaddle.org.cn/whl/linux/mkl/avx/stable.html
+#   The paddlepaddle-gpu wheel below is for Linux + CUDA.
+#   Match the wheel to your server's CUDA version:
+#     CUDA 11.x: paddlepaddle-gpu==2.6.2.post112
+#     CUDA 12.x: paddlepaddle-gpu==2.6.2.post120
+#   Install from: https://www.paddlepaddle.org.cn/whl/linux/mkl/avx/stable.html
 #
-#   CRITICAL PINS (do NOT change these - breaks PaddleOCR):
+#   For CPU-only Docker: replace paddlepaddle-gpu with paddlepaddle==2.6.2
+#
+#   CRITICAL PINS (do NOT change - breaks PaddleOCR):
 #     protobuf==3.20.2
 #     numpy==1.26.4
 # ============================================================
 
 # Web Framework & Server
 fastapi==0.104.1
-uvicorn==0.24.0
+uvicorn[standard]==0.24.0
 python-multipart==0.0.6
 starlette==0.27.0
 Jinja2==3.1.2
 Werkzeug==3.0.1
-Flask==3.0.0
-Flask-Cors==4.0.0
+flask==3.0.0
+flask-cors==4.0.0
 gunicorn==21.2.0
 python-dotenv==1.0.0
 itsdangerous==2.2.0
@@ -43,8 +46,7 @@ tenacity==9.1.4
 
 # OCR & PDF Processing
 paddleocr==2.8.1
-paddlepaddle-gpu==2.6.2        # SWAP for paddlepaddle (CPU) if no CUDA GPU
-paddlex==3.7.2
+# paddlepaddle-gpu: install separately - see note at top of file
 pdf2image==1.16.3
 pdfplumber==0.11.10
 PyMuPDF==1.28.2
@@ -117,7 +119,7 @@ httptools==0.8.0
 
 # Security
 pyclamd>=0.4.0
-python-magic-bin>=0.4.14       # Windows only - use python-magic on Linux
+python-magic>=0.4.27           # Linux: use python-magic (NOT python-magic-bin)
 pycryptodome==3.23.0
 
 # Utilities

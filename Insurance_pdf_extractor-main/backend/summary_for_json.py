@@ -134,7 +134,7 @@ class ClaimsAnalyzer:
     def generate_claim_summary(
         self, 
         claims_json: dict,
-        model: str = "gpt-4.1-mini",
+        model: str = "gpt-5.5",
         temperature: float = 0.2
     ) -> str:
         """
@@ -142,7 +142,7 @@ class ClaimsAnalyzer:
         
         Args:
             claims_json: Dictionary containing claims data
-            model: OpenAI model to use (default: gpt-4.1-mini)
+            model: OpenAI model to use (default: gpt-5.5)
             temperature: LLM temperature setting (default: 0.2 for consistent output)
             
         Returns:
@@ -328,8 +328,8 @@ def main():
         print("Generating summary with OpenAI LLM...")
         summary_output = analyzer.generate_claim_summary(
             claims_data,
-            model="gpt-4.1-mini",
-            temperature=0.2
+            model="gpt-5.5",
+            temperature=1
         )
         
         # Display summary

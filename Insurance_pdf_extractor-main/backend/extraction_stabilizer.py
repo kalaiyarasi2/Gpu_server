@@ -6,7 +6,7 @@ from typing import Dict, Any
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def call_llm_deterministically(client: Any, prompt: str, model: str = "gpt-4o") -> Any:
+def call_llm_deterministically(client: Any, prompt: str, model: str = "gpt-5.5") -> Any:
     """
     Wraps OpenAI API calls with deterministic settings.
     Requires 'seed' parameter (available in newer openai client versions).
@@ -15,7 +15,7 @@ def call_llm_deterministically(client: Any, prompt: str, model: str = "gpt-4o") 
         model=model,
         messages=[{"role": "user", "content": prompt}],
         response_format={"type": "json_object"},
-        temperature=0.0,
+        temperature=1,
         seed=42  # Ensures deterministic output
     )
 

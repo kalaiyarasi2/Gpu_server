@@ -92,11 +92,11 @@ DOCUMENT TEXT (Characters {start_pos} to {end_pos}):
             try:
                 # print(f"   --> Scanning for policies from character {start_pos} to {end_pos}...")
                 response = self.client.chat.completions.create(
-                    model="gpt-4o",
+                    model="gpt-5.5",
                     messages=[{"role": "user", "content": prompt}],
                     response_format={"type": "json_object"},
-                    max_tokens=4000,
-                    temperature=0.0
+                    max_completion_tokens=4000,
+                    temperature=1
                 )
                 result = json.loads(response.choices[0].message.content)
                 return result.get("boundaries", []) or result.get("policies", []) or []
@@ -292,6 +292,13 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
         
         # Separate math fields from schema output
         all_claims = schema_data.get("claims", [])
+        
+        # ═══════════════════════════════════════════════════════════════════════
+        # FEATURE: Fallback calculation for medical_reserve and indemnity_reserve
+        # ═══════════════════════════════════════════════════════════════════════
+        all_claims = self._calculate_reserve_fallback(all_claims)
+        # ═══════════════════════════════════════════════════════════════════════
+        
         clean_claims_for_schema = []
         claims_analysis_data = []
 
@@ -609,9 +616,9 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
                 chunk_res["_chunk_id"] = idx + 1
             return idx, chunk_res
 
-        # Execute parallel AI API Calls (max 5 to protect OpenAI rate limits)
-        print(f"\n🚀 Launching Parallel Processing Pool for {len(chunks)} chunks (max 5 workers)...")
-        with ThreadPoolExecutor(max_workers=5) as executor:
+        # Execute parallel AI API Calls (max 8 to fully utilize concurrent chunk processing)
+        print(f"\n🚀 Launching Parallel Processing Pool for {len(chunks)} chunks (max 8 workers)...")
+        with ThreadPoolExecutor(max_workers=8) as executor:
             future_to_idx = {executor.submit(process_chunk, i, chunk): i for i, chunk in enumerate(chunks)}
             for future in as_completed(future_to_idx):
                 idx = future_to_idx[future]
@@ -773,6 +780,67 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
         # ─────────────────────────────────────────────────────────────────────
         
         return merged
+
+    def _calculate_reserve_fallback(self, claims: List[Dict]) -> List[Dict]:
+        """
+        Fallback calculation for medical_reserve and indemnity_reserve when not found in PDF.
+        
+        Logic (Fallback only when fields are missing):
+        - medical_reserve = estimated_medical - medical_paid
+        - indemnity_reserve = estimated_comp - indemnity_paid
+        
+        This provides reserve values when the PDF doesn't have explicit reserve columns.
+        
+        Args:
+            claims: List of claim dictionaries
+            
+        Returns:
+            List of claims with reserve fields calculated (if missing)
+        """
+        if not claims:
+            return claims
+            
+        calculated_count = 0
+        
+        for claim in claims:
+            # Helper function to safely get float value
+            def safe_float(value):
+                if value is None:
+                    return 0.0
+                if isinstance(value, (int, float)):
+                    return float(value)
+                if isinstance(value, str):
+                    try:
+                        return float(value.replace(',', '').replace('$', '').strip())
+                    except (ValueError, AttributeError):
+                        return 0.0
+                return 0.0
+            
+            # FALLBACK: Calculate medical_reserve if missing
+            if claim.get("medical_reserve") is None or claim.get("medical_reserve") == 0.0:
+                estimated_medical = safe_float(claim.get("estimated_medical"))
+                medical_paid = safe_float(claim.get("medical_paid"))
+                
+                # Only calculate if we have estimated_medical
+                if estimated_medical > 0:
+                    claim["medical_reserve"] = round(estimated_medical - medical_paid, 2)
+                    calculated_count += 1
+                
+            # FALLBACK: Calculate indemnity_reserve if missing
+            if claim.get("indemnity_reserve") is None or claim.get("indemnity_reserve") == 0.0:
+                estimated_comp = safe_float(claim.get("estimated_comp"))
+                indemnity_paid = safe_float(claim.get("indemnity_paid"))
+                
+                # Only calculate if we have estimated_comp
+                if estimated_comp > 0:
+                    claim["indemnity_reserve"] = round(estimated_comp - indemnity_paid, 2)
+        
+        if calculated_count > 0:
+            print(f"   💡 Fallback: Calculated reserve fields for {calculated_count} claim entries")
+            print(f"      Formula: medical_reserve = estimated_medical - medical_paid")
+            print(f"      Formula: indemnity_reserve = estimated_comp - indemnity_paid")
+        
+        return claims
 
 
 if __name__ == "__main__":

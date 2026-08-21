@@ -70,11 +70,11 @@ PAGE SAMPLES:
 """
         
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-5.5",
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"},
-            max_tokens=800,
-            temperature=0.0
+            max_completion_tokens=800,
+            temperature=1
         )
         
         result = json.loads(response.choices[0].message.content)

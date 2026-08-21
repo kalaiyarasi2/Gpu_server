@@ -162,7 +162,7 @@ DO NOT repeat fields already found in the text.
             img_base64 = base64.b64encode(buffered.getvalue()).decode('utf-8')
             
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5.5",
                 messages=[{
                     "role": "user",
                     "content": [
@@ -174,8 +174,8 @@ DO NOT repeat fields already found in the text.
                     ]
                 }],
                 response_format={"type": "json_object"},
-                max_tokens=800,
-                temperature=0.0
+                max_completion_tokens=800,
+                temperature=1
             )
             
             res_data = json.loads(response.choices[0].message.content)
@@ -207,7 +207,7 @@ DO NOT repeat fields already found in the text.
             img_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
 
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5.5",
                 messages=[{
                     "role": "user",
                     "content": [
@@ -218,8 +218,8 @@ DO NOT repeat fields already found in the text.
                         }
                     ]
                 }],
-                max_tokens=4000,
-                temperature=0.0
+                max_completion_tokens=4000,
+                temperature=1
             )
             return response.choices[0].message.content or ""
         except Exception as e:

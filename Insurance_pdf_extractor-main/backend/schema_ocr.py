@@ -103,7 +103,7 @@ class SchemaOCRExtractor:
         
         Args:
             schema_format: Dict of keys to extract
-            use_llm: If true, uses a CHEAP Text LLM (like gpt-4o-mini). No Vision is needed
+            use_llm: If true, uses a CHEAP Text LLM (like gpt-5.5). No Vision is needed
                      because rostaing-ocr perfectly preserved the visual structure as text spaces.
                      If false, relies purely on fast regular expressions.
         """
@@ -136,10 +136,10 @@ class SchemaOCRExtractor:
         
         try:
             response = client.chat.completions.create(
-                model="gpt-4o-mini",  # Text model, no vision needed
+                model="gpt-5.5",  # Text model, no vision needed
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
-                temperature=0.0
+                temperature=1
             )
             data = json.loads(response.choices[0].message.content)
             print("[Rostaing OCR] Schema mapping completed successfully.")

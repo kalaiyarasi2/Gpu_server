@@ -35,7 +35,7 @@ class FinancialValidator:
 
     def identify_pattern_from_vision(self, pdf_path: str, max_pages: int = 4) -> Dict:
         """
-        Uses gpt-4.1-Vision to identify the table structure and math patterns from PDF images.
+        Uses gpt-5.5-Vision to identify the table structure and math patterns from PDF images.
         """
         base64_images = self._get_page_images(pdf_path, max_pages)
         if not base64_images:
@@ -85,10 +85,10 @@ Return ONLY a JSON object:
 
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5.5",
                 messages=messages,
                 response_format={"type": "json_object"},
-                temperature=0.0
+                temperature=1
             )
             return json.loads(response.choices[0].message.content)
         except Exception as e:
@@ -124,10 +124,10 @@ Return ONLY a JSON object describing the pattern:
 """
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5.5",
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
-                temperature=0.0
+                temperature=1
             )
             return json.loads(response.choices[0].message.content)
         except Exception as e:

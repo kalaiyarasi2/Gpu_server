@@ -226,43 +226,70 @@ class EnhancedInsuranceExtractor:
 
     def extract_text_from_pdf(self, pdf_path: str, is_scanned: Optional[bool] = None) -> Tuple[str, List[Dict]]:
         """
-        Extract text from PDF using detection and appropriate extraction method.
-        MODIFIED: Always prioritizes Rostaing-OCR (GPU) for layout preservation.
+        Extract text from PDF using multi-stage fallback approach.
+        
+        STAGE 1: OCRmyPDF (Fast, high-quality OCR enhancement)
+        STAGE 2: Roasting-OCR (GPU-based layout-preserving OCR)
+        STAGE 3: Traditional Tesseract/Vision fallback
         """
-        # from pdf_detector import PDFDetector  # Commented out to bypass detection
         from config import config
         
         try:
-            # if is_scanned is None:
-            #     print(f"🔍 Detecting PDF type...")
-            #     detector = PDFDetector(pdf_path)
-            #     is_scanned = detector.is_scanned()
-            # else:
-            #     print(f"🔍 PDF type already identified: {'Scanned' if is_scanned else 'Digital'}")
-            
             # FORCE SCANNED/GPU PATH
             is_scanned = True 
             
             # Check if we should use Vision for scanned PDFs
             use_vision = getattr(config, 'OCR_ENGINE', 'tesseract') == 'vision'
             
-            # STAGE 2 & 3: OCR Fallback (Schema -> Tesseract -> Vision)
             if is_scanned:
-                print(f"🚀 ROSTAING-OCR PRIORITY: Starting GPU Extraction Pipeline...")
+                print(f"🚀 MULTI-STAGE OCR PIPELINE: Starting extraction...")
                 
-                # FIRST ATTEMPT: Rostaing-OCR (SchemaOCRExtractor)
+                # ═══════════════════════════════════════════════════════════════
+                # STAGE 1: PaddleOCR (Fast, GPU-accelerated Table & Layout Preservation)
+                # ═══════════════════════════════════════════════════════════════
                 try:
-                    print(f"   🚀 ATTEMPT 1: Schema OCR (rostaing-ocr layout preservation)...")
+                    print(f"   🔧 STAGE 1: PaddleOCR (Layout Preservation)...")
+                    import sys
+                    import os
+                    
+                    # Ensure the backend directory is in path for paddleocr_enhancer
+                    backend_dir = os.path.dirname(os.path.abspath(__file__))
+                    if backend_dir not in sys.path:
+                        sys.path.append(backend_dir)
+                        
+                    from paddleocr_enhancer import process_pdf_with_paddleocr
+                    
+                    # Process with PaddleOCR (uses GPU if available, relies on custom basic layout alignment)
+                    paddle_text, metadata = process_pdf_with_paddleocr(
+                        input_pdf_path=str(pdf_path),
+                        use_gpu=True,
+                        enable_table=False
+                    )
+                    
+                    # Validate quality
+                    if paddle_text and len(paddle_text.strip()) > 50:
+                        print(f"   ✅ STAGE 1 SUCCESS: Extracted {len(paddle_text)} chars from PaddleOCR")
+                        return paddle_text, metadata
+                    else:
+                        print(f"   ⚠️ STAGE 1: Insufficient text quality from PaddleOCR, falling back...")
+                        
+                except Exception as e:
+                    print(f"   ⚠️ STAGE 1 failed: {e}")
+                    print(f"   🔄 Proceeding to STAGE 2...")
+                
+                # ═══════════════════════════════════════════════════════════════
+                # STAGE 2: Roasting-OCR (GPU-based Schema OCR)
+                # ═══════════════════════════════════════════════════════════════
+                try:
+                    print(f"   🚀 STAGE 2: Roasting-OCR (schema-ocr layout preservation)...")
                     from schema_ocr import SchemaOCRExtractor
                     
                     schema_extractor = SchemaOCRExtractor(str(pdf_path), api_key=self.api_key)
-                    # Use the structure-preserving method
                     rostaing_text = schema_extractor.extract_layout_text(save_debug_output=True)
                     
                     # Validate we actually got usable text
                     if rostaing_text and len(rostaing_text.strip()) > 50:
-                        print(f"   ✅ Schema OCR succeeded. Extracted {len(rostaing_text)} characters.")
-                        # Provide a single-page mocked metadata block to satisfy downstream expectations
+                        print(f"   ✅ STAGE 2 SUCCESS: Extracted {len(rostaing_text)} chars")
                         mock_metadata = [{
                             "page_number": 1,
                             "text": rostaing_text,
@@ -272,13 +299,16 @@ class EnhancedInsuranceExtractor:
                         }]
                         return rostaing_text, mock_metadata
                     else:
-                        print(f"   ⚠️ Schema OCR yielded insufficient text. Falling back...")
+                        print(f"   ⚠️ STAGE 2: Insufficient text, falling back...")
                         
                 except Exception as e:
-                    print(f"   ⚠️ Schema OCR failed ({e}). Falling back...")
+                    print(f"   ⚠️ STAGE 2 failed: {e}")
+                    print(f"   🔄 Proceeding to STAGE 3...")
 
-                # SECOND ATTEMPT: Existing Tesseract -> Vision 
-                print(f"   🚀 ATTEMPT 2: Fallback to OCR Pipeline (Tesseract Multi-DPI -> Vision)...")
+                # ═══════════════════════════════════════════════════════════════
+                # STAGE 3: Traditional OCR Fallback (Tesseract Multi-DPI -> Vision)
+                # ═══════════════════════════════════════════════════════════════
+                print(f"   🚀 STAGE 3: Traditional OCR Pipeline (Tesseract/Vision)...")
                 from ocr_text import OCRPDFExtractor
                 ocr_extractor = OCRPDFExtractor(pdf_path)
                 return ocr_extractor.extract(
@@ -529,7 +559,7 @@ class EnhancedInsuranceExtractor:
                 "page_number": i,
                 "text": page_header + page_text,
                 "is_scanned": is_scanned,
-                "extraction_method": "gpt-4o-vision",
+                "extraction_method": "gpt-5.5-vision",
                 "confidence": confidence
             })
             
@@ -582,6 +612,8 @@ IMPORTANT INSTRUCTIONS:
    - **Berkshire Homestates/Redwood Blacklist**: EXPLICITLY IGNORE any strings starting with `CRWC`. These are Policy Numbers, NOT claim numbers. 
    - **Homestates Format**: Claim numbers are typically 8-digit integers.
    - If the document says `ABC123`, result must be `ABC123`. Do NOT add `-01`.
+   - **State Fund Format**: Claim numbers are 8-digit integers (e.g. `06978630`). The 2-letter code on the NEXT line (`SG`, `SK`, `MO`, `IN`, etc.) is an employee/injury classification code — it is NOT part of the claim number. Extract `06978630` NOT `06978630 SG`.
+
 
 2. **The Header vs. Row Separation**:
    - **Policy Numbers**: Usually in Headers (labeled "Policy #", "Policy Number"). These are **EXCLUSIONS**.
@@ -676,7 +708,7 @@ Return ONLY the JSON. No explanations. Ensure you catch EVERY claim number, espe
             response = call_llm_deterministically(
                 self.client,
                 prompt,
-                model="gpt-4o"
+                model="gpt-5.5"
             )
             
             result = self._parse_llm_json_response(response.choices[0].message.content, label="_detect_claim_numbers_ai")
@@ -769,7 +801,7 @@ IMPORTANT:
                         "url": f"data:image/png;base64,{img_base64}"
                     }
                 }],
-                model="gpt-4o"
+                model="gpt-5.5"
             )
             
             response_text = response.choices[0].message.content
@@ -885,7 +917,7 @@ DOCUMENT SAMPLE:
             response = call_llm_deterministically(
                 self.client,
                 prompt,
-                model="gpt-4o"
+                model="gpt-5.5"
             )
             
             chunking_plan = self._parse_llm_json_response(response.choices[0].message.content, label="_chunk_text_dynamically")
@@ -1049,7 +1081,7 @@ Return ONLY the JSON. Ensure the dynamic_rules is extremely precise."""
             format_info = self._parse_llm_json_response(call_llm_deterministically(
                 self.client,
                 prompt,
-                model="gpt-4o"
+                model="gpt-5.5"
             ).choices[0].message.content, label="_analyze_document_format")
             
             print(f"   ✓ Format detected: {format_info.get('format_type', 'unknown')}")
@@ -1106,7 +1138,7 @@ DOCUMENT TEXT (first 4000 chars):
             result = self._parse_llm_json_response(call_llm_deterministically(
                 self.client,
                 prompt,
-                model="gpt-4o"
+                model="gpt-4o-mini"  # Fast model for simple yes/no layout check — full model used for actual extraction
             ).choices[0].message.content, label="_smart_verify_format")
             
             if result.get("is_match"):
@@ -1518,7 +1550,7 @@ Follow the format-specific instructions above. Validate your extractions."""
             response = call_llm_deterministically(
                 self.client,
                 prompt,
-                model="gpt-4o"
+                model="gpt-5.5"
             )
             
             response_text = response.choices[0].message.content
@@ -2188,6 +2220,9 @@ STRICT RULES:
 1. DO NOT include any claims NOT in the list above.
 2. Ensure math balances perfectly (Med+Ind+Exp = Total).
 3. Extract exactly what you see in the text, preserving layout context.
+4. MERGED CLAIM+DATE: OCR sometimes fuses a claim number directly with a date (e.g. '4A2409QGMJG-00009/19/2024'). If you see this, extract ONLY the claim number portion (e.g. '4A2409QGMJG-0000') and treat the date separately as the injury date.
+5. POLICY NUMBER: Extract the policy number that appears in the section header ABOVE the specific claim row. Do NOT list all policy numbers from the entire document.
+
 
 TEXT TO ANALYZE:
 {all_text}
@@ -2198,7 +2233,7 @@ Return ONLY the JSON."""
             response = call_llm_deterministically(
                 self.client,
                 retry_prompt,
-                model="gpt-4o"
+                model="gpt-5.5"
             )
             
             retry_data = self._parse_llm_json_response(response.choices[0].message.content, label="_extract_missing_claims_by_number")
@@ -2263,7 +2298,7 @@ Return ONLY the JSON object for claim {target_claim_number}."""
             response = call_llm_deterministically(
                 self.client,
                 prompt,
-                model="gpt-4o"
+                model="gpt-5.5"
             )
             
             response_text = response.choices[0].message.content

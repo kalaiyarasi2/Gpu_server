@@ -1,4 +1,5 @@
 import os
+import json
 import shutil
 import zipfile
 import tempfile
@@ -18,6 +19,33 @@ EXTRACTED_TEXT_DIR.mkdir(exist_ok=True)
 # Shared state
 router_engine = UnifiedRouter()
 file_path_cache: Dict[str, str] = {}
+
+# ── Cache persistence ─────────────────────────────────────────────────────────
+CACHE_FILE = BASE_DIR / "file_path_cache.json"
+
+def _save_cache(cache: Dict[str, str]) -> None:
+    """Persist the file_path_cache to disk as JSON."""
+    try:
+        with open(CACHE_FILE, "w", encoding="utf-8") as f:
+            json.dump(cache, f, indent=2)
+        logger.info(f"[Cache] Saved {len(cache)} entries to {CACHE_FILE}")
+    except Exception as e:
+        logger.warning(f"[Cache] Failed to save cache: {e}")
+
+def _load_cache() -> Dict[str, str]:
+    """Load the file_path_cache from disk (JSON). Returns loaded dict."""
+    if CACHE_FILE.exists():
+        try:
+            with open(CACHE_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            logger.info(f"[Cache] Loaded {len(data)} entries from {CACHE_FILE}")
+            return data
+        except Exception as e:
+            logger.warning(f"[Cache] Failed to load cache: {e}")
+    return {}
+
+# Auto-load cache on module import
+file_path_cache = _load_cache()
 
 async def _perform_extraction(file: UploadFile, request: Request):
     import traceback
