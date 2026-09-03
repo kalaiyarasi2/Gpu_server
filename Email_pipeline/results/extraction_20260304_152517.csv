@@ -1,0 +1,25 @@
+type,excel,json,status,source_file,processed_at,error
+INVOICE,C:\Users\INT002\pdf_extractor\Unified_PDF_Platform\unified_outputs\APL MGSI Feb-25 Inv_invoice.xlsx,C:\Users\INT002\pdf_extractor\Unified_PDF_Platform\unified_outputs\APL MGSI Feb-25 Inv_invoice.json,extracted,APL MGSI Feb-25 Inv.pdf,2026-03-04T15:20:19,
+,,,error,Pet Benefit Solutions Feb-25 Inv.pdf,2026-03-04T15:25:17,"Invoice extraction failed: Traceback (most recent call last):
+  File ""C:\Users\INT002\pdf_extractor\Invoice_pdf_extractor\Invoice_Extraction-main\universal_pdf_extractor_v3.py"", line 2063, in <module>
+    process_single_pdf_to_excel(input_path, output_file)
+  File ""C:\Users\INT002\pdf_extractor\Invoice_pdf_extractor\Invoice_Extraction-main\universal_pdf_extractor_v3.py"", line 1385, in process_single_pdf_to_excel
+    df.to_excel(output_excel, index=False, engine='openpyxl')
+  File ""C:\Users\INT002\AppData\Local\Programs\Python\Python311\Lib\site-packages\pandas\util\_decorators.py"", line 333, in wrapper
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File ""C:\Users\INT002\AppData\Local\Programs\Python\Python311\Lib\site-packages\pandas\core\generic.py"", line 2439, in to_excel
+    formatter.write(
+  File ""C:\Users\INT002\AppData\Local\Programs\Python\Python311\Lib\site-packages\pandas\io\formats\excel.py"", line 943, in write
+    writer = ExcelWriter(
+             ^^^^^^^^^^^^
+  File ""C:\Users\INT002\AppData\Local\Programs\Python\Python311\Lib\site-packages\pandas\io\excel\_openpyxl.py"", line 61, in __init__
+    super().__init__(
+  File ""C:\Users\INT002\AppData\Local\Programs\Python\Python311\Lib\site-packages\pandas\io\excel\_base.py"", line 1246, in __init__
+    self._handles = get_handle(
+                    ^^^^^^^^^^^
+  File ""C:\Users\INT002\AppData\Local\Programs\Python\Python311\Lib\site-packages\pandas\io\common.py"", line 882, in get_handle
+    handle = open(handle, ioargs.mode)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'C:\\Users\\INT002\\pdf_extractor\\Unified_PDF_Platform\\unified_outputs\\Pet Benefit Solutions Feb-25 Inv_invoice.xlsx'
+"

@@ -1,0 +1,157 @@
+.page {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #0f172a;
+  color: #e5e7eb;
+  min-height: 100vh;
+  margin: 0;
+  padding: 24px;
+  box-sizing: border-box;
+}
+
+.header {
+  max-width: 960px;
+  margin: 0 auto 24px;
+}
+
+.header h1 {
+  margin: 0 0 4px;
+  font-size: 1.8rem;
+}
+
+.header p {
+  margin: 0;
+  color: #9ca3af;
+}
+
+.content {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.upload-card,
+.table-card,
+.summary {
+  background: #020617;
+  border-radius: 12px;
+  padding: 16px 20px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  border: 1px solid #1e293b;
+}
+
+.upload-card h2,
+.summary h2,
+.table-card h3 {
+  margin-top: 0;
+}
+
+form {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-top: 8px;
+}
+
+input[type="file"] {
+  color: #e5e7eb;
+}
+
+button {
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: none;
+  background: #22c55e;
+  color: #0b1120;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.status {
+  margin-top: 8px;
+  font-size: 0.9rem;
+  color: #9ca3af;
+}
+
+.results {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.tables {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 20px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+thead {
+  background: #020617;
+}
+
+th,
+td {
+  padding: 6px 8px;
+  border-bottom: 1px solid #1e293b;
+  text-align: left;
+  vertical-align: top;
+}
+
+tbody tr:nth-child(even) {
+  background: rgba(15, 23, 42, 0.7);
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px 16px;
+  font-size: 0.9rem;
+}
+
+.summary-label {
+  color: #9ca3af;
+}
+
+.summary-value {
+  font-weight: 600;
+}
+
+
+.file-result {
+  margin-bottom: 40px;
+}
+
+.error-result {
+  background: #270000;
+  border-left: 4px solid #f87171;
+  padding: 16px;
+  margin-bottom: 24px;
+}
+
+.error-result h3 {
+  margin-top: 0;
+  color: #fca5a5;
+}
+
+.error {
+  color: #f87171;
+  font-weight: 500;
+}
+
+.file-divider {
+  border: 0;
+  border-top: 2px solid #1e293b;
+  margin: 40px 0;
+}

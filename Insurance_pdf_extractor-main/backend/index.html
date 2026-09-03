@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enhanced Insurance Form Extractor - With Verification</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #2c3e50 0%, #000000 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #1a1a1a 0%, #000000 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 14px;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        /* Upload Area */
+        .upload-section {
+            margin-bottom: 30px;
+        }
+
+        .upload-area {
+            border: 3px dashed #333333;
+            border-radius: 15px;
+            padding: 60px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: #f5f5f5;
+        }
+
+        .upload-area:hover {
+            border-color: #000000;
+            background: #e8e8e8;
+        }
+
+        .upload-icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .target-claim-input {
+            margin-top: 20px;
+            padding: 10px;
+        }
+
+        .target-claim-input input {
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            width: 300px;
+            font-size: 14px;
+        }
+
+        /* Buttons */
+        .btn {
+            background: linear-gradient(135deg, #333333 0%, #000000 100%);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin: 10px 5px;
+        }
+
+        .btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.4);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+        }
+
+        .btn-success {
+            background: #28a745;
+        }
+
+        /* Status Messages */
+        .status {
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+            display: none;
+            text-align: center;
+        }
+
+        .status.show {
+            display: block;
+        }
+
+        .status.processing {
+            background: #fff4e5;
+            color: #cc8400;
+        }
+
+        .status.success {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        .status.error {
+            background: #ffebee;
+            color: #c62828;
+        }
+
+        /* Spinner */
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #333333;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+            display: none;
+        }
+
+        .spinner.show {
+            display: block;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            border-bottom: 2px solid #e0e0e0;
+            margin-bottom: 20px;
+        }
+
+        .tab {
+            padding: 15px 30px;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            font-weight: 600;
+            color: #666;
+            transition: all 0.3s;
+        }
+
+        .tab:hover {
+            color: #333333;
+        }
+
+        .tab.active {
+            color: #000000;
+            border-bottom-color: #000000;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Images Grid */
+        .images-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        .page-card {
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            overflow: hidden;
+            background: white;
+        }
+
+        .page-header {
+            background: #f5f5f5;
+            padding: 15px;
+            border-bottom: 2px solid #e0e0e0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .page-title {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .page-meta {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .page-image {
+            width: 100%;
+            height: auto;
+            display: block;
+            cursor: pointer;
+            transition: transform 0.3s;
+        }
+
+        .page-image:hover {
+            transform: scale(1.02);
+        }
+
+        /* Text Viewer */
+        .text-viewer {
+            background: #f5f5f5;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .text-editor {
+            width: 100%;
+            min-height: 400px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            padding: 15px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            resize: vertical;
+            line-height: 1.6;
+        }
+
+        .text-stats {
+            display: flex;
+            gap: 30px;
+            margin-top: 15px;
+            font-size: 14px;
+            color: #666;
+        }
+
+        .text-stats span {
+            font-weight: 600;
+            color: #333333;
+        }
+
+        /* Schema Display */
+        .schema-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .field-item {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 10px;
+            border: 2px solid #e0e0e0;
+        }
+
+        .field-label {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 5px;
+            font-weight: 600;
+        }
+
+        .field-value {
+            font-size: 16px;
+            color: #333;
+            font-weight: 500;
+        }
+
+        .field-value.null {
+            color: #999;
+            font-style: italic;
+        }
+
+        /* JSON Viewer */
+        .json-viewer {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 20px;
+            border-radius: 10px;
+            overflow-x: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        /* Modal for full image view */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.show {
+            display: flex;
+        }
+
+        .modal-content {
+            max-width: 90%;
+            max-height: 90%;
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 20px;
+            right: 40px;
+            color: white;
+            font-size: 40px;
+            cursor: pointer;
+        }
+
+        .extraction-summary {
+            background: #f5f5f5;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .summary-item {
+            text-align: center;
+        }
+
+        .summary-value {
+            font-size: 32px;
+            font-weight: bold;
+            color: #333333;
+        }
+
+        .summary-label {
+            font-size: 14px;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔍 Enhanced Insurance Form Extractor</h1>
+            <p>AI-Powered Extraction with Verification • Layout-Aware OCR • Scanned Document Support</p>
+        </div>
+
+        <div class="content">
+            <!-- Upload Section -->
+            <div class="upload-section">
+                <div class="upload-area" id="uploadArea">
+                    <div class="upload-icon">📄</div>
+                    <div class="upload-text">Drop PDF here or click to upload</div>
+                    <div class="upload-hint">Supports scanned and digital PDFs (max 50MB)</div>
+                </div>
+                <input type="file" id="fileInput" accept=".pdf" multiple>
+
+                <div class="target-claim-input">
+                    <label>Target Claim Number (optional):</label><br>
+                    <input type="text" id="targetClaim" placeholder="e.g., 20825">
+                </div>
+
+                <div class="action-buttons">
+                    <button class="btn" id="processBtn" style="display: none;">🚀 Process Document(s)</button>
+                    <button class="btn btn-secondary" id="resetBtn" style="display: none;">🔄 Reset</button>
+                </div>
+            </div>
+
+            <!-- Batch Results Navigation -->
+            <div id="batchNav" class="extraction-summary hidden"
+                style="background: #f5f5f5; border: 2px solid #333333; margin-bottom: 20px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h2>📁 Processed Documents</h2>
+                    <div class="action-buttons" style="margin: 0; display: flex; gap: 10px;">
+                        <button class="btn" id="downloadBatchJsonBtn"
+                            style="padding: 8px 15px; font-size: 13px; background: #000; border: 1px solid #fff;">💾
+                            Download All (JSON)</button>
+                    </div>
+                </div>
+                <div id="fileSelectorList" style="display: flex; gap: 10px; flex-wrap: wrap;"></div>
+            </div>
+
+            <!-- Status -->
+            <div class="status" id="status"></div>
+            <div class="spinner" id="spinner"></div>
+
+            <!-- Results Section -->
+            <div id="resultsSection" class="hidden">
+                <!-- Extraction Summary -->
+                <div class="extraction-summary">
+                    <h2>📊 Extraction Summary</h2>
+                    <div class="summary-grid" id="summaryGrid"></div>
+                </div>
+
+                <!-- Tabs -->
+                <div class="tabs">
+                    <div class="tab" data-tab="text">📝 Extracted Text</div>
+                    <div class="tab" data-tab="json">{ } JSON Output</div>
+                </div>
+
+                <!-- Tab: Images -->
+                <div class="tab-content active" id="tab-images">
+                    <div class="images-grid" id="imagesGrid"></div>
+                </div>
+
+                <!-- Tab: Text -->
+                <div class="tab-content" id="tab-text">
+                    <div class="text-viewer">
+                        <h3>Extracted Text (Editable)</h3>
+                        <p style="color: #666; margin: 10px 0;">Review and correct the extracted text if needed, then
+                            click "Re-extract Schema" to update the data.</p>
+                        <textarea class="text-editor" id="textEditor"></textarea>
+                        <div class="text-stats">
+                            <div>Characters: <span id="charCount">0</span></div>
+                            <div>Lines: <span id="lineCount">0</span></div>
+                            <div>Words: <span id="wordCount">0</span></div>
+                        </div>
+                        <div class="action-buttons">
+                            <button class="btn btn-success" id="reextractBtn">♻️ Re-extract Schema from Text</button>
+                            <button class="btn btn-secondary" id="downloadTextBtn">💾 Download Text</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab: Schema -->
+                <div class="tab-content" id="tab-schema">
+                    <div class="schema-grid" id="schemaGrid"></div>
+                </div>
+
+                <!-- Tab: JSON -->
+                <div class="tab-content" id="tab-json">
+                    <div class="action-buttons">
+                        <button class="btn" id="downloadJsonBtn">💾 Download JSON</button>
+                        <button class="btn btn-secondary" id="copyJsonBtn">📋 Copy to Clipboard</button>
+                    </div>
+                    <pre class="json-viewer" id="jsonViewer"></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Image Modal -->
+    <div class="modal" id="imageModal">
+        <span class="modal-close" id="modalClose">&times;</span>
+        <img class="modal-content" id="modalImage">
+    </div>
+
+    <script>
+        // Use the current window location so it works from any device
+        const API_BASE_URL = window.location.origin;
+
+        let currentData = null;
+        let batchResults = [];
+        let currentFileIndex = 0;
+        let currentSession = null;
+
+        // DOM Elements
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const targetClaim = document.getElementById('targetClaim');
+        const processBtn = document.getElementById('processBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const status = document.getElementById('status');
+        const spinner = document.getElementById('spinner');
+        const resultsSection = document.getElementById('resultsSection');
+        const summaryGrid = document.getElementById('summaryGrid');
+        const imagesGrid = document.getElementById('imagesGrid');
+        const textEditor = document.getElementById('textEditor');
+        const schemaGrid = document.getElementById('schemaGrid');
+        const jsonViewer = document.getElementById('jsonViewer');
+        const reextractBtn = document.getElementById('reextractBtn');
+        const downloadTextBtn = document.getElementById('downloadTextBtn');
+        const downloadJsonBtn = document.getElementById('downloadJsonBtn');
+        const copyJsonBtn = document.getElementById('copyJsonBtn');
+        const imageModal = document.getElementById('imageModal');
+        const modalImage = document.getElementById('modalImage');
+        const modalClose = document.getElementById('modalClose');
+
+        // Upload handlers
+        uploadArea.addEventListener('click', () => fileInput.click());
+
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.style.background = '#e8ebff';
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.style.background = '#f5f5f5';
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.style.background = '#f5f5f5';
+            if (e.dataTransfer.files.length > 0) {
+                fileInput.files = e.dataTransfer.files;
+                handleFileSelect();
+            }
+        });
+
+        fileInput.addEventListener('change', handleFileSelect);
+
+        function handleFileSelect() {
+            if (fileInput.files.length > 0) {
+                const count = fileInput.files.length;
+                uploadArea.querySelector('.upload-text').textContent = count === 1 ?
+                    `Selected: ${fileInput.files[0].name}` :
+                    `Selected ${count} files`;
+                processBtn.style.display = 'inline-block';
+                resetBtn.style.display = 'inline-block';
+            }
+        }
+
+        // Process button
+        processBtn.addEventListener('click', async () => {
+            if (fileInput.files.length === 0) return;
+
+            showStatus('processing', '🚀 Starting extraction...');
+            spinner.classList.add('show');
+            processBtn.disabled = true;
+
+            const formData = new FormData();
+            if (fileInput.files.length === 1) {
+                formData.append('files', fileInput.files[0]);
+            } else {
+                for (let i = 0; i < fileInput.files.length; i++) {
+                    formData.append('files', fileInput.files[i]);
+                }
+            }
+
+            const target = targetClaim.value.trim();
+            if (target) {
+                formData.append('target_claim', target);
+            }
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/extract-batch`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Server error: ${response.status}`);
+                }
+
+                const result = await response.json();
+
+                if (result.success) {
+                    batchResults = result.results;
+                    displayBatchUI(batchResults, result.merged_file);
+                    showStatus('success', `✅ Batch extraction completed for ${batchResults.length} files!`);
+                } else {
+                    throw new Error(result.error || 'Extraction failed');
+                }
+
+            } catch (error) {
+                console.error('Error:', error);
+                showStatus('error', `❌ Error: ${error.message}`);
+            } finally {
+                spinner.classList.remove('show');
+                processBtn.disabled = false;
+            }
+        });
+
+        function displayBatchUI(results, mergedFileUrl) {
+            const batchNav = document.getElementById('batchNav');
+            const fileSelectorList = document.getElementById('fileSelectorList');
+            const downloadBatchJsonBtn = document.getElementById('downloadBatchJsonBtn');
+            const downloadBatchCsvBtn = document.getElementById('downloadBatchCsvBtn');
+
+            batchNav.classList.remove('hidden');
+            fileSelectorList.innerHTML = '';
+
+            // Update session-wide download buttons
+            downloadBatchJsonBtn.onclick = () => {
+                if (mergedFileUrl) {
+                    const a = document.createElement('a');
+                    a.href = `${API_BASE_URL}${mergedFileUrl}`;
+                    a.download = 'merged_results.json';
+                    a.click();
+                }
+            };
+
+            downloadBatchCsvBtn.onclick = () => {
+                // Flatten all claims from all successful results for CSV export
+                const allClaims = [];
+                results.forEach(res => {
+                    if (res.success && res.data && res.data.extracted_schema && res.data.extracted_schema.claims) {
+                        res.data.extracted_schema.claims.forEach(claim => {
+                            allClaims.push({
+                                ...claim,
+                                source_filename: res.filename
+                            });
+                        });
+                    }
+                });
+
+                if (allClaims.length > 0) {
+                    downloadAsCsv(allClaims);
+                } else {
+                    showStatus('error', '❌ No claims found to export');
+                }
+            };
+
+            results.forEach((res, index) => {
+                const badge = document.createElement('div');
+                badge.className = `field-item ${index === 0 ? 'active-file' : ''}`;
+                badge.style.cursor = 'pointer';
+                badge.style.padding = '8px 15px';
+                badge.style.background = res.success ? '#e8f5e9' : '#ffebee';
+                badge.style.border = index === 0 ? '2px solid #333333' : '1px solid #ddd';
+                badge.innerHTML = `
+                    <div style="font-size: 13px; font-weight: bold; color: ${res.success ? '#2e7d32' : '#c62828'}">
+                        ${res.filename}
+                    </div>
+                    <div style="font-size: 10px; color: #666;">
+                        ${res.success ? `${res.data.summary.claims_count} claims` : 'Error'}
+                    </div>
+                `;
+                badge.onclick = () => selectFile(index);
+                fileSelectorList.appendChild(badge);
+            });
+
+            // Display the first successful result by default
+            const firstSuccess = results.findIndex(r => r.success);
+            if (firstSuccess !== -1) {
+                selectFile(firstSuccess);
+            }
+        }
+
+        function selectFile(index) {
+            currentFileIndex = index;
+            const res = batchResults[index];
+
+            // Highlight active badge
+            const badges = document.getElementById('fileSelectorList').children;
+            for (let i = 0; i < badges.length; i++) {
+                badges[i].style.border = (i === index) ? '2px solid #333333' : '1px solid #ddd';
+            }
+
+            if (res.success) {
+                currentData = res.data;
+                displayResults(res.data);
+            } else {
+                resultsSection.classList.add('hidden');
+                showStatus('error', `❌ Error processing ${res.filename}: ${res.error}`);
+            }
+        }
+        function displayResults(data) {
+            resultsSection.classList.remove('hidden');
+
+            // Summary
+            const summary = data.summary;
+            summaryGrid.innerHTML = `
+                <div class="summary-item">
+                    <div class="summary-value">${summary.total_pages}</div>
+                    <div class="summary-label">Pages</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-value">${summary.scanned_pages}</div>
+                    <div class="summary-label">Scanned</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-value">${(summary.avg_confidence * 100).toFixed(0)}%</div>
+                    <div class="summary-label">Confidence</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-value">${summary.extraction_methods ? summary.extraction_methods.filter(m => m === 'tesseract').length : 0}</div>
+                    <div class="summary-label">OCR Pages</div>
+                </div>
+            `;
+
+            // Images - Show extraction metadata instead since no images are generated
+            imagesGrid.innerHTML = '';
+            data.pages.forEach(page => {
+                const card = document.createElement('div');
+                card.className = 'page-card';
+                card.innerHTML = `
+                    <div class="page-header">
+                        <div class="page-title">Page ${page.page_number}</div>
+                        <div class="page-meta">
+                            ${page.extraction_method} • ${page.is_scanned ? 'Scanned' : 'Digital'} • ${(page.confidence * 100).toFixed(0)}%
+                        </div>
+                    </div>
+                    <div class="page-content" style="padding: 15px; background: #f5f5f5; border-radius: 8px; max-height: 300px; overflow-y: auto; font-family: monospace; font-size: 12px; white-space: pre-wrap; word-wrap: break-word;">
+                        ${(page.text || '[No text extracted]').substring(0, 500)}${(page.text || '').length > 500 ? '...' : ''}
+                    </div>
+                `;
+                imagesGrid.appendChild(card);
+            });
+
+            // Text
+            textEditor.value = data.combined_text;
+            updateTextStats();
+
+            // Schema
+            displaySchema(data.extracted_schema);
+
+            // JSON
+            jsonViewer.textContent = JSON.stringify(data.extracted_schema, null, 2);
+        }
+
+        function displaySchema(schema) {
+            schemaGrid.innerHTML = '';
+
+            const fields = [
+                { label: 'Employee Name', key: 'employee_name' },
+                { label: 'Claim Number', key: 'claim_number' },
+                { label: 'Injury Date', key: 'injury_date_time' },
+                { label: 'Status', key: 'status' },
+                { label: 'Body Part', key: 'body_part' },
+                { label: 'Injury Type', key: 'injury_type' },
+                { label: 'Claim Class', key: 'claim_class' },
+                { label: 'Medical Paid', key: 'medical_paid', format: 'currency' },
+                { label: 'Medical Reserve', key: 'medical_reserve', format: 'currency' },
+                { label: 'Indemnity Paid', key: 'indemnity_paid', format: 'currency' },
+                { label: 'Indemnity Reserve', key: 'indemnity_reserve', format: 'currency' },
+                { label: 'Expense Paid', key: 'expense_paid', format: 'currency' },
+                { label: 'Expense Reserve', key: 'expense_reserve', format: 'currency' },
+                { label: 'Recovery', key: 'recovery', format: 'currency' },
+                { label: 'Deductible', key: 'deductible', format: 'currency' },
+                { label: 'Total Incurred', key: 'total_incurred', format: 'currency' }
+            ];
+
+            fields.forEach(field => {
+                const value = schema[field.key];
+                let displayValue;
+                let isNull = false;
+
+                if (value === null || value === undefined) {
+                    displayValue = 'N/A';
+                    isNull = true;
+                } else if (field.format === 'currency') {
+                    displayValue = `$${Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                } else {
+                    displayValue = value;
+                }
+
+                const item = document.createElement('div');
+                item.className = 'field-item';
+                item.innerHTML = `
+                    <div class="field-label">${field.label}</div>
+                    <div class="field-value ${isNull ? 'null' : ''}">${displayValue}</div>
+                `;
+                schemaGrid.appendChild(item);
+            });
+
+            // Injury description (full width)
+            if (schema.injury_description) {
+                const item = document.createElement('div');
+                item.className = 'field-item';
+                item.style.gridColumn = '1 / -1';
+                item.innerHTML = `
+                    <div class="field-label">Injury Description</div>
+                    <div class="field-value">${schema.injury_description}</div>
+                `;
+                schemaGrid.appendChild(item);
+            }
+        }
+
+        // Text editor stats
+        textEditor.addEventListener('input', updateTextStats);
+
+        function updateTextStats() {
+            const text = textEditor.value;
+            document.getElementById('charCount').textContent = text.length;
+            document.getElementById('lineCount').textContent = text.split('\n').length;
+            document.getElementById('wordCount').textContent = text.trim().split(/\s+/).filter(w => w).length;
+        }
+
+        // Re-extract schema from edited text
+        reextractBtn.addEventListener('click', async () => {
+            const text = textEditor.value;
+            const target = targetClaim.value.trim() || null;
+
+            showStatus('processing', '♻️ Re-extracting schema from text...');
+            spinner.classList.add('show');
+            reextractBtn.disabled = true;
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/extract-schema-only`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text, target_claim: target })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    currentData.extracted_schema = result.schema;
+                    displaySchema(result.schema);
+                    jsonViewer.textContent = JSON.stringify(result.schema, null, 2);
+                    showStatus('success', '✅ Schema re-extracted successfully!');
+
+                    // Switch to schema tab
+                    switchTab('schema');
+                } else {
+                    throw new Error(result.error);
+                }
+
+            } catch (error) {
+                showStatus('error', `❌ Error: ${error.message}`);
+            } finally {
+                spinner.classList.remove('show');
+                reextractBtn.disabled = false;
+            }
+        });
+
+        // Download handlers
+        downloadTextBtn.addEventListener('click', () => {
+            downloadFile(textEditor.value, 'extracted_text.txt', 'text/plain');
+        });
+
+        downloadJsonBtn.addEventListener('click', () => {
+            downloadFile(JSON.stringify(currentData.extracted_schema, null, 2), 'extracted_schema.json', 'application/json');
+        });
+
+        copyJsonBtn.addEventListener('click', () => {
+            navigator.clipboard.writeText(jsonViewer.textContent);
+            showStatus('success', '✅ JSON copied to clipboard!');
+            setTimeout(() => status.classList.remove('show'), 2000);
+        });
+
+        function downloadFile(content, filename, type) {
+            const blob = new Blob([content], { type });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function downloadAsCsv(data) {
+            if (!data || data.length === 0) return;
+
+            // Get all unique keys from all objects
+            const headers = Array.from(new Set(data.flatMap(obj => Object.keys(obj))));
+
+            const csvRows = [];
+            // Add headers
+            csvRows.push(headers.join(','));
+
+            // Add data rows
+            for (const row of data) {
+                const values = headers.map(header => {
+                    const val = row[header];
+                    const escaped = ('' + (val ?? '')).replace(/"/g, '""');
+                    return `"${escaped}"`;
+                });
+                csvRows.push(values.join(','));
+            }
+
+            const csvContent = csvRows.join('\n');
+            downloadFile(csvContent, 'merged_results.csv', 'text/csv');
+        }
+
+        // Tab switching
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                switchTab(tab.dataset.tab);
+            });
+        });
+
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+
+            document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+            document.getElementById(`tab-${tabName}`).classList.add('active');
+        }
+
+        // Modal
+        modalClose.addEventListener('click', () => {
+            imageModal.classList.remove('show');
+        });
+
+        imageModal.addEventListener('click', (e) => {
+            if (e.target === imageModal) {
+                imageModal.classList.remove('show');
+            }
+        });
+
+        // Reset
+        resetBtn.addEventListener('click', () => {
+            fileInput.value = '';
+            targetClaim.value = '';
+            uploadArea.querySelector('.upload-text').textContent = 'Drop PDF here or click to upload';
+            processBtn.style.display = 'none';
+            resetBtn.style.display = 'none';
+            resultsSection.classList.add('hidden');
+            status.classList.remove('show');
+            currentData = null;
+            currentSession = null;
+        });
+
+        // Status helper
+        function showStatus(type, message) {
+            status.className = `status show ${type}`;
+            status.textContent = message;
+        }
+    </script>
+</body>
+
+</html>

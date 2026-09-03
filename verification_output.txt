@@ -1,0 +1,126 @@
+[OK] StructuredExcelExtractor module loaded successfully
+[OK] Poppler PATH configured: C:\Users\INTERN\Downloads\Release-25.12.0-0\poppler-25.12.0\Library\bin
+Warning: Could not check Insurance extractor module: name 'get_extractor_class' is not defined
+   Will fall back to subprocess method if needed.
+
+[STEP] Initializing Extractors...
+[Extractor] Loaded ChunkedInsuranceExtractor from C:\Users\INTERN\main_project\Main--main\Insurance_pdf_extractor-main\backend
+Γ£ô GPT-4 Vision API initialized
+[OK] ChunkedInsuranceExtractor initialized
+[Extractor] Loaded ChunkedInsuranceExtractor from C:\Users\INTERN\main_project\Main--main\work_compenstaion\backend
+Γ£ô GPT-4 Vision API initialized
+[OK] Work Compensation Extractor initialized
+[STEP] Initializing Bank Statement Extractor...
+[OK] Bank Statement Extractor initialized
+
+======================================================================
+[STEP] UNIFIED PDF INTELLIGENT ROUTER (7-LAYER VERSION)
+======================================================================
+[INFO] Input: ICW Loss Runs - 2023.pdf
+[INFO] Started: 2026-03-25 00:12:24
+======================================================================
+
+======================================================================
+[STEP 1] INTELLIGENT DOCUMENT CLASSIFICATION & PROVIDER DETECTION
+======================================================================
+[FILE] Processing: ICW Loss Runs - 2023.pdf (.pdf)
+
+[STEP] Extracting text snippet for classification...
+[Rotation] Rotation check failed: no such file: 'C:\Users\INTERN\main_project\Main--main\Insurance_pdf_extractor-main\backend\data\ICW Loss Runs - 2023.pdf'
+[Snippet] Stage 1 failed: no such file: 'C:\Users\INTERN\main_project\Main--main\Insurance_pdf_extractor-main\backend\data\ICW Loss Runs - 2023.pdf'
+[Snippet] Stage 2 (pdfplumber) failed: [Errno 2] No such file or directory: 'C:\\Users\\INTERN\\main_project\\Main--main\\Insurance_pdf_extractor-main\\backend\\data\\ICW Loss Runs - 2023.pdf'
+[Snippet] Stage 3 (Enhanced OCR 600 DPI + 4-angle) starting...
+   [WARN] Stage 3 Image conversion failed at 600 DPI: Unable to get page count.
+I/O Error: Couldn't open file 'C:/Users/INTERN/main_project/Main--main/Insurance_pdf_extractor-main/backend/data/ICW Loss Runs - 2023.pdf': No error.
+
+. Falling back to 200 DPI.
+[Snippet] Stage 3 failed: Unable to get page count.
+I/O Error: Couldn't open file 'C:/Users/INTERN/main_project/Main--main/Insurance_pdf_extractor-main/backend/data/ICW Loss Runs - 2023.pdf': No error.
+
+
+[Snippet] Stage 4 (Adaptive DPI OCR) starting...
+[Snippet] Stage 4 (400 DPI) failed: Unable to get page count.
+I/O Error: Couldn't open file 'C:/Users/INTERN/main_project/Main--main/Insurance_pdf_extractor-main/backend/data/ICW Loss Runs - 2023.pdf': No error.
+
+. Trying fallback 200 DPI.
+[Snippet] Stage 4 (400 DPI) failed: Unable to get page count.
+I/O Error: Couldn't open file 'C:/Users/INTERN/main_project/Main--main/Insurance_pdf_extractor-main/backend/data/ICW Loss Runs - 2023.pdf': No error.
+
+
+[Snippet] Stage 4 (300 DPI) failed: Unable to get page count.
+I/O Error: Couldn't open file 'C:/Users/INTERN/main_project/Main--main/Insurance_pdf_extractor-main/backend/data/ICW Loss Runs - 2023.pdf': No error.
+
+. Trying fallback 200 DPI.
+[Snippet] Stage 4 (300 DPI) failed: Unable to get page count.
+I/O Error: Couldn't open file 'C:/Users/INTERN/main_project/Main--main/Insurance_pdf_extractor-main/backend/data/ICW Loss Runs - 2023.pdf': No error.
+
+
+[Snippet] Final snippet ready: 0 chars
+[Pre-Classify] Loss run filename ΓåÆ INSURANCE_CLAIMS
+[Pre-Classify] Deterministic rule fired ΓåÆ INSURANCE_CLAIMS (Filename loss run keyword)
+
+[INFO] Classification Result: INSURANCE_CLAIMS | Provider: UNKNOWN
+
+[ROUTE] doc_type=INSURANCE_CLAIMS | provider=UNKNOWN | format=.pdf
+
+======================================================================
+[STEP 2] RUNNING INSURANCE EXTRACTOR
+======================================================================
+[INFO] Input: C:\Users\INTERN\main_project\Main--main\Insurance_pdf_extractor-main\backend\data\ICW Loss Runs - 2023.pdf
+[INFO] Method: Direct Module Import (ChunkedInsuranceExtractor)
+
+[INFO] Processing... (this may take 1-2 minutes)
+
+
+============================================================
+≡ƒÜÇ PROCESSING: ICW Loss Runs - 2023.pdf
+============================================================
+≡ƒöä Checking for rotation...
+  Γ¥î Error processing C:\Users\INTERN\main_project\Main--main\Insurance_pdf_extractor-main\backend\data\ICW Loss Runs - 2023.pdf: no such file: 'C:\Users\INTERN\main_project\Main--main\Insurance_pdf_extractor-main\backend\data\ICW Loss Runs - 2023.pdf'
+   Γ£ô Document orientation correct.
+≡ƒöì Detecting PDF type...
+ΓÜá∩╕Å Detection/Extraction error: PDF file not found: C:\Users\INTERN\main_project\Main--main\Insurance_pdf_extractor-main\backend\data\ICW Loss Runs - 2023.pdf
+   Falling back to standard pdfplumber...
+
+[ERR] Insurance Extraction Error: [Errno 2] No such file or directory: 'C:\\Users\\INTERN\\main_project\\Main--main\\Insurance_pdf_extractor-main\\backend\\data\\ICW Loss Runs - 2023.pdf'
+Traceback (most recent call last):
+  File "C:\Users\INTERN\main_project\Main--main\Insurance_pdf_extractor-main\backend\insurance_extractor.py", line 183, in extract_text_from_pdf
+    detector = PDFDetector(pdf_path)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\INTERN\main_project\Main--main\Insurance_pdf_extractor-main\backend\pdf_detector.py", line 32, in __init__
+    raise FileNotFoundError(f"PDF file not found: {pdf_path}")
+FileNotFoundError: PDF file not found: C:\Users\INTERN\main_project\Main--main\Insurance_pdf_extractor-main\backend\data\ICW Loss Runs - 2023.pdf
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\INTERN\main_project\Main--main\Unified_PDF_Platform\unified_router.py", line 1925, in run_insurance_extractor
+    result = self.insurance_extractor.process_pdf_with_verification(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\INTERN\main_project\Main--main\Insurance_pdf_extractor-main\backend\chunked_extractor.py", line 202, in process_pdf_with_verification
+    all_text, pages_metadata = self.extract_text_from_pdf(pdf_path)
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\INTERN\main_project\Main--main\Insurance_pdf_extractor-main\backend\insurance_extractor.py", line 241, in extract_text_from_pdf
+    return external_extract(pdf_path)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\INTERN\main_project\Main--main\Insurance_pdf_extractor-main\backend\pdf_plumber.py", line 153, in extract_pdf_with_pdfplumber
+    with pdfplumber.open(pdf_path) as pdf:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\INTERN\AppData\Roaming\Python\Python311\site-packages\pdfplumber\pdf.py", line 98, in open
+    stream = open(path_or_fp, "rb")
+             ^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: 'C:\\Users\\INTERN\\main_project\\Main--main\\Insurance_pdf_extractor-main\\backend\\data\\ICW Loss Runs - 2023.pdf'
+
+======================================================================
+[ERR] PROCESSING FAILED
+======================================================================
+Error: Insurance extraction failed: [Errno 2] No such file or directory: 'C:\\Users\\INTERN\\main_project\\Main--main\\Insurance_pdf_extractor-main\\backend\\data\\ICW Loss Runs - 2023.pdf'
+======================================================================
+
+
+==================================================
+UNIFIED ROUTER RESULT
+==================================================
+{
+  "error": "Insurance extraction failed: [Errno 2] No such file or directory: 'C:\\\\Users\\\\INTERN\\\\main_project\\\\Main--main\\\\Insurance_pdf_extractor-main\\\\backend\\\\data\\\\ICW Loss Runs - 2023.pdf'"
+}

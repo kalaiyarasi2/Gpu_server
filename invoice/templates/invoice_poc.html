@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invoice Extraction POC</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .glass { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); }
+        .gradient-bg { background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%); }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div class="gradient-bg h-64 w-full absolute top-0 z-0"></div>
+    
+    <div class="relative z-10 max-w-5xl mx-auto pt-16 px-4">
+        <header class="text-white mb-10 text-center">
+            <h1 class="text-4xl font-extrabold tracking-tight mb-2">Invoice Data Extraction POC</h1>
+            <p class="text-indigo-100 text-lg">High-accuracy multimodal AI extraction for invoices and receipts</p>
+        </header>
+
+        <main class="space-y-8">
+            <!-- Upload Section -->
+            <section class="glass rounded-3xl shadow-2xl p-8 border border-white/20">
+                <div id="dropzone" class="border-2 border-dashed border-indigo-200 rounded-2xl p-12 text-center hover:border-indigo-400 transition-all cursor-pointer bg-indigo-50/10">
+                    <input type="file" id="fileInput" multiple class="hidden" accept=".pdf">
+                    <div class="space-y-4">
+                        <div class="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center mx-auto text-indigo-600">
+                            <i class="fas fa-cloud-upload-alt text-2xl"></i>
+                        </div>
+                        <div>
+                            <p class="text-xl font-semibold text-gray-800">Drop PDFs here or click to upload</p>
+                            <p class="text-gray-500 mt-1">Select one or multiple files to begin extraction</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Progress/Files List Section -->
+            <section id="filesListSection" class="hidden glass rounded-3xl shadow-xl p-8 border border-white/20">
+                <h2 class="text-2xl font-bold text-gray-800 mb-6 flex items-center">
+                    <i class="fas fa-tasks mr-3 text-indigo-500"></i> Processing Queue
+                </h2>
+                <div id="filesContainer" class="space-y-4">
+                    <!-- Files will be injected here -->
+                </div>
+            </section>
+        </main>
+
+        <footer class="mt-20 pb-10 text-center text-gray-400 text-sm">
+            <p>&copy; 2026 AI Invoice Extractor POC • Powered by GPT-4o</p>
+        </footer>
+    </div>
+
+    <!-- Modals / JSON Preview -->
+    <div id="jsonModal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl w-full max-w-4xl max-h-[80vh] flex flex-col shadow-2xl overflow-hidden">
+            <div class="p-6 border-b flex justify-between items-center bg-gray-50">
+                <h3 class="text-xl font-bold text-gray-800">JSON Data Preview</h3>
+                <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            <div class="p-6 overflow-auto bg-gray-900 text-indigo-300 font-mono text-sm">
+                <pre id="jsonPreview"></pre>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const dropzone = document.getElementById('dropzone');
+        const fileInput = document.getElementById('fileInput');
+        const filesListSection = document.getElementById('filesListSection');
+        const filesContainer = document.getElementById('filesContainer');
+        const jsonModal = document.getElementById('jsonModal');
+        const jsonPreview = document.getElementById('jsonPreview');
+
+        let activeJobs = {};
+
+        dropzone.addEventListener('click', () => fileInput.click());
+        dropzone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropzone.classList.add('border-indigo-500', 'bg-indigo-50');
+        });
+        dropzone.addEventListener('dragleave', () => {
+            dropzone.classList.remove('border-indigo-500', 'bg-indigo-50');
+        });
+        dropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropzone.classList.remove('border-indigo-500', 'bg-indigo-50');
+            handleFiles(e.dataTransfer.files);
+        });
+
+        fileInput.addEventListener('change', () => {
+            handleFiles(fileInput.files);
+        });
+
+        async function handleFiles(files) {
+            if (files.length === 0) return;
+            
+            filesListSection.classList.remove('hidden');
+            
+            const formData = new FormData();
+            for (const file of files) {
+                formData.append('files', file);
+            }
+
+            try {
+                const response = await fetch('/api/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.json();
+                
+                result.jobs.forEach(job => {
+                    createFileItem(job.job_id, job.filename);
+                    startProcessing(job.job_id);
+                });
+            } catch (error) {
+                console.error('Upload failed:', error);
+                alert('Failed to upload files. Check if backend is running.');
+            }
+        }
+
+        function createFileItem(jobId, filename) {
+            const div = document.createElement('div');
+            div.id = `job-${jobId}`;
+            div.className = 'bg-white rounded-2xl p-5 border border-gray-100 shadow-sm flex items-center justify-between transition-all hover:shadow-md';
+            div.innerHTML = `
+                <div class="flex items-center space-x-4">
+                    <div class="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-500">
+                        <i class="far fa-file-pdf text-xl"></i>
+                    </div>
+                    <div>
+                        <p class="font-semibold text-gray-800">${filename}</p>
+                        <p id="status-${jobId}" class="text-sm text-gray-500 flex items-center tracking-wide">
+                            <i class="fas fa-spinner fa-spin mr-2"></i> Pending...
+                        </p>
+                    </div>
+                </div>
+                <div id="actions-${jobId}" class="flex items-center space-x-2 hidden">
+                    <button onclick="viewJson('${jobId}')" class="px-4 py-2 text-sm font-medium text-indigo-600 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition-colors">
+                        <i class="fas fa-code mr-1"></i> JSON
+                    </button>
+                    <a id="excel-${jobId}" href="#" target="_blank" class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors">
+                        <i class="fas fa-file-excel mr-1"></i> Excel
+                    </a>
+                </div>
+            `;
+            filesContainer.appendChild(div);
+        }
+
+        async function startProcessing(jobId) {
+            try {
+                const response = await fetch(`/api/process/${jobId}`, { method: 'POST' });
+                const statusCircle = document.getElementById(`status-${jobId}`);
+                statusCircle.innerHTML = '<i class="fas fa-circle-notch fa-spin mr-2 text-indigo-500"></i> Extracting Data...';
+                
+                pollStatus(jobId);
+            } catch (error) {
+                console.error('Processing start failed:', error);
+            }
+        }
+
+        function pollStatus(jobId) {
+            const interval = setInterval(async () => {
+                try {
+                    const response = await fetch(`/api/status/${jobId}`);
+                    const result = await response.json();
+                    
+                    if (result.status === 'completed') {
+                        clearInterval(interval);
+                        markCompleted(jobId, result);
+                    } else if (result.status === 'error') {
+                        clearInterval(interval);
+                        markError(jobId, result.error);
+                    }
+                } catch (error) {
+                    clearInterval(interval);
+                    console.error('Polling failed:', error);
+                }
+            }, 2000);
+        }
+
+        function markCompleted(jobId, result) {
+            const statusLabel = document.getElementById(`status-${jobId}`);
+            statusLabel.innerHTML = '<i class="fas fa-check-circle mr-2 text-green-500"></i> Extraction Complete';
+            statusLabel.classList.remove('text-gray-500');
+            statusLabel.classList.add('text-green-600', 'font-medium');
+            
+            const actions = document.getElementById(`actions-${jobId}`);
+            actions.classList.remove('hidden');
+            
+            const excelBtn = document.getElementById(`excel-${jobId}`);
+            excelBtn.href = result.excel_url;
+            
+            activeJobs[jobId] = result;
+        }
+
+        function markError(jobId, error) {
+            const statusLabel = document.getElementById(`status-${jobId}`);
+            statusLabel.innerHTML = `<i class="fas fa-exclamation-circle mr-2 text-red-500"></i> Error: ${error}`;
+            statusLabel.classList.remove('text-gray-500');
+            statusLabel.classList.add('text-red-600');
+        }
+
+        function viewJson(jobId) {
+            const job = activeJobs[jobId];
+            if (job && job.data) {
+                jsonPreview.textContent = JSON.stringify(job.data, null, 2);
+                jsonModal.classList.remove('hidden');
+                document.body.style.overflow = 'hidden';
+            }
+        }
+
+        function closeModal() {
+            jsonModal.classList.add('hidden');
+            document.body.style.overflow = 'auto';
+        }
+
+        // Close on backdrop click
+        jsonModal.addEventListener('click', (e) => {
+            if (e.target === jsonModal) closeModal();
+        });
+    </script>
+</body>
+</html>

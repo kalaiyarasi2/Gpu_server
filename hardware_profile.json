@@ -1,0 +1,7 @@
+{
+    "gpu_available": true,
+    "device_name": "Tesla T4",
+    "vram_total_gb": 14.999755859375,
+    "cuda_version": "12.1",
+    "onnx_gpu_available": true
+}

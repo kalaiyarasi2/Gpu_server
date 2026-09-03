@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI PDF Invoice Extractor</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>Invoice AI</h1>
+            <p class="subtitle">Premium PDF Data Extraction with Auto-OCR & gpt-4.1</p>
+        </header>
+
+        <main class="card">
+            <div id="drop-zone" class="upload-zone">
+                <div class="upload-info">
+                    <i class="fa-solid fa-cloud-arrow-up upload-icon"></i>
+                    <h2>Drag & Drop PDF</h2>
+                    <p class="text-muted">or click to browse your computer</p>
+                    <input type="file" id="file-input" class="hidden" accept=".pdf">
+                </div>
+                <div id="file-preview" class="hidden">
+                    <i class="fa-solid fa-file-pdf upload-icon"></i>
+                    <h2 id="filename-display">filename.pdf</h2>
+                    <p id="filesize-display" class="text-muted">1.2 MB</p>
+                </div>
+            </div>
+
+            <div class="actions">
+                <button id="extract-btn" class="btn" disabled>
+                    <i class="fa-solid fa-wand-magic-sparkles"></i>
+                    Start Extraction
+                </button>
+                <div id="status" class="hidden">
+                    <div class="loader"></div>
+                    <span id="status-text">Processing your invoice...</span>
+                </div>
+            </div>
+        </main>
+
+        <section id="results" class="results-area hidden">
+            <div class="glass-panel">
+                <div class="stats">
+                    <div class="stat-item">
+                        <span id="result-count" class="stat-value">0</span>
+                        <span class="stat-label">Rows Extracted</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value success-badge">Succeeded</span>
+                        <span class="stat-label">Process Status</span>
+                    </div>
+                </div>
+                <button id="download-btn" class="btn">
+                    <i class="fa-solid fa-download"></i>
+                    Download Excel Result
+                </button>
+            </div>
+
+            <h3>Data Preview (First 5 Rows)</h3>
+            <div class="table-container">
+                <table id="preview-table">
+                    <thead>
+                        <tr>
+                            <th>Contract No</th>
+                            <th>Policy ID</th>
+                            <th>Member ID</th>
+                            <th>First Name</th>
+                            <th>Last Name</th>
+                            <th>Billed Amount</th>
+                            <th>Total Premium</th>
+                            <th>Coverage</th>
+                        </tr>
+                    </thead>
+                    <tbody id="preview-body">
+                        <!-- Rows injected here -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script src="/static/js/main_v2.js"></script>
+</body>
+
+</html>

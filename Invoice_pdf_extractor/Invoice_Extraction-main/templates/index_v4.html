@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Invoice Extractor v4 - Dashboard</title>
+    <link rel="stylesheet" href="/static/css/style_v4.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+
+<body class="light-mode">
+    <header>
+        <div class="logo-container">
+            <div class="logo-icon"><i class="fa-solid fa-file-invoice"></i></div>
+            <div class="logo-text">
+                <h1>PDF Invoice <span>Extractor</span></h1>
+            </div>
+        </div>
+
+        <div class="header-right">
+            <button id="theme-toggle" class="theme-toggle" title="Toggle Dark/Light Mode">
+                <i class="fa-solid fa-moon"></i>
+            </button>
+            <div class="brand-logo">
+                <img src="/static/img/cognet_logo.png" alt="CogNet"
+                    onerror="this.src='https://via.placeholder.com/100x30/f1f5f9/0284c7?text=CogNet'">
+            </div>
+        </div>
+    </header>
+
+    <main class="dashboard-container">
+        <!-- Dashboard Header -->
+        <div class="hero-section">
+            <h2>Precision AI Extraction</h2>
+            <p>High-accuracy data recovery and Excel generation for your PDF invoices.</p>
+        </div>
+
+        <!-- Initial Upload View -->
+        <div id="upload-view" class="upload-wrapper">
+            <div id="drop-zone" class="upload-container">
+                <i class="fa-solid fa-cloud-upload-alt upload-icon-large"></i>
+                <h3 style="font-size: 1.5rem; font-weight: 700; margin-bottom: 8px;">Drag & Drop PDF Files</h3>
+                <p style="color: var(--text-muted);">or click to browse • Supports multiple files</p>
+                <button id="browse-btn" class="upload-btn">
+                    <i class="fa-solid fa-plus"></i> Select Files
+                </button>
+                <input type="file" id="file-input" class="hidden" accept=".pdf" multiple>
+            </div>
+        </div>
+
+        <!-- Processing/Results View (Hidden initially) -->
+        <div id="dashboard-main" class="dashboard-grid hidden">
+            <!-- Left Column: Queue & Status -->
+            <div class="dashboard-card">
+                <div class="card-title">
+                    <i class="fa-solid fa-layer-group"></i> Document Queue
+                </div>
+
+                <div id="queue-list" class="queue-list">
+                    <!-- Queue items injected by JS -->
+                </div>
+
+                <div class="card-title"
+                    style="margin-top: 24px; border-top: 1px solid var(--border-color); padding-top: 24px;">
+                    <i class="fa-solid fa-gear"></i> Processing Status
+                </div>
+
+                <div class="steps-list">
+                    <div id="step-0" class="step">
+                        <div class="step-icon"><i class="fa-solid fa-sync"></i></div>
+                        <span>Checking Rotation</span>
+                    </div>
+                    <div id="step-1" class="step">
+                        <div class="step-icon"><i class="fa-solid fa-file-word"></i></div>
+                        <span>Extracting Text</span>
+                    </div>
+                    <div id="step-2" class="step">
+                        <div class="step-icon"><i class="fa-solid fa-microchip"></i></div>
+                        <span>Schema Extraction</span>
+                    </div>
+                    <div id="step-3" class="step">
+                        <div class="step-icon"><i class="fa-solid fa-database"></i></div>
+                        <span>Validating Data</span>
+                    </div>
+                    <div id="step-4" class="step">
+                        <div class="step-icon"><i class="fa-solid fa-check-circle"></i></div>
+                        <span>Complete</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Active View/Results -->
+            <div class="dashboard-card">
+                <div id="results-view" class="results-view">
+                    <!-- Loading Animation -->
+                    <div id="loading-animation" class="results-panel">
+                        <div class="result-icon-container">
+                            <i class="fa-solid fa-wand-magic-sparkles loading-spinner result-icon-large"></i>
+                        </div>
+                        <h3 id="status-title" style="font-size: 1.25rem; font-weight: 800;">Processing document...</h3>
+                        <p id="current-filename"
+                            style="color: var(--text-muted); font-size: 0.85rem; font-weight: 600;">Filename.pdf</p>
+                    </div>
+
+                    <!-- Completion View -->
+                    <div id="completion-view" class="results-panel hidden extraction-complete">
+                        <div class="result-icon-container">
+                            <i class="fa-solid fa-circle-check result-icon-large"></i>
+                        </div>
+                        <h3 style="font-size: 1.4rem; font-weight: 800;">Extraction Success!</h3>
+                        <p id="extraction-summary"
+                            style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 24px;">We found 15
+                            rows in your invoice.</p>
+                        <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
+                            <button id="download-btn" class="download-btn">
+                                <i class="fa-solid fa-file-excel"></i> Download Excel
+                            </button>
+                            <button id="download-json-btn" class="download-btn" style="background: var(--primary);">
+                                <i class="fa-solid fa-code"></i> Download JSON
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="margin-top: 24px; text-align: center;">
+                    <button id="upload-more-btn"
+                        style="background: transparent; border: 1px solid var(--border-color); color: var(--text-muted); padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 0.85rem; font-weight: 600;">
+                        Upload More Files
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding-bottom: 40px;">
+            <p>PDF Invoice Extractor • Ai-Powered PDF Processing • v4.0</p>
+        </div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script src="/static/js/main_v4.js"></script>
+</body>
+
+</html>

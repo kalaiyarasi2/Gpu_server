@@ -1,0 +1,55 @@
+
+[[PAGE_1]]
+Tax Invoice/Bill of Supply/Cash Memo
+(Original for Recipient)
+IRN:
+6b69022e52dd1082b0c17301225a2cc5a05f7d469f3c40021d40570d31e5fee0
+IRN/QR Code:
+Sold By : Billing Address
+CLICKTECH RETAIL PRIVATE LIMITED CogNet HR Solutions Pvt Ltd
+2nd Floor, Karunaa Conquest,, 7 MTH Road,
+No. 1/B, IndoSpace Logistics Park, Puduvoyal, Ambattur Industrial Estate
+Durainallur Village, Ponneri Taluk Chennai, TN, 600058
+Thiruvalluvar, Tamil Nadu, 601206 IN
+IN GST Registration No: 33AADCC0190K1ZW
+State/UT Code: 33
+PAN No: AAJCC9783E
+GST Registration No: 33AAJCC9783E1ZE Shipping Address
+CogNet HR Solutions Pvt Ltd
+Sathya
+Cognet Hr Solutions India Pvt Ltd, 2nd Floor,,
+Karunaa Conquest, 7 MTH Road, Ambattur
+Industrial Estate
+CHENNAI, TAMIL NADU, 600058
+IN
+State/UT Code: 33
+GST Registration No: 33AADCC0190K1ZW
+Place of supply: TN
+Place of delivery: TAMIL NADU
+Order Number: 402-1844109-7377929 Invoice Number : MAA4-3883418
+Order Date: 11.02.2026 Invoice Details : TN-MAA4-297683823-2526
+Invoice Date : 11.02.2026
+Sl. Unit Net Tax Tax Tax Total
+Description Qty
+No Price Amount RateType Amount Amount
+1 Voltas Pearl RB Hot, Cold and Normal Standing Water
+Dispenser With refrigerator (Black) | B072LWCC6N ( ₹7,291.04 1 ₹7,291.04 9% CGST ₹656.19 ₹8,603.42
+B072LWCC6N
+HSN:64059000
+9% SGST ₹656.19
+TOTAL: ₹1,312.38₹8,603.42
+Amount in Words:
+Eight Thousand Six Hundred Three Point Four Two only
+*ASSPL-Amazon Seller Services Pvt. Ltd., ARIPL-Amazon Retail India Pvt. Ltd. (only where Amazon Retail India Pvt. Ltd. fulfillment center is co-located)
+Please note that this invoice is not a demand for payment
+Page 1 of 2
+
+[[PAGE_2]]
+Tax Invoice/Bill of Supply/Cash Memo
+(Original for Recipient)
+For CLICKTECH RETAIL PRIVATE LIMITED:
+Authorized Signatory
+Whether tax is payable under reverse charge - No
+*ASSPL-Amazon Seller Services Pvt. Ltd., ARIPL-Amazon Retail India Pvt. Ltd. (only where Amazon Retail India Pvt. Ltd. fulfillment center is co-located)
+Please note that this invoice is not a demand for payment
+Page 2 of 2
