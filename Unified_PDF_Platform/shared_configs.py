@@ -152,10 +152,11 @@ async def _perform_extraction(file: UploadFile, request: Request):
             doc_type = "VENDOR_INVOICE"
         
         # Build base URL for downloads
-        base_url = str(request.base_url).rstrip("/")
+        base_url = os.getenv("BASE_URL") or str(request.base_url).rstrip("/")
         
         # Build base response with clickable URLs
         response = {
+            "requestId": request_id,
             "type": doc_type,
             "output_file": excel_filename,
             "output_json": json_filename,

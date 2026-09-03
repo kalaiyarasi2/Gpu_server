@@ -75,10 +75,12 @@ window.addEventListener('load', function() {
                         
                         const data = JSON.parse(match[0]);
                         
+                        const currentRequestId = data.requestId || 'unknown';
+                        
                         // Check if we already have buttons for THIS specific requestId to avoid duplicates/stale links
                         const existingBtns = targetElement.querySelector('.cognethro-dl-btns');
                         if (existingBtns) {
-                            if (existingBtns.getAttribute('data-request-id') === data.requestId) {
+                            if (existingBtns.getAttribute('data-request-id') === String(currentRequestId)) {
                                 return; // Already current
                             }
                             existingBtns.remove(); // Stale, remove them
@@ -86,28 +88,30 @@ window.addEventListener('load', function() {
 
                         const btnContainer = document.createElement('div');
                         btnContainer.className = 'cognethro-dl-btns';
-                        btnContainer.setAttribute('data-request-id', data.requestId || 'unknown');
+                        btnContainer.setAttribute('data-request-id', currentRequestId);
                         btnContainer.style = 'margin-top: 20px; display: flex; gap: 12px; padding: 15px; background: #111; border-radius: 10px; border: 1px solid #333; box-shadow: 0 4px 15px rgba(0,0,0,0.5);';
                         
-                        if (data.excel) {
+                        if (data.output_file) {
                             const xlBtn = document.createElement('a');
-                            xlBtn.href = data.excel;
+                            // Dynamically build the URL using the browser's current domain to avoid localhost issues
+                            xlBtn.href = window.location.origin + '/api/download/' + data.output_file;
                             xlBtn.innerHTML = '⚡  <b>Download Excel</b>';
                             xlBtn.style = 'background: linear-gradient(135deg, #064e3b 0%, #065f46 100%); color: #6ee7b7; border: 1px solid #059669; padding: 12px 22px; border-radius: 8px; text-decoration: none; font-size: 14px; cursor: pointer; transition: transform 0.1s;';
                             xlBtn.onmouseover = () => xlBtn.style.transform = 'scale(1.02)';
                             xlBtn.onmouseout = () => xlBtn.style.transform = 'scale(1)';
-                            xlBtn.setAttribute('download', data.output_file || 'result.xlsx');
+                            xlBtn.setAttribute('download', data.output_file);
                             btnContainer.appendChild(xlBtn);
                         }
                         
-                        if (data.json) {
+                        if (data.output_json) {
                             const jsBtn = document.createElement('a');
-                            jsBtn.href = data.json;
+                            // Dynamically build the URL using the browser's current domain to avoid localhost issues
+                            jsBtn.href = window.location.origin + '/api/download/' + data.output_json;
                             jsBtn.innerHTML = '📂  <b>Download JSON</b>';
                             jsBtn.style = 'background: linear-gradient(135deg, #0c1a33 0%, #112244 100%); color: #93c5fd; border: 1px solid #1e40af; padding: 12px 22px; border-radius: 8px; text-decoration: none; font-size: 14px; cursor: pointer; transition: transform 0.1s;';
                             jsBtn.onmouseover = () => jsBtn.style.transform = 'scale(1.02)';
                             jsBtn.onmouseout = () => jsBtn.style.transform = 'scale(1)';
-                            jsBtn.setAttribute('download', data.output_json || 'result.json');
+                            jsBtn.setAttribute('download', data.output_json);
                             btnContainer.appendChild(jsBtn);
                         }
                         
@@ -149,10 +153,12 @@ window.addEventListener('load', function() {
                         
                         const data = JSON.parse(match[0]);
                         
+                        const currentRequestId = data.requestId || 'unknown';
+                        
                         // Check if we already have buttons for THIS specific requestId to avoid duplicates/stale links
                         const existingBtns = targetElement.querySelector('.wc-dl-btns');
                         if (existingBtns) {
-                            if (existingBtns.getAttribute('data-request-id') === data.requestId) {
+                            if (existingBtns.getAttribute('data-request-id') === String(currentRequestId)) {
                                 return; // Already current
                             }
                             existingBtns.remove(); // Stale, remove them
@@ -160,28 +166,30 @@ window.addEventListener('load', function() {
 
                         const btnContainer = document.createElement('div');
                         btnContainer.className = 'wc-dl-btns';
-                        btnContainer.setAttribute('data-request-id', data.requestId || 'unknown');
+                        btnContainer.setAttribute('data-request-id', currentRequestId);
                         btnContainer.style = 'margin-top: 20px; display: flex; gap: 12px; padding: 15px; background: #111; border-radius: 10px; border: 1px solid #333; box-shadow: 0 4px 15px rgba(0,0,0,0.5);';
                         
-                        if (data.excel) {
+                        if (data.output_file) {
                             const xlBtn = document.createElement('a');
-                            xlBtn.href = data.excel;
+                            // Dynamically build the URL using the browser's current domain to avoid localhost issues
+                            xlBtn.href = window.location.origin + '/api/download/' + data.output_file;
                             xlBtn.innerHTML = '⚡  <b>Download Excel</b>';
                             xlBtn.style = 'background: linear-gradient(135deg, #064e3b 0%, #065f46 100%); color: #6ee7b7; border: 1px solid #059669; padding: 12px 22px; border-radius: 8px; text-decoration: none; font-size: 14px; cursor: pointer; transition: transform 0.1s;';
                             xlBtn.onmouseover = () => xlBtn.style.transform = 'scale(1.02)';
                             xlBtn.onmouseout = () => xlBtn.style.transform = 'scale(1)';
-                            xlBtn.setAttribute('download', data.output_file || 'result.xlsx');
+                            xlBtn.setAttribute('download', data.output_file);
                             btnContainer.appendChild(xlBtn);
                         }
                         
-                        if (data.json) {
+                        if (data.output_json) {
                             const jsBtn = document.createElement('a');
-                            jsBtn.href = data.json;
+                            // Dynamically build the URL using the browser's current domain to avoid localhost issues
+                            jsBtn.href = window.location.origin + '/api/download/' + data.output_json;
                             jsBtn.innerHTML = '📂  <b>Download JSON</b>';
                             jsBtn.style = 'background: linear-gradient(135deg, #0c1a33 0%, #112244 100%); color: #93c5fd; border: 1px solid #1e40af; padding: 12px 22px; border-radius: 8px; text-decoration: none; font-size: 14px; cursor: pointer; transition: transform 0.1s;';
                             jsBtn.onmouseover = () => jsBtn.style.transform = 'scale(1.02)';
                             jsBtn.onmouseout = () => jsBtn.style.transform = 'scale(1)';
-                            jsBtn.setAttribute('download', data.output_json || 'result.json');
+                            jsBtn.setAttribute('download', data.output_json);
                             btnContainer.appendChild(jsBtn);
                         }
                         

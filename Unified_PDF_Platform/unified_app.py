@@ -61,12 +61,18 @@ logger = logging.getLogger("unified_app")
 # Load environment variables from parent directory
 load_dotenv(BASE_DIR.parent / ".env")
 
+# Determine the base URL for OpenAPI servers
+openapi_base_url = os.getenv("BASE_URL", "http://localhost:8007")
+
 app = FastAPI(
     title=API_TITLE,
     description=API_DESCRIPTION,
     version=API_VERSION,
     docs_url=None,  # Override for custom download buttons logic
-    redoc_url="/redoc"
+    redoc_url="/redoc",
+    servers=[
+        {"url": openapi_base_url, "description": "Production API Server"}
+    ]
 )
 
 # Attach monitoring middleware and endpoints
