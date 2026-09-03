@@ -1,0 +1,44 @@
+{
+  "CARRIER_KEYWORDS": [
+    "DPS$$$PKG",
+    "UHS Billing",
+    "Account Adjustments",
+    "Minimum Amount Due"
+  ],
+  "EXAMPLES": [
+    {
+      "RAW_TEXT": "1212236 Anand, Arjun E3500i5021B - *****857100 E A $372.38 $578.02",
+      "MAPPING": {
+        "LASTNAME": "ANAND",
+        "FIRSTNAME": "ARJUN",
+        "MIDDLENAME": null,
+        "SSN": null,
+        "POLICYID": "1212236",
+        "MEMBERID": "857100",
+        "PLAN_NAME": "E3500i5021B - Admin/Excess Loss",
+        "PLAN_TYPE": "MEDICAL",
+        "COVERAGE": "EE",
+        "CURRENT_PREMIUM": 372.38,
+        "ADJUSTMENT_PREMIUM": null,
+        "PRICING_ADJUSTMENT": null
+      }
+    },
+    {
+      "RAW_TEXT": "1212236 Anand, Arjun E3500i5021B - *****857100 E A $372.38 $578.02",
+      "MAPPING": {
+        "LASTNAME": "ANAND",
+        "FIRSTNAME": "ARJUN",
+        "MIDDLENAME": null,
+        "SSN": null,
+        "POLICYID": "1212236",
+        "MEMBERID": "857100",
+        "PLAN_NAME": "E3500i5021B - Max Claims Liability",
+        "PLAN_TYPE": "MEDICAL",
+        "COVERAGE": "EE",
+        "CURRENT_PREMIUM": 205.64,
+        "ADJUSTMENT_PREMIUM": null,
+        "PRICING_ADJUSTMENT": null
+      }
+    }
+  ]
+}

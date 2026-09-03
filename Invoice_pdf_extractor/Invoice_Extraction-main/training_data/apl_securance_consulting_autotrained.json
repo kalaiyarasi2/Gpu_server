@@ -1,0 +1,44 @@
+{
+  "CARRIER_KEYWORDS": [
+    "Premium Period",
+    "Amount Billed",
+    "Care Team",
+    "MEDLINKSELECT"
+  ],
+  "EXAMPLES": [
+    {
+      "RAW_TEXT": "2559229 DESANDRO, LORI ***-**-0253 MEDLINKSELECT GROUP MED SUP $181.74 - $181.74",
+      "MAPPING": {
+        "LASTNAME": "DESANDRO",
+        "FIRSTNAME": "LORI",
+        "MIDDLENAME": null,
+        "SSN": "0253",
+        "POLICYID": null,
+        "MEMBERID": "2559229",
+        "PLAN_NAME": "MEDLINKSELECT GROUP MED SUP",
+        "PLAN_TYPE": "MEDICAL",
+        "COVERAGE": "EE",
+        "CURRENT_PREMIUM": 181.74,
+        "ADJUSTMENT_PREMIUM": null,
+        "PRICING_ADJUSTMENT": null
+      }
+    },
+    {
+      "RAW_TEXT": "2680458 TEDESCHI, GILLIAN ***-**-4964 MEDLINKSELECT GROUP MED SUP $121.19 - $121.19",
+      "MAPPING": {
+        "LASTNAME": "TEDESCHI",
+        "FIRSTNAME": "GILLIAN",
+        "MIDDLENAME": null,
+        "SSN": "4964",
+        "POLICYID": null,
+        "MEMBERID": "2680458",
+        "PLAN_NAME": "MEDLINKSELECT GROUP MED SUP",
+        "PLAN_TYPE": "MEDICAL",
+        "COVERAGE": "EE",
+        "CURRENT_PREMIUM": 121.19,
+        "ADJUSTMENT_PREMIUM": null,
+        "PRICING_ADJUSTMENT": null
+      }
+    }
+  ]
+}

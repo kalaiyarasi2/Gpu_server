@@ -1,0 +1,44 @@
+{
+  "CARRIER_KEYWORDS": [
+    "Premium Statement",
+    "Billing Number",
+    "Coverage",
+    "Total Due"
+  ],
+  "EXAMPLES": [
+    {
+      "RAW_TEXT": "278069173 :ON DI ENNAEL ,NAPKA :EMAN",
+      "MAPPING": {
+        "LASTNAME": "NAPKA",
+        "FIRSTNAME": "LEANNE",
+        "MIDDLENAME": null,
+        "SSN": null,
+        "POLICYID": null,
+        "MEMBERID": "278069173",
+        "PLAN_NAME": "DTS",
+        "PLAN_TYPE": "STD",
+        "COVERAGE": "EE",
+        "CURRENT_PREMIUM": 3.03,
+        "ADJUSTMENT_PREMIUM": null,
+        "PRICING_ADJUSTMENT": null
+      }
+    },
+    {
+      "RAW_TEXT": "773860583 :ON DI ENILEUQCAJ ,HTOOB :EMAN",
+      "MAPPING": {
+        "LASTNAME": "BOOTH",
+        "FIRSTNAME": "JACQUELINE",
+        "MIDDLENAME": null,
+        "SSN": null,
+        "POLICYID": null,
+        "MEMBERID": "773860583",
+        "PLAN_NAME": "DTS",
+        "PLAN_TYPE": "STD",
+        "COVERAGE": "EE",
+        "CURRENT_PREMIUM": 39.89,
+        "ADJUSTMENT_PREMIUM": null,
+        "PRICING_ADJUSTMENT": null
+      }
+    }
+  ]
+}

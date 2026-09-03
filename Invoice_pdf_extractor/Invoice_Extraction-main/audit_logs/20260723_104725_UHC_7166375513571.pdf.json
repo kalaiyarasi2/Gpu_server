@@ -1,0 +1,11 @@
+{
+  "timestamp": "2026-07-23T10:47:25.392641Z",
+  "source_file": "C:\\Windows\\TEMP\\tmp1nyontwe\\UHC 7166375513571.pdf",
+  "passes": 2,
+  "final_sum": 27131.93,
+  "target_total": 10585.72,
+  "discrepancy": 16546.21,
+  "line_item_count": 60,
+  "validation_reason": "Financial mismatch \u2014 document total $10585.72, extracted sum $27131.93, gap $16546.21.",
+  "outcome": "gap_remaining"
+}

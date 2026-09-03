@@ -1,0 +1,118 @@
+{
+  "CARRIER_NAME": "APL",
+  "CARRIER_KEYWORDS": [
+    "IMPORTANT NOTE",
+    "SPECIFIED ARCHITECTURAL SYSTEMS",
+    "Invoice Date",
+    "MEDLINKSELECT",
+    "Dept.",
+    "TAMPA, FL 33619",
+    "VU TECHNOLOGIES CORP",
+    "P.O. Box",
+    "BRITTANY WAY"
+  ],
+  "EXAMPLES": [
+    {
+      "RAW_TEXT": "2543915 ANAND, ARJUN ***-**-7635 MEDLINKSELECT GROUP MED SUP $85.27 - $85.27",
+      "MAPPING": {
+        "LASTNAME": "ANAND",
+        "FIRSTNAME": "ARJUN",
+        "MIDDLENAME": null,
+        "SSN": "7635",
+        "POLICYID": null,
+        "MEMBERID": "2543915",
+        "PLAN_NAME": "MEDLINKSELECT GROUP MED SUP",
+        "PLAN_TYPE": null,
+        "COVERAGE": "EE",
+        "CURRENT_PREMIUM": 85.27,
+        "ADJUSTMENT_PREMIUM": null,
+        "PRICING_ADJUSTMENT": null
+      }
+    },
+    {
+      "RAW_TEXT": "2408923 BERG, CHANE ***-**-6006 MEDLINKSELECT GROUP MED SUP $260.28 - $260.28",
+      "MAPPING": {
+        "LASTNAME": "BERG",
+        "FIRSTNAME": "CHANE",
+        "MIDDLENAME": null,
+        "SSN": "6006",
+        "POLICYID": null,
+        "MEMBERID": "2408923",
+        "PLAN_NAME": "MEDLINKSELECT GROUP MED SUP",
+        "PLAN_TYPE": null,
+        "COVERAGE": "EE",
+        "CURRENT_PREMIUM": 260.28,
+        "ADJUSTMENT_PREMIUM": null,
+        "PRICING_ADJUSTMENT": null
+      }
+    },
+    {
+      "RAW_TEXT": "2455645 CLEMENS, JAMES ***-**- MEDLINK9 GROUP MED SUP $64.40 - $64.40",
+      "MAPPING": {
+        "LASTNAME": "CLEMENS",
+        "FIRSTNAME": "JAMES",
+        "MIDDLENAME": null,
+        "SSN": "6635",
+        "POLICYID": null,
+        "MEMBERID": "2455645",
+        "PLAN_NAME": "MEDLINK9 GROUP MED SUP",
+        "PLAN_TYPE": null,
+        "COVERAGE": "EE",
+        "CURRENT_PREMIUM": 64.4,
+        "ADJUSTMENT_PREMIUM": null,
+        "PRICING_ADJUSTMENT": null,
+        "BILLING_PERIOD": "202605",
+        "INV_DATE": "05/01/2026",
+        "INV_NUMBER": "6419316",
+        "AMOUNT_DUE": 1876.08
+      }
+    },
+    {
+      "RAW_TEXT": "2552662 COFFEY, CRISTEN ***-**- MEDLINK9 GROUP MED SUP $186.86 - $186.86",
+      "MAPPING": {
+        "LASTNAME": "COFFEY",
+        "FIRSTNAME": "CRISTEN",
+        "MIDDLENAME": null,
+        "SSN": "1919",
+        "POLICYID": null,
+        "MEMBERID": "2552662",
+        "PLAN_NAME": "MEDLINK9 GROUP MED SUP",
+        "PLAN_TYPE": null,
+        "COVERAGE": "EE",
+        "CURRENT_PREMIUM": 186.86,
+        "ADJUSTMENT_PREMIUM": null,
+        "PRICING_ADJUSTMENT": null,
+        "BILLING_PERIOD": "202605",
+        "INV_DATE": "05/01/2026",
+        "INV_NUMBER": "6419316",
+        "AMOUNT_DUE": 1876.08
+      }
+    },
+    {
+      "RAW_TEXT": "2455632 DAVILA,      ***-**- MEDLINK9 GROUP MED SUP $64.40 - $64.40",
+      "MAPPING": {
+        "LASTNAME": "DAVILA",
+        "FIRSTNAME": "JONATHAN",
+        "MIDDLENAME": null,
+        "SSN": "2251",
+        "POLICYID": null,
+        "MEMBERID": "2455632",
+        "PLAN_NAME": "MEDLINK9 GROUP MED SUP",
+        "PLAN_TYPE": null,
+        "COVERAGE": "EE",
+        "CURRENT_PREMIUM": 64.4,
+        "ADJUSTMENT_PREMIUM": null,
+        "PRICING_ADJUSTMENT": null,
+        "BILLING_PERIOD": "202605",
+        "INV_DATE": "05/01/2026",
+        "INV_NUMBER": "6419316",
+        "AMOUNT_DUE": 1876.08
+      }
+    }
+  ],
+  "DOCUMENT_FINGERPRINTS": [
+    "90f3573c2b46a9ab"
+  ],
+  "LAST_UPDATED": "2026-08-18T10:39:48.199375Z",
+  "EXAMPLE_COUNT": 5
+}

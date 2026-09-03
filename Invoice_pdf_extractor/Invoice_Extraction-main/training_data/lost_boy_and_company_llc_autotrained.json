@@ -1,0 +1,44 @@
+{
+  "CARRIER_KEYWORDS": [
+    "Billing ID",
+    "Premiums this period",
+    "Employer Self-Service Portal",
+    "RANDALL ALONSO"
+  ],
+  "EXAMPLES": [
+    {
+      "RAW_TEXT": "RANDALL ALONSO",
+      "MAPPING": {
+        "LASTNAME": "ALONSO",
+        "FIRSTNAME": "RANDALL",
+        "MIDDLENAME": null,
+        "SSN": null,
+        "POLICYID": null,
+        "MEMBERID": "123774619",
+        "PLAN_NAME": "DPO",
+        "PLAN_TYPE": "DENTAL",
+        "COVERAGE": "EE",
+        "CURRENT_PREMIUM": 34.26,
+        "ADJUSTMENT_PREMIUM": null,
+        "PRICING_ADJUSTMENT": null
+      }
+    },
+    {
+      "RAW_TEXT": "129234244",
+      "MAPPING": {
+        "LASTNAME": "BANEY",
+        "FIRSTNAME": "KYLE",
+        "MIDDLENAME": null,
+        "SSN": null,
+        "POLICYID": null,
+        "MEMBERID": "129234244",
+        "PLAN_NAME": "DHM",
+        "PLAN_TYPE": "DENTAL",
+        "COVERAGE": "EE",
+        "CURRENT_PREMIUM": 15.05,
+        "ADJUSTMENT_PREMIUM": null,
+        "PRICING_ADJUSTMENT": null
+      }
+    }
+  ]
+}

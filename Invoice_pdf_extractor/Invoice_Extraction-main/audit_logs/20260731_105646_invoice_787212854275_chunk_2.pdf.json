@@ -1,0 +1,11 @@
+{
+  "timestamp": "2026-07-31T10:56:46.741259Z",
+  "source_file": "C:\\Users\\Administrator\\pdf_extractor\\Unified_PDF_Platform\\unified_outputs\\temp_splits\\invoice_787212854275_chunk_2.pdf",
+  "passes": 2,
+  "final_sum": 29678.58,
+  "target_total": 29766.08,
+  "discrepancy": 87.5,
+  "line_item_count": 6,
+  "validation_reason": "Financial mismatch \u2014 document total $29766.08, extracted sum $29678.58, gap $87.50.",
+  "outcome": "gap_remaining"
+}

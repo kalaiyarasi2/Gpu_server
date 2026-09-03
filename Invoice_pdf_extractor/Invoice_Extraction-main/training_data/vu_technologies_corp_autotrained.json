@@ -1,0 +1,44 @@
+{
+  "CARRIER_KEYWORDS": [
+    "DPS$$$PKG",
+    "UHS Billing",
+    "Account Adjustments",
+    "Minimum Amount Due"
+  ],
+  "EXAMPLES": [
+    {
+      "RAW_TEXT": "1326188 Adames, Kalhil E6000i80LX21B - *****478800 ES A $597.17 $947.21",
+      "MAPPING": {
+        "LASTNAME": "ADAMES",
+        "FIRSTNAME": "KALHIL",
+        "MIDDLENAME": null,
+        "SSN": null,
+        "POLICYID": "1326188",
+        "MEMBERID": "478800",
+        "PLAN_NAME": "E6000i80LX21B -",
+        "PLAN_TYPE": "MEDICAL",
+        "COVERAGE": "ES",
+        "CURRENT_PREMIUM": 597.17,
+        "ADJUSTMENT_PREMIUM": null,
+        "PRICING_ADJUSTMENT": null
+      }
+    },
+    {
+      "RAW_TEXT": "1326188 Adames, Kalhil E6000i80LX21B - *****478800 ES A $597.17 $947.21",
+      "MAPPING": {
+        "LASTNAME": "ADAMES",
+        "FIRSTNAME": "KALHIL",
+        "MIDDLENAME": null,
+        "SSN": null,
+        "POLICYID": "1326188",
+        "MEMBERID": "478800",
+        "PLAN_NAME": "E6000i80LX21B - Max",
+        "PLAN_TYPE": "MEDICAL",
+        "COVERAGE": "ES",
+        "CURRENT_PREMIUM": 296.13,
+        "ADJUSTMENT_PREMIUM": null,
+        "PRICING_ADJUSTMENT": null
+      }
+    }
+  ]
+}

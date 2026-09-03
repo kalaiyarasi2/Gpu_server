@@ -1,0 +1,44 @@
+{
+  "CARRIER_KEYWORDS": [
+    "PBS ID",
+    "Family Unlimited",
+    "Single Pet",
+    "Group ID"
+  ],
+  "EXAMPLES": [
+    {
+      "RAW_TEXT": "ADKINS JACOB 5080940 11/1/2024 Total Pet - Family Unlimited $18.50",
+      "MAPPING": {
+        "LASTNAME": "ADKINS",
+        "FIRSTNAME": "JACOB",
+        "MIDDLENAME": null,
+        "SSN": null,
+        "POLICYID": null,
+        "MEMBERID": "5080940",
+        "PLAN_NAME": "Total Pet - Family Unlimited",
+        "PLAN_TYPE": null,
+        "COVERAGE": "FAM",
+        "CURRENT_PREMIUM": 18.5,
+        "ADJUSTMENT_PREMIUM": null,
+        "PRICING_ADJUSTMENT": null
+      }
+    },
+    {
+      "RAW_TEXT": "ALONSO RANDALL 5064871 10/1/2024 Total Pet - Single Pet $11.75",
+      "MAPPING": {
+        "LASTNAME": "ALONSO",
+        "FIRSTNAME": "RANDALL",
+        "MIDDLENAME": null,
+        "SSN": null,
+        "POLICYID": null,
+        "MEMBERID": "5064871",
+        "PLAN_NAME": "Total Pet - Single Pet",
+        "PLAN_TYPE": null,
+        "COVERAGE": "EE",
+        "CURRENT_PREMIUM": 11.75,
+        "ADJUSTMENT_PREMIUM": null,
+        "PRICING_ADJUSTMENT": null
+      }
+    }
+  ]
+}

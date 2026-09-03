@@ -1,0 +1,43 @@
+{
+  "CARRIER_KEYWORDS": [
+    "Premium Period",
+    "Amount Billed",
+    "Dept."
+  ],
+  "EXAMPLES": [
+    {
+      "RAW_TEXT": "2552658 ADAMES, KALHIL ***-**-6349 MEDLINK9 GROUP MED SUP $128.93 - $128.93",
+      "MAPPING": {
+        "LASTNAME": "ADAMES",
+        "FIRSTNAME": "KALHIL",
+        "MIDDLENAME": null,
+        "SSN": "6349",
+        "POLICYID": null,
+        "MEMBERID": "2552658",
+        "PLAN_NAME": "MEDLINK9 GROUP MED SUP",
+        "PLAN_TYPE": null,
+        "COVERAGE": "EE",
+        "CURRENT_PREMIUM": 128.93,
+        "ADJUSTMENT_PREMIUM": null,
+        "PRICING_ADJUSTMENT": null
+      }
+    },
+    {
+      "RAW_TEXT": "2455645 CLEMENS, JAMES ***-**-6635 MEDLINK9 GROUP MED SUP $61.34 - $61.34",
+      "MAPPING": {
+        "LASTNAME": "CLEMENS",
+        "FIRSTNAME": "JAMES",
+        "MIDDLENAME": null,
+        "SSN": "6635",
+        "POLICYID": null,
+        "MEMBERID": "2455645",
+        "PLAN_NAME": "MEDLINK9 GROUP MED SUP",
+        "PLAN_TYPE": null,
+        "COVERAGE": "EE",
+        "CURRENT_PREMIUM": 61.34,
+        "ADJUSTMENT_PREMIUM": null,
+        "PRICING_ADJUSTMENT": null
+      }
+    }
+  ]
+}

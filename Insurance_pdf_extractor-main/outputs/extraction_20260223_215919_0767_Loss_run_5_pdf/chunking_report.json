@@ -1,0 +1,70 @@
+{
+  "total_original_chars": 81785,
+  "num_chunks": 10,
+  "strategy": "policy-based",
+  "num_pages": 9,
+  "chunks": [
+    {
+      "policy": "Initial Section",
+      "length": 761,
+      "preview_start": "================================================================================\nPDF DOCUMENT EXTRAC",
+      "preview_end": "                                       \n                                                  Claim Grid"
+    },
+    {
+      "policy": "W610628 - 2025",
+      "length": 8009,
+      "preview_start": "Claims where Date Of Loss between 1/1/2025 and 12/31/2025 11:59 PM and Claim Status is Closed or Ope",
+      "preview_end": "                                       \n                                                  Claim Grid"
+    },
+    {
+      "policy": "W610614 - 2025 (Part 3)",
+      "length": 9396,
+      "preview_start": "Claims where Date Of Loss between 1/1/2025 and 12/31/2025 11:59 PM and Claim Status is Closed or Ope",
+      "preview_end": "                   \n--------------------------------------------------------------------------------"
+    },
+    {
+      "policy": "W610614 - 2025 (Part 4)",
+      "length": 11392,
+      "preview_start": "Page 1 of 3\n\n\n================================================================================\nPAGE ",
+      "preview_end": "                   \n--------------------------------------------------------------------------------"
+    },
+    {
+      "policy": "W610614 - 2025 (Part 5)",
+      "length": 2904,
+      "preview_start": "Page 2 of 3\n\n\n================================================================================\nPAGE ",
+      "preview_end": "                   \n--------------------------------------------------------------------------------"
+    },
+    {
+      "policy": "W610614 - 2025 (Part 6)",
+      "length": 574,
+      "preview_start": "Page 3 of 3\n\n\n================================================================================\nPAGE ",
+      "preview_end": "                                       \n                                                  Claim Grid"
+    },
+    {
+      "policy": "W610628 - 2024",
+      "length": 8175,
+      "preview_start": "Claims where Date Of Loss between 1/1/2024 and 12/31/2024 11:59 PM and Claim Status is Closed or Ope",
+      "preview_end": "                                       \n                                                  Claim Grid"
+    },
+    {
+      "policy": "W610614 - 2024",
+      "length": 19612,
+      "preview_start": "Claims where Date Of Loss between 1/1/2024 and 12/31/2024 11:59 PM and Claim Status is Closed or Ope",
+      "preview_end": "                                       \n                                                  Claim Grid"
+    },
+    {
+      "policy": "W610614 - 2023",
+      "length": 8823,
+      "preview_start": "Claims where Date Of Loss between 1/1/2023 and 12/31/2023 11:59 PM and Claim Status is Closed or Ope",
+      "preview_end": "                                       \n                                                  Claim Grid"
+    },
+    {
+      "policy": "W610628 - 2023",
+      "length": 7148,
+      "preview_start": "Claims where Date Of Loss between 2/1/2023 and 12/31/2023 11:59 PM and Claim Status is Closed or Ope",
+      "preview_end": "                                                                                         Page 1 of 1"
+    }
+  ],
+  "total_chunked_chars": 76794,
+  "integrity_check": "Sum of chunk lengths is close to original"
+}

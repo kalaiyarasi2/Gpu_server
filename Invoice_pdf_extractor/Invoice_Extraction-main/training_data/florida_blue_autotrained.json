@@ -1,0 +1,44 @@
+{
+  "CARRIER_KEYWORDS": [
+    "Org Id",
+    "Group",
+    "Division",
+    "Invoice #"
+  ],
+  "EXAMPLES": [
+    {
+      "RAW_TEXT": "ANDERSON TODD *****7961 H36284483 SINGLE BEAC BLUECARE $560.92",
+      "MAPPING": {
+        "LASTNAME": "ANDERSON",
+        "FIRSTNAME": "TODD",
+        "MIDDLENAME": null,
+        "SSN": "7961",
+        "POLICYID": null,
+        "MEMBERID": "H36284483",
+        "PLAN_NAME": "BLUECARE NFQ LG GRP PLAN 54-RC",
+        "PLAN_TYPE": "MEDICAL",
+        "COVERAGE": "EE",
+        "CURRENT_PREMIUM": 560.92,
+        "ADJUSTMENT_PREMIUM": null,
+        "PRICING_ADJUSTMENT": null
+      }
+    },
+    {
+      "RAW_TEXT": "ANTENOR CEROLNY *****9087 H36284852 SINGLE MARV BLUECARE $560.92",
+      "MAPPING": {
+        "LASTNAME": "ANTENOR",
+        "FIRSTNAME": "CEROLNY",
+        "MIDDLENAME": null,
+        "SSN": "9087",
+        "POLICYID": null,
+        "MEMBERID": "H36284852",
+        "PLAN_NAME": "BLUECARE NFQ LG GRP PLAN 54-RC",
+        "PLAN_TYPE": "MEDICAL",
+        "COVERAGE": "EE",
+        "CURRENT_PREMIUM": 560.92,
+        "ADJUSTMENT_PREMIUM": null,
+        "PRICING_ADJUSTMENT": null
+      }
+    }
+  ]
+}

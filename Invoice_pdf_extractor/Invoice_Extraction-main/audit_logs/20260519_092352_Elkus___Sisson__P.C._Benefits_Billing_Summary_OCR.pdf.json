@@ -1,0 +1,11 @@
+{
+  "timestamp": "2026-05-19T09:23:52.916920Z",
+  "source_file": "C:\\Windows\\TEMP\\tmp8cjmugsf\\Elkus & Sisson, P.C. Benefits Billing Summary OCR.pdf",
+  "passes": 1,
+  "final_sum": 11639.18,
+  "target_total": 0.0,
+  "discrepancy": 11639.18,
+  "line_item_count": 31,
+  "validation_reason": "passed",
+  "outcome": "gap_remaining"
+}

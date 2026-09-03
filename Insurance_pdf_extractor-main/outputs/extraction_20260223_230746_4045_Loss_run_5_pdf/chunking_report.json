@@ -1,0 +1,76 @@
+{
+  "total_original_chars": 82748,
+  "num_chunks": 11,
+  "strategy": "policy-based",
+  "num_pages": 9,
+  "chunks": [
+    {
+      "policy": "Initial Section",
+      "length": 974,
+      "preview_start": "================================================================================\nPDF DOCUMENT EXTRAC",
+      "preview_end": "2/31/2025 11:59 PM and Claim Status is Closed or Open As\n                          Of 10/22/2025 and"
+    },
+    {
+      "policy": "W610628 - 2025",
+      "length": 8176,
+      "preview_start": "Location is one of SKMGT LE BLEU CHATEAU, INC. - W610628         \n                                  ",
+      "preview_end": "nd 12/31/2025 11:59 PM and Claim Status is Closed or Open As\n                      Of 11/10/2025 and"
+    },
+    {
+      "policy": "W610614 - 2025 (Part 3)",
+      "length": 9757,
+      "preview_start": "Location is SKMGT SAVANT SENIOR LIVING MANAGEMENT LLC - W610614      \n                              ",
+      "preview_end": "d Claims Administration Solutions  \n                                                  (800) 252-5059"
+    },
+    {
+      "policy": "W610614 - 2025 (Part 4)",
+      "length": 11898,
+      "preview_start": "Page 1 of 3\n\n\n================================================================================\nPAGE ",
+      "preview_end": "d Claims Administration Solutions  \n                                                  (800) 252-5059"
+    },
+    {
+      "policy": "W610614 - 2025 (Part 5)",
+      "length": 6380,
+      "preview_start": "Page 2 of 3\n\n\n================================================================================\nPAGE ",
+      "preview_end": "d Claims Administration Solutions  \n                                                  (800) 252-5059"
+    },
+    {
+      "policy": "W610614 - 2025 (Part 6)",
+      "length": 8203,
+      "preview_start": "Page 3 of 3\n\n\n================================================================================\nPAGE ",
+      "preview_end": "d Claims Administration Solutions  \n                                                  (800) 252-5059"
+    },
+    {
+      "policy": "W610614 - 2025 (Part 7)",
+      "length": 10403,
+      "preview_start": "Page 1 of 1\n\n\n================================================================================\nPAGE ",
+      "preview_end": "d Claims Administration Solutions  \n                                                  (800) 252-5059"
+    },
+    {
+      "policy": "W610614 - 2025 (Part 8)",
+      "length": 9200,
+      "preview_start": "Page 1 of 2\n\n\n================================================================================\nPAGE ",
+      "preview_end": "d Claims Administration Solutions  \n                                                  (800) 252-5059"
+    },
+    {
+      "policy": "W610614 - 2025 (Part 9)",
+      "length": 8851,
+      "preview_start": "Page 2 of 2\n\n\n================================================================================\nPAGE ",
+      "preview_end": "d Claims Administration Solutions  \n                                                  (800) 252-5059"
+    },
+    {
+      "policy": "W610614 - 2025 (Part 10)",
+      "length": 7739,
+      "preview_start": "Page 1 of 1\n\n\n================================================================================\nPAGE ",
+      "preview_end": "                                   \n                                                  (800) 252-5059"
+    },
+    {
+      "policy": "W610614 - 2025 (Part 11)",
+      "length": 11,
+      "preview_start": "Page 1 of 1",
+      "preview_end": "Page 1 of 1"
+    }
+  ],
+  "total_chunked_chars": 81592,
+  "integrity_check": "Sum of chunk lengths is close to original"
+}

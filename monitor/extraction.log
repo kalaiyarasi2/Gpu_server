@@ -1,0 +1,28 @@
+[OK] StructuredExcelExtractor module loaded successfully
+[OK] Poppler PATH configured: C:\Users\INT002\Downloads\Release-25.12.0-0\poppler-25.12.0\Library\bin
+Warning: Could not import Insurance extractor module: No module named 'Insurance_pdf_extractor_main'
+   Will fall back to subprocess method if needed.
+
+[STEP] Initializing Extractors...
+[Extractor] Loaded ChunkedInsuranceExtractor from C:\Users\INT002\updated_Extractor\pdf_extractor\Insurance_pdf_extractor-main\backend
+✓ GPT-4 Vision API initialized
+[OK] ChunkedInsuranceExtractor initialized
+[Extractor] Loaded ChunkedInsuranceExtractor from C:\Users\INT002\updated_Extractor\pdf_extractor\work_compenstaion\backend
+✓ GPT-4 Vision API initialized
+[OK] Work Compensation Extractor initialized
+[OK] Mounted frontend assets from C:\Users\INT002\updated_Extractor\pdf_extractor\Unified_PDF_Platform\frontend\dist\assets
+[OK] Mounted frontend assets from C:\Users\INT002\updated_Extractor\pdf_extractor\Unified_PDF_Platform\frontend\dist\assets
+[OK] StructuredExcelExtractor module loaded successfully
+[OK] Poppler PATH configured: C:\Users\INT002\Downloads\Release-25.12.0-0\poppler-25.12.0\Library\bin
+Warning: Could not import Insurance extractor module: No module named 'Insurance_pdf_extractor_main'
+   Will fall back to subprocess method if needed.
+
+[STEP] Initializing Extractors...
+[Extractor] Loaded ChunkedInsuranceExtractor from C:\Users\INT002\updated_Extractor\pdf_extractor\Insurance_pdf_extractor-main\backend
+✓ GPT-4 Vision API initialized
+[OK] ChunkedInsuranceExtractor initialized
+[Extractor] Loaded ChunkedInsuranceExtractor from C:\Users\INT002\updated_Extractor\pdf_extractor\work_compenstaion\backend
+✓ GPT-4 Vision API initialized
+[OK] Work Compensation Extractor initialized
+[OK] Mounted frontend assets from C:\Users\INT002\updated_Extractor\pdf_extractor\Unified_PDF_Platform\frontend\dist\assets
+[OK] Mounted frontend assets from C:\Users\INT002\updated_Extractor\pdf_extractor\Unified_PDF_Platform\frontend\dist\assets

@@ -1,0 +1,11 @@
+{
+  "timestamp": "2026-07-09T08:56:46.800135Z",
+  "source_file": "C:\\Windows\\TEMP\\tmp3qbm5aca\\Columbine Label Renewal 2025.pdf",
+  "passes": 1,
+  "final_sum": 0.0,
+  "target_total": 0.0,
+  "discrepancy": 0.0,
+  "line_item_count": 4,
+  "validation_reason": "Missing Plan Types detected on 4/4 rows (100.0%).",
+  "outcome": "reconciled"
+}
