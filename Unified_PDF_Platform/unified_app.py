@@ -179,10 +179,12 @@ else:
 # _perform_extraction is now imported from shared_configs
 
 @app.post("/api/extract", include_in_schema=False)
+@app.post("/extract", include_in_schema=False)
 async def extract_document(request: Request, file: UploadFile = File(...)):
     return await _perform_extraction(file, request)
 
 @app.get("/api/health")
+@app.get("/health")
 async def health_check():
     """Quick connectivity test for external developers.
     Returns server status and the base URL they connected to.

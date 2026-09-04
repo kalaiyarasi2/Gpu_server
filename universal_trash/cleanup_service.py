@@ -95,6 +95,8 @@ def start_scheduled_cleanup():
     logger.info(f"Scheduled cleanup service started. Interval: {CLEANUP_INTERVAL}s, Retention: {TRASH_RETENTION_DAYS} days.")
     return thread
 
+start_cleanup_service = start_scheduled_cleanup
+
 if __name__ == "__main__":
     # If run directly, just perform a one-off cleanup
     perform_cleanup()

@@ -251,7 +251,8 @@ def process_with_structural_layer(pdf_path, output_excel=None):
     is_legalshield = "LEGALSHIELD" in pdf_path.upper() or "LEGAL SHIELD" in pdf_path.upper()
     pdf_type = detect_pdf_type(pdf_path)
     
-    extracted_text_dir = Path("c:/Users/INT002/pdf_extractor/Unified_PDF_Platform/extracted_text")
+    gpu_server_dir = Path(__file__).resolve().parents[2]
+    extracted_text_dir = gpu_server_dir / "Unified_PDF_Platform" / "extracted_text"
     extracted_text_dir.mkdir(parents=True, exist_ok=True)
     initial_text_path = extracted_text_dir / f"{Path(pdf_path).stem}_extracted.txt"
 

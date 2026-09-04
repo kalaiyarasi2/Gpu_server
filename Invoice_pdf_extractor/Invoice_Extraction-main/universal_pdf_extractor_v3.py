@@ -3407,8 +3407,11 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
             "passes": passes
         }
 
+    if not working_chunks:
+        return {"INVOICE_DETAILS": {}, "LINE_ITEMS": []}
+
     # Execute threads
-    max_workers = min(len(working_chunks), 10) 
+    max_workers = max(1, min(len(working_chunks), 10)) 
     print(f"  [V3][PARALLEL] Dispatching {len(working_chunks)} chunks across {max_workers} threads...")
     
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
