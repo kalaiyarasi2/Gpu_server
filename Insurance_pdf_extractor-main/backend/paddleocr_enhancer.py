@@ -14,9 +14,18 @@ import sys
 import json
 import tempfile
 import subprocess
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Tuple, List, Dict, Optional
 import re as _re
+
+# Dynamic worker count — reads from gpu_config (Tesla T4 → 4 workers automatically)
+try:
+    from gpu_config import gpu_concurrency_config as _gpu_cfg
+    _MAX_PARALLEL_WORKERS = _gpu_cfg["rostaing_ocr"]["max_workers"]
+except Exception:
+    _MAX_PARALLEL_WORKERS = 2  # safe fallback if gpu_config unavailable
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -175,29 +184,55 @@ def extract_with_paddleocr(pdf_path: str, use_gpu: bool = True, enable_table: bo
             )
 
             total_pages = len(image_paths)
-            print(f"   🔍 Processing {total_pages} pages (one subprocess per page)...")
+            print(f"   🔍 Processing {total_pages} pages — ⚡ PARALLEL mode ({_MAX_PARALLEL_WORKERS} workers)...")
 
-            for page_num, img_path in enumerate(image_paths, start=1):
-                print(f"      Page {page_num}/{total_pages}...", end=" ", flush=True)
+            # Pre-allocate results list to preserve page order regardless of completion order
+            page_results  = ["" ] * total_pages
+            page_metadata = [{}  ] * total_pages
 
-                # Run OCR in isolated subprocess — crash-safe
-                page_text = _ocr_page_in_subprocess(
-                    img_path=str(img_path),
-                    use_gpu=use_gpu,
-                    enable_table=enable_table,
-                    timeout=300
-                )
+            # Semaphore ensures at most _MAX_PARALLEL_WORKERS subprocesses run at once
+            # even if the executor has more threads queued.
+            _gpu_sem = threading.Semaphore(_MAX_PARALLEL_WORKERS)
 
-                extracted_pages.append(page_text)
-                metadata.append({
-                    "page_number": page_num,
-                    "text": page_text,
-                    "is_scanned": True,
-                    "extraction_method": "paddleocr-structure" if enable_table else "paddleocr-basic",
-                    "confidence": 0.92
-                })
+            def _ocr_page_task(idx: int, img_path: str):
+                """Worker function: OCR one page in an isolated subprocess (crash-safe)."""
+                page_num = idx + 1
+                with _gpu_sem:           # throttle concurrent GPU subprocesses
+                    print(f"      Page {page_num}/{total_pages}...", end=" ", flush=True)
+                    text = _ocr_page_in_subprocess(
+                        img_path=img_path,
+                        use_gpu=use_gpu,
+                        enable_table=enable_table,
+                        timeout=300
+                    )
+                    print(f"✓ ({len(text)} chars)")
+                    return idx, text
 
-                print(f"✓ ({len(page_text)} chars)")
+            # Submit all pages at once; executor caps concurrency to _MAX_PARALLEL_WORKERS
+            with ThreadPoolExecutor(max_workers=_MAX_PARALLEL_WORKERS) as executor:
+                futures = {
+                    executor.submit(_ocr_page_task, i, str(path)): i
+                    for i, path in enumerate(image_paths)
+                }
+                for future in as_completed(futures):
+                    try:
+                        idx, page_text = future.result()
+                    except Exception as exc:
+                        idx = futures[future]
+                        print(f"      ⚠️  Page {idx+1} future raised: {exc}")
+                        page_text = ""
+
+                    page_results[idx]  = page_text
+                    page_metadata[idx] = {
+                        "page_number": idx + 1,
+                        "text": page_text,
+                        "is_scanned": True,
+                        "extraction_method": "paddleocr-structure" if enable_table else "paddleocr-basic",
+                        "confidence": 0.92
+                    }
+
+            extracted_pages = page_results
+            metadata        = page_metadata
 
             # Temp dir auto-cleans when the `with` block exits
 
