@@ -22,6 +22,10 @@ from .monitor_db import monitor_db
 from .service import request_monitor
 from .middleware import add_monitoring_to_app, RequestMonitoringMiddleware
 from .endpoints import router as monitor_router
+from .patch_openai import patch_openai_for_monitoring
+
+# Automatically activate OpenAI tracking
+patch_openai_for_monitoring()
 
 __version__ = "1.0.0"
 __author__ = "PDF Processing Monitor Team"
@@ -32,5 +36,6 @@ __all__ = [
     'request_monitor', 
     'add_monitoring_to_app',
     'RequestMonitoringMiddleware',
-    'monitor_router'
+    'monitor_router',
+    'patch_openai_for_monitoring'
 ]

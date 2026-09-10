@@ -109,8 +109,10 @@ class RequestMonitoringMiddleware(BaseHTTPMiddleware):
             
             logger.info(f"Monitoring started for request {request_id}: {file_info['filename']}")
             
-            # Add request_id to request state for use in handlers
+            # Add request_id to request state and environment for use in handlers & LLM interceptor
             request.state.monitoring_request_id = request_id
+            import os
+            os.environ["AI_MONITOR_REQUEST_ID"] = str(request_id)
             
             # Proceed with the request
             response = await call_next(request)

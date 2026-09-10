@@ -1333,7 +1333,16 @@ class UnifiedRouter:
         file_path = Path(file_path)
         filename = file_path.name
         file_ext = file_path.suffix.lower()
-        print(f"[FILE] Processing: {filename} ({file_ext})")
+        page_info = ""
+        if file_ext == ".pdf":
+            try:
+                import fitz
+                doc = fitz.open(str(file_path))
+                page_info = f" | Total Pages: {len(doc)}"
+                doc.close()
+            except Exception:
+                pass
+        print(f"[FILE] Processing: {filename} ({file_ext}){page_info}")
 
         # ── STEP 0: Extract raw text from any format FIRST ────────────────────
         text = ""
@@ -2932,16 +2941,43 @@ Return ONLY the company name or UNKNOWN:"""
         if file_ext not in [".pdf", ".xlsx", ".xls", ".csv"]:
             return {"error": f"Unsupported file format: {file_ext}"}
 
-        # Count pages for monitoring
+        # Count pages for monitoring & validation
         num_pages = 0
         if file_ext == ".pdf":
+            # Robust extraction: PyMuPDF -> pypdf -> raw stream regex
             try:
                 import fitz
                 doc = fitz.open(str(file_path))
-                num_pages = len(doc)
-                doc.close()
+                try:
+                    num_pages = len(doc)
+                finally:
+                    doc.close()
             except Exception:
-                pass
+                try:
+                    import pypdf
+                    reader = pypdf.PdfReader(str(file_path), strict=False)
+                    num_pages = len(reader.pages)
+                except Exception:
+                    try:
+                        with open(str(file_path), "rb") as f:
+                            content = f.read()
+                            num_pages = len(re.findall(rb'/Type\s*/Page\b', content))
+                    except Exception:
+                        num_pages = 0
+
+            print(f"[INFO] Total Pages: {num_pages}")
+
+            # Enforce page limit before classification & extraction
+            if num_pages > 100:
+                print("\n" + "="*70)
+                print(f"[ERR] PAGE LIMIT EXCEEDED: Document has {num_pages} pages (Maximum allowed: 100)")
+                print("="*70 + "\n")
+                return {
+                    "error": f"Page limit exceeded: Document contains {num_pages} pages. The maximum allowed limit is 100 pages.",
+                    "pages": num_pages
+                }
+            elif num_pages > 0:
+                print(f"[INFO] Page limit check passed: {num_pages} pages (Limit: <= 100)")
 
         import tempfile
         # Use a context manager to ensure the temp directory is cleaned up at the end

@@ -47,6 +47,40 @@ def _load_cache() -> Dict[str, str]:
 # Auto-load cache on module import
 file_path_cache = _load_cache()
 
+def get_pdf_page_count(pdf_path) -> int:
+    """Robust page count extraction supporting normal, corrupted, or truncated PDFs."""
+    import re
+    # Method 1: PyMuPDF (fitz) with safe cleanup
+    try:
+        import fitz
+        doc = fitz.open(str(pdf_path))
+        try:
+            return len(doc)
+        finally:
+            doc.close()
+    except Exception:
+        pass
+
+    # Method 2: pypdf (handles non-standard xrefs)
+    try:
+        import pypdf
+        reader = pypdf.PdfReader(str(pdf_path), strict=False)
+        return len(reader.pages)
+    except Exception:
+        pass
+
+    # Method 3: Raw PDF page object regex scanning (handles damaged/truncated PDFs)
+    try:
+        with open(str(pdf_path), "rb") as f:
+            content = f.read()
+            count = len(re.findall(rb'/Type\s*/Page\b', content))
+            if count > 0:
+                return count
+    except Exception:
+        pass
+
+    return 0
+
 async def _perform_extraction(file: UploadFile, request: Request):
     import traceback
     import re
@@ -93,6 +127,21 @@ async def _perform_extraction(file: UploadFile, request: Request):
             shutil.copyfileobj(file.file, buffer)
         print(f"[Unified][API] Saved to: {file_path}")
 
+        # Early PDF Page Count Check & Validation
+        if file_ext == ".pdf":
+            page_count = get_pdf_page_count(file_path)
+            print(f"[Unified][API] Total Pages: {page_count}")
+            if page_count > 100:
+                err_msg = f"Page limit exceeded: Document contains {page_count} pages. The maximum allowed limit is 100 pages."
+                print(f"[Unified][API][ERR] {err_msg}")
+                try:
+                    if request_id:
+                        from monitor.service import request_monitor
+                        request_monitor.update_request_status(request_id=request_id, status="failed", error_details=err_msg)
+                except Exception:
+                    pass
+                return {"error": err_msg, "pages": page_count}
+
         # --- Security Gateway ---
         import sys
         parent_dir = str(BASE_DIR.parent)
@@ -129,6 +178,12 @@ async def _perform_extraction(file: UploadFile, request: Request):
 
         if "error" in result:
             print(f"[Unified][WARN] Extraction returned error: {result['error']}")
+            try:
+                if request_id:
+                    from monitor.service import request_monitor
+                    request_monitor.update_request_status(request_id=request_id, status="failed", error_details=result["error"])
+            except Exception:
+                pass
             return {"error": result["error"]}
         
         # Extract filenames and full paths

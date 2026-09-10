@@ -190,57 +190,56 @@ class RequestMonitor:
         return False
     
     def record_ai_usage(self, request_id: Optional[str], prompt_tokens: int, completion_tokens: int, 
-                       processing_time: float, model: str, pages: int = 1) -> bool:
+                        processing_time: float, model: str, pages: int = 1) -> bool:
         """Record AI usage for a specific request using token_monitor metrics.
         
-        If request_id is None, it will attempt to read from AI_MONITOR_REQUEST_ID env var.
+        Thread-safe method. If request_id is None, it reads from AI_MONITOR_REQUEST_ID env var.
         """
         import os
         if not request_id:
             request_id = os.environ.get("AI_MONITOR_REQUEST_ID")
             
         if not request_id:
-            # logger.warn("AI call recorded without request_id - metrics will be lost for this call.")
             return False
             
-        try:
-            # Calculate metrics using the ai_metrics module
-            metrics = compute_metrics(
-                prompt_tokens=prompt_tokens,
-                completion_tokens=completion_tokens,
-                processing_time_sec=processing_time,
-                pages=pages,
-                model=model
-            )
-            
-            # Store in database metadata
-            # We use a list because a single request might have multiple AI calls (e.g. classification + extraction)
-            ai_data = metrics.to_dict()
-            ai_data['recorded_at'] = datetime.now(timezone.utc).isoformat()
-            
-            # Get existing metadata to append to 'ai_calls' list
-            req_data = monitor_db.get_request(request_id)
-            metadata = (req_data.get('metadata') or {}) if req_data else {}
-            
-            ai_calls = metadata.get('ai_calls', [])
-            ai_calls.append(ai_data)
-            
-            # Update overall request AI stats for easier dashboard access
-            total_prompt = sum(call.get('prompt_tokens', 0) for call in ai_calls)
-            total_completion = sum(call.get('completion_tokens', 0) for call in ai_calls)
-            total_cost = sum(call.get('total_cost', 0) for call in ai_calls)
-            
-            metadata['ai_calls'] = ai_calls
-            metadata['total_ai_tokens'] = total_prompt + total_completion
-            metadata['total_ai_cost'] = total_cost
-            
-            success = monitor_db.add_metadata(request_id, metadata)
-            if success:
-                logger.info(f"Recorded AI call for {request_id}: {model}, {total_prompt+total_completion} tokens, ${total_cost:.4f} total cost")
-            return success
-        except Exception as e:
-            logger.error(f"Failed to record AI usage for {request_id}: {e}")
-            return False
+        with self.lock:
+            try:
+                # Calculate metrics using the ai_metrics module
+                metrics = compute_metrics(
+                    prompt_tokens=prompt_tokens,
+                    completion_tokens=completion_tokens,
+                    processing_time_sec=processing_time,
+                    pages=pages,
+                    model=model
+                )
+                
+                # Store in database metadata
+                ai_data = metrics.to_dict()
+                ai_data['recorded_at'] = datetime.now(timezone.utc).isoformat()
+                
+                # Get existing metadata to append to 'ai_calls' list
+                req_data = monitor_db.get_request(request_id)
+                metadata = (req_data.get('metadata') or {}) if req_data else {}
+                
+                ai_calls = metadata.get('ai_calls', [])
+                ai_calls.append(ai_data)
+                
+                # Update overall request AI stats
+                total_prompt = sum(call.get('prompt_tokens', 0) for call in ai_calls)
+                total_completion = sum(call.get('completion_tokens', 0) for call in ai_calls)
+                total_cost = sum(call.get('total_cost', 0) for call in ai_calls)
+                
+                metadata['ai_calls'] = ai_calls
+                metadata['total_ai_tokens'] = total_prompt + total_completion
+                metadata['total_ai_cost'] = total_cost
+                
+                success = monitor_db.add_metadata(request_id, metadata)
+                if success:
+                    logger.info(f"Recorded AI call #{len(ai_calls)} for {request_id}: {model}, {prompt_tokens+completion_tokens} tokens (${metrics.total_cost:.5f}) | Total: {total_prompt+total_completion} tokens, ${total_cost:.4f}")
+                return success
+            except Exception as e:
+                logger.error(f"Failed to record AI usage for {request_id}: {e}")
+                return False
     
     def get_request_status(self, request_id: str) -> Optional[Dict]:
         """Get current status of a request."""
