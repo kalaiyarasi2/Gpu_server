@@ -748,12 +748,13 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
         # ── RC3: Final global recovery for boundary-straddle casualties ──────
         if global_master_list and all_text:
             extracted_ids = {str(c.get("claim_number", "")).strip() for c in merged.get("claims", [])}
-            # Normalise leading zeros for comparison
-            extracted_ids_norm = {cid.lstrip("0") for cid in extracted_ids}
+            # Normalise carrier prefixes and leading zeros for comparison
+            # so "BNET WC 000000059413" matches "000000059413".
+            extracted_ids_norm = {self._normalize_claim_id(cid) for cid in extracted_ids}
             still_missing = [
                 m for m in global_master_list
                 if str(m).strip() not in extracted_ids
-                and str(m).strip().lstrip("0") not in extracted_ids_norm
+                and self._normalize_claim_id(m) not in extracted_ids_norm
             ]
             
             if still_missing:
