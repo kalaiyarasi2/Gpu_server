@@ -38,7 +38,20 @@ if parent_dir not in sys.path:
 if current_dir not in sys.path:
     sys.path.insert(0, current_dir)
 # Import summary router
-from summary_api import router as summary_router
+try:
+    from summary_api import router as summary_router
+except ImportError:
+    # The base app mounts the "summary & chatbot" sub-app under the same module
+    # name "summary_api", which can shadow this local module after a reload.
+    # Fall back to loading the local file by path.
+    import importlib.util as _summary_ilu
+    _summary_path = os.path.join(current_dir, "summary_api.py")
+    _summary_spec = _summary_ilu.spec_from_file_location("_unified_local_summary_api", _summary_path)
+    if _summary_spec is None or _summary_spec.loader is None:
+        raise ImportError(f"Could not resolve local summary_api.py at {_summary_path}")
+    _summary_mod = _summary_ilu.module_from_spec(_summary_spec)
+    _summary_spec.loader.exec_module(_summary_mod)
+    summary_router = _summary_mod.router
 from ai_summary_file import router as ai_summary_router
 from claims_dashboard_api import router as claims_dashboard_router
 from management_claims_dashboard_api import router as management_claims_dashboard_router
@@ -269,7 +282,18 @@ async def work_comp_swagger_ui():
 async def download_file(filepath: str):
     """Download endpoint that handles both absolute and relative paths."""
     logger.info(f"[Download] Requested file: {filepath}")
-    
+
+    # Extraction is handled by a different module instance in the base app, so this
+    # instance's in-memory cache can be stale. Always refresh from the persisted disk
+    # cache first so the newest extraction wins over a stale in-memory entry.
+    try:
+        from shared_configs import _load_cache
+        disk_cache = _load_cache()
+        if disk_cache:
+            file_path_cache.update(disk_cache)
+    except Exception as e:
+        logger.warning(f"[Download] Could not reload disk cache: {e}")
+
     # First, check the cache for the full path
     if filepath in file_path_cache:
         file_path = Path(file_path_cache[filepath])
@@ -291,7 +315,29 @@ async def download_file(filepath: str):
             else:
                 media_type = 'application/octet-stream'
             return FileResponse(path=file_path, filename=filename, media_type=media_type)
-    
+    else:
+        # Extraction is handled by a different module instance in the base app, so its
+        # in-memory cache is not visible here. Reload the persisted cache from disk.
+        try:
+            from shared_configs import _load_cache
+            disk_cache = _load_cache()
+            if disk_cache:
+                file_path_cache.update(disk_cache)
+            cached_disk = file_path_cache.get(filepath)
+            if cached_disk and Path(cached_disk).exists():
+                file_path = Path(cached_disk)
+                logger.info(f"[Download] Found via disk cache: {file_path}")
+                filename = file_path.name
+                if filename.endswith(".xlsx"):
+                    media_type = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                elif filename.endswith(".json"):
+                    media_type = 'application/json'
+                else:
+                    media_type = 'application/octet-stream'
+                return FileResponse(path=file_path, filename=filename, media_type=media_type)
+        except Exception as e:
+            logger.warning(f"[Download] Could not reload disk cache: {e}")
+
     # Fallback: Try to find the file manually
     original_filepath = filepath
     file_path = Path(filepath)
@@ -311,25 +357,41 @@ async def download_file(filepath: str):
         # Try relative to BASE_DIR
         file_path = BASE_DIR / filename_only
     
-    # Try searching in the insurance outputs directory (searching by filename)
+    # Try searching in the extractor output directories (resolved under this workspace
+    # instead of the previous hard-coded path that only existed on another machine)
     if not file_path.exists():
-        insurance_outputs = Path("c:/Users/Administrator/pdf_extractor/work_compenstaion/backend/outputs")
-        # Try to find a directory that matches the requestId if possible
+        gpu_server_dir = BASE_DIR.parent
+        output_roots = [
+            gpu_server_dir / "Insurance_pdf_extractor-main" / "backend" / "outputs",
+            gpu_server_dir / "work_compenstaion" / "backend" / "outputs",
+            Path("c:/Users/Administrator/pdf_extractor/work_compenstaion/backend/outputs"),
+        ]
+        req_id = None
         if "/" in original_filepath:
             req_id = original_filepath.split("/")[0]
-            for session_dir in insurance_outputs.glob(f"extraction_*_{req_id[:4]}*"):
-                potential_file = session_dir / filename_only
-                if potential_file.exists():
-                    file_path = potential_file
-                    break
-        
-        # If still not found, just find the first matching filename
-        if not file_path.exists():
-            for session_dir in insurance_outputs.glob("extraction_*"):
-                potential_file = session_dir / filename_only
-                if potential_file.exists():
-                    file_path = potential_file
-                    break
+        for root in output_roots:
+            root = Path(root)
+            if not root.exists():
+                continue
+            # Try to find a directory that matches the requestId if possible
+            if req_id:
+                for session_dir in root.glob(f"extraction_*_{req_id[:4]}*"):
+                    potential_file = session_dir / filename_only
+                    if potential_file.exists():
+                        file_path = potential_file
+                        break
+            # If still not found, search all session dirs (newest first)
+            if not file_path.exists():
+                session_dirs = sorted(root.glob("extraction_*"),
+                                      key=lambda p: p.stat().st_mtime,
+                                      reverse=True)
+                for session_dir in session_dirs:
+                    potential_file = session_dir / filename_only
+                    if potential_file.exists():
+                        file_path = potential_file
+                        break
+            if file_path.exists():
+                break
     
     # Try searching in unified_outputs for any matching filename
     if not file_path.exists():

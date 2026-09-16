@@ -3,11 +3,14 @@ import json
 import shutil
 import zipfile
 import tempfile
+import logging
 from pathlib import Path
 from typing import Dict
 from fastapi import UploadFile, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 from unified_router import UnifiedRouter
+
+logger = logging.getLogger("shared_configs")
 
 # Shared directories
 BASE_DIR = Path(__file__).parent
@@ -200,6 +203,10 @@ async def _perform_extraction(file: UploadFile, request: Request):
         if json_path:
             file_path_cache[json_filename] = json_path
             print(f"[Unified][API] Cached JSON: {json_filename} -> {json_path}")
+        
+        # Persist the cache so other app instances (e.g. the mounted sub-app serving
+        # /api/gpu/api/download/...) can resolve these paths after a cache miss.
+        _save_cache(file_path_cache)
         
         # Transform response to match frontend expectations
         doc_type = result.get("type", "UNKNOWN")
