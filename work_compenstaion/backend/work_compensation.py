@@ -22,6 +22,14 @@ import sys
 from io import BytesIO
 import time
 
+# Fix Windows console encoding for Unicode (e.g. checkmarks, emoji)
+if sys.platform == 'win32':
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+        sys.stderr.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
+
 try:
     from monitor.service import request_monitor
 except ImportError:
@@ -200,11 +208,9 @@ class EnhancedInsuranceExtractor:
     
     def extract_text_from_pdf(self, pdf_path: str) -> Tuple[str, List[Dict]]:
         """
-        Extract text from PDF using page-level hybrid strategy (Digital + OCR + Form Fields).
-        Covers: Scanned, Digital, Combined, and Editable PDFs.
+        Extract text from PDF using PaddleOCR with crash-safe isolated subprocesses
+        and table structure preservation for all Workers Compensation documents.
         """
-        # Use importlib for explicit path-based import to avoid sys.modules collision
-        # with the Insurance backend's pdf_detector (which lacks is_page_scanned)
         import importlib.util as _ilu
         import pathlib as _pl
         _wc_dir = _pl.Path(__file__).parent
@@ -215,120 +221,40 @@ class EnhancedInsuranceExtractor:
             mod = _ilu.module_from_spec(spec)
             spec.loader.exec_module(mod)
             return mod
-        _pdf_detector_mod = _load_wc_module("pdf_detector")
-        PDFDetector = _pdf_detector_mod.PDFDetector
+        
         _pdf_plumber_mod = _load_wc_module("pdf_plumber")
-        extract_pdf_with_pdfplumber = _pdf_plumber_mod.extract_pdf_with_pdfplumber
         extract_form_data = _pdf_plumber_mod.extract_form_data
-        _ocr_text_mod = _load_wc_module("ocr_text")
-        OCRPDFExtractor = _ocr_text_mod.OCRPDFExtractor
         
         try:
-            print(f"🔍 Analyzing PDF structure for 100% coverage...")
-            detector = PDFDetector(pdf_path)
+            print(f"🔍 Analyzing PDF structure with PaddleOCR...")
             
             # 1. CHECK FOR VISION EXTRACTION OVERRIDE
             if getattr(config, 'USE_VISION_EXTRACTION', False):
                 print(f"👁️ VISION EXTRACTION ENABLED: Processing images with {config.VISION_MODEL}")
                 return self._extract_via_vision(pdf_path)
 
-            # 2. EXTRACT FORM FIELD DATA (Top Priority for Editable PDFs)
+            # 2. EXTRACT FORM FIELD DATA (For fillable/XFA ACORD forms)
             form_data = extract_form_data(pdf_path)
             if form_data:
                 print(f"✅ Extracted data from fillable form fields/XFA.")
 
-            # 3. PAGE-LEVEL HYBRID EXTRACTION (4-Stage Flow)
-            all_text_parts = []
-            if form_data:
-                all_text_parts.append(form_data)
-            
-            pages_metadata = []
-            
-            # Initial digital extraction
-            digital_text, digital_metadata = extract_pdf_with_pdfplumber(pdf_path)
-            total_pages = len(digital_metadata)
-            
-            _verifier_mod = _load_wc_module("text_quality_verifier")
-            TextQualityVerifier = _verifier_mod.TextQualityVerifier
-            verifier = TextQualityVerifier()
-            
-            print(f"📄 Processing {total_pages} pages using Unified 4-Stage Strategy...")
-            
-            from concurrent.futures import ThreadPoolExecutor, as_completed
-            from parallel_processor import ParallelPageProcessor
-            
-            # --- STAGE 1: Identify pages needing OCR ---
-            pages_to_ocr = []
-            for i in range(total_pages):
-                page_meta = digital_metadata[i]
-                page_text = page_meta.get("text", "")
-                quality = verifier.analyze_quality(page_text, num_pages=1)
-                
-                if not quality['is_acceptable']:
-                    page_meta["rejection_reason"] = quality['reason']
-                    page_meta["quality_metrics"] = quality.get('metrics', {})
-                    pages_to_ocr.append(i + 1)
-                else:
-                    pages_metadata.append(page_meta)
-                    all_text_parts.append(page_text)
-            
-            # --- STAGE 2: Process low-quality pages in parallel ---
-            if pages_to_ocr:
-                print(f"   ⚡ Digital quality low for {len(pages_to_ocr)} pages. Parallel OCR start...")
-                processor = ParallelPageProcessor(pdf_path, api_key=self.api_key, max_workers=4)
-                
-                with ThreadPoolExecutor(max_workers=4) as executor:
-                    future_to_page = {executor.submit(processor.process_page, p_num): p_num for p_num in pages_to_ocr}
-                    
-                    ocr_results = {}
-                    for future in as_completed(future_to_page):
-                        p_num = future_to_page[future]
-                        try:
-                            ocr_results[p_num] = future.result()
-                        except Exception as e:
-                            print(f"   ⚠️ Parallel OCR failed for page {p_num}: {e}")
+            # 3. EXTRACT TEXT USING PADDLEOCR (pure OCR, no hybrid)
+            _paddle_mod = _load_wc_module("paddleocr_enhancer")
+            extract_with_paddleocr = _paddle_mod.extract_with_paddleocr
 
-                # Rebuild the final list in correct sequence
-                final_metadata = []
-                final_text_parts = [form_data] if form_data else []
-                
-                ocr_count = 0
-                for i in range(total_pages):
-                    p_num = i + 1
-                    if p_num in ocr_results:
-                        res = ocr_results[p_num]
-                        final_metadata.append({
-                            "page_number": p_num,
-                            "text": res.get("text", ""),
-                            "extraction_method": res.get("extraction_method"),
-                            "confidence": res.get("confidence"),
-                            "is_scanned": True
-                        })
-                        final_text_parts.append(res.get("text", ""))
-                        ocr_count += 1
-                    else:
-                        # Find the existing digital meta
-                        # (We need to be careful with ordering here)
-                        for dm in digital_metadata:
-                            if dm.get("page_number") == p_num:
-                                final_metadata.append(dm)
-                                final_text_parts.append(dm.get("text", ""))
-                                break
-                
-                pages_metadata = final_metadata
-                all_text_parts = final_text_parts
-                print(f"   ✓ Parallel OCR finished. {ocr_count} pages recovered.")
-            else:
-                # All pages were acceptable digitally
-                pages_metadata = digital_metadata
-                all_text_parts = [form_data] + [m.get("text", "") for m in digital_metadata] if form_data else [m.get("text", "") for m in digital_metadata]
+            print(f"🐼 Running PaddleOCR (crash-safe subprocess mode)...")
+            paddle_text, pages_metadata = extract_with_paddleocr(pdf_path, use_gpu=True, enable_table=False)
+
+            if not paddle_text or not pages_metadata:
+                print(f"⚠️ PaddleOCR returned empty text, falling back to pdfplumber...")
+                extract_pdf_with_pdfplumber = _pdf_plumber_mod.extract_pdf_with_pdfplumber
+                paddle_text, pages_metadata = extract_pdf_with_pdfplumber(pdf_path)
             
-            # Step 4: Logical Rearrangement (Rearrange correctly after extraction)
+            # 4. Logical Rearrangement
             print(f"📊 Rearranging {len(pages_metadata)} pages logically based on content...")
             pages_metadata = self._rearrange_pages_logically(pages_metadata)
             
             # Rebuild combined text from sorted metadata
-            # form_data always stays at the very top as it has no page number
             final_parts = [form_data] if form_data else []
             for m in pages_metadata:
                 final_parts.append(m.get("text", ""))
@@ -337,7 +263,7 @@ class EnhancedInsuranceExtractor:
             return combined_text, pages_metadata
                 
         except Exception as e:
-            print(f"⚠️ Detection/Extraction error: {e}")
+            print(f"⚠️ PaddleOCR Extraction error: {e}")
             import traceback
             traceback.print_exc()
             print(f"   Falling back to standard pdfplumber...")
@@ -867,11 +793,11 @@ Your task: Describe HOW the data is organized in this document and identify the 
 
 CRITICAL ROLE DISTINCTION (The "Anchor" Rules):
 1. **AGENCY**: This is the insurance broker/agent. They are usually located in the TOP-LEFT box. (Common examples: "Thomas & Thomas", "Insurance Services").
-2. **APPLICANT**: This is the actual business being insured. They are usually located in the MIDDLE-LEFT or TOP-RIGHT box, often explicitly labeled "APPLICANT NAME" or "INSURED".
+2. **APPLICANT**: This is the actual business being insured. They are usually located in the MIDDLE-LEFT or TOP-RIGHT box, often explicitly labeled "APPLICANT NAME" or "INSURED". **Note on OCR Misalignment**: Due to PDF extraction artifacts, the applicant's name might appear on the line directly ABOVE or BELOW the "APPLICANT NAME" label (e.g., next to dashed lines, "UNDERWRITER", or "COMPANY"). Look carefully around the label for the actual company name. Do NOT extract an address (like a street or PO box) as the applicant name.
 
 Answer these questions:
 1. What is the Agency name? (Check top-left)
-2. What is the Applicant/Insured name? (Check middle-left or top-right; Look for labels like 'APPLICANT NAME')
+2. What is the Applicant/Insured name? (Check middle-left or top-right; Look for labels like 'APPLICANT NAME', check lines above/below if empty)
 3. Are there tables for "Rating by State" or "Class Codes"?
 4. Is there a section for "Prior Carriers" or "Loss History"?
 5. Are there "General Questions" with Y/N answers?
@@ -944,6 +870,7 @@ ACORD FORM SPECIFIC RULES:
    - The **Agency** (e.g., "Thomas & Thomas") is the broker.
    - The **Applicant** (e.g., "Macias Sheet Metal") is the client.
    - Extract only the **Applicant** name into the `applicantName` field.
+   - **CRITICAL OCR FIX**: Because of how the document is scanned, the actual company name (e.g., "National NEMT, LLC") might appear on the line directly **ABOVE** the "APPLICANT NAME:" label, not next to it. Scan the lines immediately surrounding the label for a company name (LLC, Inc, Corp). Do NOT extract a street address (e.g. "3817 NW Expressway") as the Applicant Name.
    - Use the **MAILING ADDRESS** and Zip Code associated with the Applicant, not the Agency.
 2. **Zip Codes**: Zip codes in DE/MD often start with 19 or 21. If you see "1980%", it is "19801". Use the **MAILING ADDRESS** zip code for demographics, not the Location addresses found lower in the form.
 3. **Fuzzy Date Correction**: OCR often misreads years (e.g., "3024" for "2024", "1900" for "2026"). If a year is logically impossible (like 3024) or a placeholder (like 1900), look for the surrounding context or use the current year as a baseline.

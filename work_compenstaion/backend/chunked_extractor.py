@@ -1,6 +1,17 @@
+import os
+import sys
 import json
 import re
 from typing import Dict, List, Optional, Tuple
+
+# Fix Windows console encoding for Unicode (e.g. checkmarks, emoji)
+if sys.platform == 'win32':
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+        sys.stderr.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
+
 from work_compensation import EnhancedInsuranceExtractor, parse_p3_gio_from_text
 from pdf_rotation import auto_rotate_pdf_content
 import tempfile

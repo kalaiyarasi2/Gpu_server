@@ -81,6 +81,9 @@ class OCRPDFExtractor:
             return self._extract_with_vision(dpi=300, verbose=verbose)
         if engine == 'rostaing':
             return self._extract_with_rostaing(verbose=verbose)
+        if engine == 'paddleocr' or engine == 'paddle':
+            from paddleocr_enhancer import extract_with_paddleocr
+            return extract_with_paddleocr(str(self.pdf_path), use_gpu=True, enable_table=False)
         
         extracted_text = []
         from text_quality_verifier import TextQualityVerifier
