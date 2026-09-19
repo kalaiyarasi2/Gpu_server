@@ -1,4 +1,14 @@
 {
-  "extracted_schema.xlsx": "C:\\Users\\Intern\\cognet full app\\Sales team - Copy\\Gpu_server\\Insurance_pdf_extractor-main\\backend\\outputs\\extraction_20260917_191401_4886_5e16523ed281_FCBI_21\\extracted_schema.xlsx",
-  "extracted_schema.json": "C:\\Users\\Intern\\cognet full app\\Sales team - Copy\\Gpu_server\\Insurance_pdf_extractor-main\\backend\\outputs\\extraction_20260917_191401_4886_5e16523ed281_FCBI_21\\extracted_schema.json"
+  "extracted_schema.xlsx": "C:\\Users\\Intern\\cognet full app\\Sales team - Copy\\Gpu_server\\Insurance_pdf_extractor-main\\backend\\outputs\\extraction_20260918_145816_9250_5e16523ed281_FCBI_21\\extracted_schema.xlsx",
+  "extracted_schema.json": "C:\\Users\\Intern\\cognet full app\\Sales team - Copy\\Gpu_server\\Insurance_pdf_extractor-main\\backend\\outputs\\extraction_20260918_145816_9250_5e16523ed281_FCBI_21\\extracted_schema.json",
+  "a4c21facb026_CC_invoice_structural.xlsx": "C:\\Users\\Intern\\cognet full app\\Sales team - Copy\\Gpu_server\\Unified_PDF_Platform\\unified_outputs\\a4c21facb026_CC_invoice_structural.xlsx",
+  "a4c21facb026_CC_invoice_structural.json": "C:\\Users\\Intern\\cognet full app\\Sales team - Copy\\Gpu_server\\Unified_PDF_Platform\\unified_outputs\\a4c21facb026_CC_invoice_structural.json",
+  "extracted_statement.xlsx": "C:\\Users\\Intern\\cognet full app\\Sales team - Copy\\Gpu_server\\bank statement\\backend\\outputs\\statement_extraction_20260918_160054_9369_6479951fa8ac_Bank_statement_(1)_pdf\\extracted_statement.xlsx",
+  "extracted_statement.json": "C:\\Users\\Intern\\cognet full app\\Sales team - Copy\\Gpu_server\\bank statement\\backend\\outputs\\statement_extraction_20260918_160054_9369_6479951fa8ac_Bank_statement_(1)_pdf\\extracted_statement.json",
+  "b2a9bd7c7fe6_Anthem -  DYE PRECISION INC Bronze PPO 6000_45 w_HSA PrevRx_CA_PPO_Small Group_84UR 1_invoice_structural.xlsx": "C:\\Users\\Intern\\cognet full app\\Sales team - Copy\\Gpu_server\\Unified_PDF_Platform\\unified_outputs\\b2a9bd7c7fe6_Anthem -  DYE PRECISION INC Bronze PPO 6000_45 w_HSA PrevRx_CA_PPO_Small Group_84UR 1_invoice_structural.xlsx",
+  "b2a9bd7c7fe6_Anthem -  DYE PRECISION INC Bronze PPO 6000_45 w_HSA PrevRx_CA_PPO_Small Group_84UR 1_invoice_structural.json": "C:\\Users\\Intern\\cognet full app\\Sales team - Copy\\Gpu_server\\Unified_PDF_Platform\\unified_outputs\\b2a9bd7c7fe6_Anthem -  DYE PRECISION INC Bronze PPO 6000_45 w_HSA PrevRx_CA_PPO_Small Group_84UR 1_invoice_structural.json",
+  "0eb79b28905b_invoice (7) (1)_invoice_poc_extractor.xlsx": "C:\\Users\\Intern\\cognet full app\\Sales team - Copy\\Gpu_server\\Unified_PDF_Platform\\unified_outputs\\0eb79b28905b_invoice (7) (1)_invoice_poc_extractor.xlsx",
+  "0eb79b28905b_invoice (7) (1)_invoice_poc_extractor.json": "C:\\Users\\Intern\\cognet full app\\Sales team - Copy\\Gpu_server\\Unified_PDF_Platform\\unified_outputs\\0eb79b28905b_invoice (7) (1)_invoice_poc_extractor.json",
+  "685165eddacb_invoice_683028723512_invoice.xlsx": "C:\\Users\\Intern\\cognet full app\\Sales team - Copy\\Gpu_server\\Unified_PDF_Platform\\unified_outputs\\685165eddacb_invoice_683028723512_invoice.xlsx",
+  "685165eddacb_invoice_683028723512_invoice.json": "C:\\Users\\Intern\\cognet full app\\Sales team - Copy\\Gpu_server\\Unified_PDF_Platform\\unified_outputs\\685165eddacb_invoice_683028723512_invoice.json"
 }

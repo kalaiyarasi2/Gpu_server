@@ -90,6 +90,24 @@ Return ONLY a JSON object:
                 response_format={"type": "json_object"},
                 temperature=1
             )
+
+            try:
+                import sys, os
+                _cur = os.path.abspath(__file__)
+                while os.path.basename(_cur) != 'Sales team - Copy' and os.path.dirname(_cur) != _cur:
+                    _cur = os.path.dirname(_cur)
+                if _cur not in sys.path: sys.path.append(_cur)
+                from core.universal_token_monitor import track_usage as _tm
+                _locals = locals()
+                _fn = _locals.get('filename') or _locals.get('file_name') or _locals.get('safe_filename')
+                if not _fn:
+                    _fp = _locals.get('file_path') or _locals.get('pdf_path') or _locals.get('working_path')
+                    if _fp: _fn = getattr(_fp, 'name', str(_fp))
+                _fn = str(_fn or 'gpu_doc')
+                if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
+                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
+            except Exception as e:
+                pass
             return json.loads(response.choices[0].message.content)
         except Exception as e:
             print(f"Error identifying vision pattern: {e}")
@@ -129,6 +147,24 @@ Return ONLY a JSON object describing the pattern:
                 response_format={"type": "json_object"},
                 temperature=1
             )
+
+            try:
+                import sys, os
+                _cur = os.path.abspath(__file__)
+                while os.path.basename(_cur) != 'Sales team - Copy' and os.path.dirname(_cur) != _cur:
+                    _cur = os.path.dirname(_cur)
+                if _cur not in sys.path: sys.path.append(_cur)
+                from core.universal_token_monitor import track_usage as _tm
+                _locals = locals()
+                _fn = _locals.get('filename') or _locals.get('file_name') or _locals.get('safe_filename')
+                if not _fn:
+                    _fp = _locals.get('file_path') or _locals.get('pdf_path') or _locals.get('working_path')
+                    if _fp: _fn = getattr(_fp, 'name', str(_fp))
+                _fn = str(_fn or 'gpu_doc')
+                if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
+                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
+            except Exception as e:
+                pass
             return json.loads(response.choices[0].message.content)
         except Exception as e:
             print(f"Error identifying pattern: {e}")

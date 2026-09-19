@@ -286,6 +286,24 @@ Return ONLY the JSON. No explanations. Ensure you catch EVERY claim number, espe
                 max_tokens=8000,
                 temperature=0.0
             )
+
+            try:
+                import sys, os
+                _cur = os.path.abspath(__file__)
+                while os.path.basename(_cur) != 'Sales team - Copy' and os.path.dirname(_cur) != _cur:
+                    _cur = os.path.dirname(_cur)
+                if _cur not in sys.path: sys.path.append(_cur)
+                from core.universal_token_monitor import track_usage as _tm
+                _locals = locals()
+                _fn = _locals.get('filename') or _locals.get('file_name') or _locals.get('safe_filename')
+                if not _fn:
+                    _fp = _locals.get('file_path') or _locals.get('pdf_path') or _locals.get('working_path')
+                    if _fp: _fn = getattr(_fp, 'name', str(_fp))
+                _fn = str(_fn or 'gpu_doc')
+                if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
+                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
+            except Exception as e:
+                pass
             
             result = json.loads(response.choices[0].message.content)
             
@@ -379,6 +397,24 @@ IMPORTANT:
                 max_tokens=8000,
                 temperature=0.0  # Zero temperature for exact extraction
             )
+
+            try:
+                import sys, os
+                _cur = os.path.abspath(__file__)
+                while os.path.basename(_cur) != 'Sales team - Copy' and os.path.dirname(_cur) != _cur:
+                    _cur = os.path.dirname(_cur)
+                if _cur not in sys.path: sys.path.append(_cur)
+                from core.universal_token_monitor import track_usage as _tm
+                _locals = locals()
+                _fn = _locals.get('filename') or _locals.get('file_name') or _locals.get('safe_filename')
+                if not _fn:
+                    _fp = _locals.get('file_path') or _locals.get('pdf_path') or _locals.get('working_path')
+                    if _fp: _fn = getattr(_fp, 'name', str(_fp))
+                _fn = str(_fn or 'gpu_doc')
+                if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
+                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
+            except Exception as e:
+                pass
             
             response_text = response.choices[0].message.content
             
@@ -496,6 +532,24 @@ DOCUMENT SAMPLE:
                 max_tokens=1500,
                 temperature=0.0
             )
+
+            try:
+                import sys, os
+                _cur = os.path.abspath(__file__)
+                while os.path.basename(_cur) != 'Sales team - Copy' and os.path.dirname(_cur) != _cur:
+                    _cur = os.path.dirname(_cur)
+                if _cur not in sys.path: sys.path.append(_cur)
+                from core.universal_token_monitor import track_usage as _tm
+                _locals = locals()
+                _fn = _locals.get('filename') or _locals.get('file_name') or _locals.get('safe_filename')
+                if not _fn:
+                    _fp = _locals.get('file_path') or _locals.get('pdf_path') or _locals.get('working_path')
+                    if _fp: _fn = getattr(_fp, 'name', str(_fp))
+                _fn = str(_fn or 'gpu_doc')
+                if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
+                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
+            except Exception as e:
+                pass
             
             chunking_plan = json.loads(response.choices[0].message.content)
             splits = chunking_plan.get("suggested_splits", [])
@@ -638,6 +692,24 @@ Return ONLY the JSON. Ensure the dynamic_instruction is highly technical and spe
                 max_tokens=1500,
                 temperature=0.0
             )
+
+            try:
+                import sys, os
+                _cur = os.path.abspath(__file__)
+                while os.path.basename(_cur) != 'Sales team - Copy' and os.path.dirname(_cur) != _cur:
+                    _cur = os.path.dirname(_cur)
+                if _cur not in sys.path: sys.path.append(_cur)
+                from core.universal_token_monitor import track_usage as _tm
+                _locals = locals()
+                _fn = _locals.get('filename') or _locals.get('file_name') or _locals.get('safe_filename')
+                if not _fn:
+                    _fp = _locals.get('file_path') or _locals.get('pdf_path') or _locals.get('working_path')
+                    if _fp: _fn = getattr(_fp, 'name', str(_fp))
+                _fn = str(_fn or 'gpu_doc')
+                if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
+                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
+            except Exception as e:
+                pass
             
             format_info = json.loads(response.choices[0].message.content)
             
@@ -957,6 +1029,24 @@ Follow the format-specific instructions above. Validate your extractions."""
                 max_tokens=8000,
                 temperature=0.0
             )
+
+            try:
+                import sys, os
+                _cur = os.path.abspath(__file__)
+                while os.path.basename(_cur) != 'Sales team - Copy' and os.path.dirname(_cur) != _cur:
+                    _cur = os.path.dirname(_cur)
+                if _cur not in sys.path: sys.path.append(_cur)
+                from core.universal_token_monitor import track_usage as _tm
+                _locals = locals()
+                _fn = _locals.get('filename') or _locals.get('file_name') or _locals.get('safe_filename')
+                if not _fn:
+                    _fp = _locals.get('file_path') or _locals.get('pdf_path') or _locals.get('working_path')
+                    if _fp: _fn = getattr(_fp, 'name', str(_fp))
+                _fn = str(_fn or 'gpu_doc')
+                if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
+                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
+            except Exception as e:
+                pass
             
             response_text = response.choices[0].message.content
             initial_data = json.loads(response_text)
@@ -1376,6 +1466,24 @@ Return ONLY the JSON."""
                 max_tokens=8000,
                 temperature=0.0
             )
+
+            try:
+                import sys, os
+                _cur = os.path.abspath(__file__)
+                while os.path.basename(_cur) != 'Sales team - Copy' and os.path.dirname(_cur) != _cur:
+                    _cur = os.path.dirname(_cur)
+                if _cur not in sys.path: sys.path.append(_cur)
+                from core.universal_token_monitor import track_usage as _tm
+                _locals = locals()
+                _fn = _locals.get('filename') or _locals.get('file_name') or _locals.get('safe_filename')
+                if not _fn:
+                    _fp = _locals.get('file_path') or _locals.get('pdf_path') or _locals.get('working_path')
+                    if _fp: _fn = getattr(_fp, 'name', str(_fp))
+                _fn = str(_fn or 'gpu_doc')
+                if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
+                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
+            except Exception as e:
+                pass
             
             retry_data = json.loads(response.choices[0].message.content)
             if "claims" in retry_data:
@@ -1440,6 +1548,24 @@ Return ONLY the JSON object for claim {target_claim_number}."""
                 max_tokens=8000,
                 temperature=0.1
             )
+
+            try:
+                import sys, os
+                _cur = os.path.abspath(__file__)
+                while os.path.basename(_cur) != 'Sales team - Copy' and os.path.dirname(_cur) != _cur:
+                    _cur = os.path.dirname(_cur)
+                if _cur not in sys.path: sys.path.append(_cur)
+                from core.universal_token_monitor import track_usage as _tm
+                _locals = locals()
+                _fn = _locals.get('filename') or _locals.get('file_name') or _locals.get('safe_filename')
+                if not _fn:
+                    _fp = _locals.get('file_path') or _locals.get('pdf_path') or _locals.get('working_path')
+                    if _fp: _fn = getattr(_fp, 'name', str(_fp))
+                _fn = str(_fn or 'gpu_doc')
+                if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
+                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
+            except Exception as e:
+                pass
             
             response_text = response.choices[0].message.content
             data = json.loads(response_text)
