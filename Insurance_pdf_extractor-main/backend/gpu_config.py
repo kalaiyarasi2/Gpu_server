@@ -19,7 +19,7 @@ def _detect_mode():
         if torch.cuda.is_available():
             vram_gb = torch.cuda.get_device_properties(0).total_memory / (1024 ** 3)
             return "GPU", vram_gb
-    except ImportError:
+    except Exception:
         pass
     return "CPU", 0.0
 

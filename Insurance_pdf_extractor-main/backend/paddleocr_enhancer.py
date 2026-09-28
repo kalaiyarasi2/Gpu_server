@@ -20,6 +20,13 @@ from pathlib import Path
 from typing import Tuple, List, Dict, Optional
 import re as _re
 
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 # Dynamic worker count — reads from gpu_config (Tesla T4 → 4 workers automatically)
 try:
     from gpu_config import gpu_concurrency_config as _gpu_cfg
@@ -138,7 +145,7 @@ def _ocr_page_in_subprocess(img_path: str, use_gpu: bool, enable_table: bool, ti
 # ─────────────────────────────────────────────────────────────────────────────
 #  MAIN EXTRACTION FUNCTION
 # ─────────────────────────────────────────────────────────────────────────────
-def extract_with_paddleocr(pdf_path: str, use_gpu: bool = True, enable_table: bool = True) -> Tuple[str, List[Dict]]:
+def extract_with_paddleocr(pdf_path: str, use_gpu: bool = True, enable_table: bool = True, max_pages: Optional[int] = None) -> Tuple[str, List[Dict]]:
     """
     Extract text from PDF using PaddleOCR with table structure preservation.
 
@@ -150,6 +157,7 @@ def extract_with_paddleocr(pdf_path: str, use_gpu: bool = True, enable_table: bo
         pdf_path: Path to input PDF
         use_gpu: Use GPU acceleration (default: True)
         enable_table: Enable table structure recognition (default: True)
+        max_pages: Limit extraction to the first N pages (ideal for classification)
 
     Returns:
         Tuple of (extracted_text, metadata_list)
@@ -163,6 +171,8 @@ def extract_with_paddleocr(pdf_path: str, use_gpu: bool = True, enable_table: bo
     print(f"🐼 PaddleOCR: Starting extraction (crash-safe subprocess mode)...")
     print(f"   GPU: {'Enabled' if use_gpu else 'Disabled'}")
     print(f"   Table Detection: {'Enabled' if enable_table else 'Disabled'}")
+    if max_pages:
+        print(f"   Page Limit: First {max_pages} pages")
     print(f"   Mode: Page-by-page isolated subprocess (no server crash risk)")
 
     extracted_pages = []
@@ -173,15 +183,18 @@ def extract_with_paddleocr(pdf_path: str, use_gpu: bool = True, enable_table: bo
         with tempfile.TemporaryDirectory() as tmp_dir:
             print(f"   📄 Converting PDF to images (300 DPI)...")
 
-            # Convert all pages to image files on disk — low RAM usage
-            # convert_from_path with output_folder writes files instead of loading to memory
-            image_paths = convert_from_path(
-                pdf_path,
+            # Convert pages to image files on disk — low RAM usage
+            convert_kwargs = dict(
                 dpi=300,
                 output_folder=tmp_dir,
                 fmt="png",
                 paths_only=True          # Returns file paths, not PIL objects → saves RAM
             )
+            if max_pages and max_pages > 0:
+                convert_kwargs["first_page"] = 1
+                convert_kwargs["last_page"] = max_pages
+
+            image_paths = convert_from_path(pdf_path, **convert_kwargs)
 
             total_pages = len(image_paths)
             print(f"   🔍 Processing {total_pages} pages — ⚡ PARALLEL mode ({_MAX_PARALLEL_WORKERS} workers)...")
