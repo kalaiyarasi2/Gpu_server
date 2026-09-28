@@ -38,6 +38,133 @@ try:
 except ImportError:
     OCR_AVAILABLE = False
 
+# ── PaddleOCR: lazy-loaded singleton ──────────────────────────────────────────
+# Loaded once on first use to avoid startup cost; None when unavailable.
+_PADDLE_OCR_INSTANCE = None
+PADDLE_OCR_AVAILABLE = False
+try:
+    from paddleocr import PaddleOCR as _PaddleOCRClass
+    PADDLE_OCR_AVAILABLE = True
+except ImportError:
+    PADDLE_OCR_AVAILABLE = False
+
+def _get_paddle_ocr():
+    """Return a shared PaddleOCR instance (lazy init, angle-classification on)."""
+    global _PADDLE_OCR_INSTANCE
+    if _PADDLE_OCR_INSTANCE is None and PADDLE_OCR_AVAILABLE:
+        import numpy as np  # noqa: F401 – ensure numpy available
+        _PADDLE_OCR_INSTANCE = _PaddleOCRClass(
+            use_angle_cls=True, lang='en', show_log=False
+        )
+    return _PADDLE_OCR_INSTANCE
+
+# ── KEYWORD BANKS: 10 keywords per category, threshold = 80% (8/10) ──────────
+# Each bank has:
+#   'keywords' : list of 10 phrases to look for (all lowercase, exact substring)
+#   'threshold': minimum fraction of hits to accept a direct classification
+#   'min_gap'  : how far ahead of the #2 category the winner must be (fraction)
+# ── 10-Keyword Category Banks for Intelligent Classification ────────────────
+# Each category defines 10 core concept slots. A slot is satisfied if any synonym matches.
+# If a document scores >= 7 out of 10 matches (70%), that category is processed.
+CLASSIFICATION_KEYWORD_BANKS = {
+    "INSURANCE_CLAIMS": {
+        "slots": [
+            ["loss run", "loss history", "loss analysis", "claims report"],
+            ["claimant", "injured worker", "injured employee"],
+            ["incurred", "total incurred"],
+            ["total paid", "paid losses", "paid to date", "total claims paid"],
+            ["reserve", "outstanding", "open reserves"],
+            ["date of loss", "loss date", "accident date"],
+            ["claim number", "claim #", "claim count", "total claims"],
+            ["policy period", "policy summary", "policy number"],
+            ["indemnity", "med only", "medical claims", "lost time"],
+            ["valuation date", "adjuster", "report date", "report valuation date"],
+        ],
+        "threshold": 0.70,   # 7 out of 10 matches required
+        "min_matches": 7,
+    },
+    "WORK_COMPENSATION": {
+        "slots": [
+            ["acord", "acord 130", "acord 133"],
+            ["workers compensation", "workers comp", "workers' compensation application"],
+            ["class code", "classification code", "governing class"],
+            ["payroll", "estimated payroll", "annual payroll"],
+            ["experience mod", "mod factor", "experience modification"],
+            ["employer liability", "employers liability", "bodily injury by accident"],
+            ["ncci", "interstate rating", "rating worksheet"],
+            ["nature of business", "description of operations"],
+            ["applicant", "insured name", "producer name"],
+            ["effective date", "proposed policy period", "expiration date"],
+        ],
+        "threshold": 0.70,   # 7 out of 10 matches required
+        "min_matches": 7,
+    },
+    "INVOICE": {
+        "slots": [
+            ["group number", "group id", "group #"],
+            ["subscriber id", "member id", "member number"],
+            ["billing period", "premium period", "statement period"],
+            ["invoice number", "bill number", "billing invoice"],
+            ["premium", "current premium", "member premium", "subscriber premium"],
+            ["hmo", "ppo", "medical supplement", "medlink", "medsupp"],
+            ["coverage", "plan name", "benefit billing"],
+            ["due date", "payment due", "please pay"],
+            ["amount billed", "total billed", "total amount due", "balance due"],
+            ["enrollment", "cobra", "subscriber", "dependents"],
+        ],
+        "threshold": 0.70,   # 7 out of 10 matches required
+        "min_matches": 7,
+    },
+    "BANK_STATEMENT": {
+        "slots": [
+            ["account summary", "balance summary"],
+            ["beginning balance", "opening balance", "starting balance"],
+            ["ending balance", "closing balance", "new balance"],
+            ["routing number", "aba routing", "transit number"],
+            ["account number", "account #"],
+            ["deposits", "deposits and other credits", "credits"],
+            ["withdrawals", "checks and other debits", "debits"],
+            ["checking", "savings", "operating account"],
+            ["daily balance", "daily ledger balance"],
+            ["transaction date", "post date", "overdraft"],
+        ],
+        "threshold": 0.70,   # 7 out of 10 matches required
+        "min_matches": 7,
+    },
+    "IDENTIFICATION": {
+        "slots": [
+            ["driver license", "driver's license", "driving licence"],
+            ["passport", "united states of america", "department of state"],
+            ["date of birth", "dob", "birth date"],
+            ["expiration date", "expires", "exp date"],
+            ["license number", "dl number", "passport number", "doc number"],
+            ["social security", "ssn", "social security number"],
+            ["state of", "department of motor vehicles", "dmv"],
+            ["sex", "height", "eyes", "hair"],
+            ["identification card", "id card", "identification"],
+            ["issue date", "date issued", "issuing authority"],
+        ],
+        "threshold": 0.70,   # 7 out of 10 matches required
+        "min_matches": 7,
+    },
+    "invoice_poc_extractor": {
+        "slots": [
+            ["tax invoice", "commercial invoice", "standard invoice"],
+            ["bill to", "billed to", "customer details"],
+            ["ship to", "shipped to", "delivery address"],
+            ["gstin", "gst number", "cgst", "sgst", "vat number"],
+            ["subtotal", "sub-total", "net amount"],
+            ["unit price", "unit cost", "rate"],
+            ["qty", "quantity", "units"],
+            ["amount payable", "total payable", "total amount due"],
+            ["due date", "payment terms", "net 30"],
+            ["item description", "description of goods", "service description"],
+        ],
+        "threshold": 0.70,   # 7 out of 10 matches required
+        "min_matches": 7,
+    },
+}
+
 # Reconfigure stdout for UTF-8 support and LINE BUFFERING on Windows
 if sys.stdout.encoding != 'utf-8' or not getattr(sys.stdout, 'line_buffering', False):
     try:
@@ -1005,176 +1132,99 @@ class UnifiedRouter:
             print(f"[Rotation] Rotation check failed: {e}")
         return pdf_path
 
-    def extract_snippet(self, pdf_path, max_pages=3):
-        """4-stage text extraction pipeline for classification.
+    def _keyword_score_classify(self, text: str):
+        """Score `text` against CLASSIFICATION_KEYWORD_BANKS (10 concept slots per category).
 
-        Stage 1: PyMuPDF native text layer + slash-code noise detection.
-        Stage 2: pdfplumber fallback (better layout, reversed-text correction).
-        Stage 3: Enhanced OCR via pytesseract using work_comp enhancement pipeline
-                 (600 DPI, grayscale, contrast 1.6, sharpness 2.2, edge_enhance,
-                  binarize threshold 200) — matches work_comp/ocr_text.py exactly.
-        Stage 4: Basic OCR fallback (300 DPI, no enhancement) if Stage 3 fails.
+        Returns (category, score, hits) for the best match if it has >= 7 matches (70%),
+        else returns (None, best_score, hits).
+        """
+        if not text:
+            return None, 0.0, []
+
+        text_l = text.lower()
+        scores = {}
+        for cat, cfg in CLASSIFICATION_KEYWORD_BANKS.items():
+            slots = cfg.get("slots", [])
+            matched_hits = []
+            for slot in slots:
+                for kw in slot:
+                    if kw in text_l:
+                        matched_hits.append(kw)
+                        break
+            match_count = len(matched_hits)
+            total_slots = len(slots) or 10
+            score = match_count / total_slots
+            min_matches = cfg.get("min_matches", 7)
+            scores[cat] = {
+                "match_count": match_count,
+                "score": score,
+                "hits": matched_hits,
+                "min_matches": min_matches,
+                "threshold": cfg.get("threshold", 0.70),
+            }
+
+        ranked = sorted(scores.items(), key=lambda x: x[1]["score"], reverse=True)
+        best_cat, best = ranked[0]
+
+        print("\n[KeywordScore] 10-Keyword Slot Match Results:")
+        for cat, data in ranked:
+            bar = "#" * int(data["score"] * 10)
+            status = "PASS" if data["match_count"] >= data["min_matches"] else "FAIL"
+            print(f"  {cat:<25} {data['match_count']:>2}/10 [{bar:<10}] ({status}) hits={data['hits'][:5]}")
+
+        if best["match_count"] >= best["min_matches"]:
+            print(f"[KeywordScore] Winner: {best_cat} ({best['match_count']}/10 matches, score={best['score']:.0%})")
+            return best_cat, best["score"], best["hits"]
+
+        print(f"[KeywordScore] Best match {best_cat} has {best['match_count']}/10 matches (< {best['min_matches']} required) -- moving to next check / LLM")
+        return None, best["score"], best["hits"]
+
+    def extract_snippet(self, pdf_path, max_pages=2):
+        """Text extraction for classification using PaddleOCR ONLY.
+
+        All fallback text extraction engines (PyMuPDF, pdfplumber, Tesseract) have been
+        removed. PaddleOCR extracts noise-free text directly from rendered page images.
+        Processes the first 2 pages (max_pages=2) for high-speed classification.
         """
         import tempfile
-        # Higher threshold = stricter quality bar before falling through to OCR
-        # 300 chars of clean alphanumeric content is the minimum useful classification text
-        CHAR_THRESHOLD = 300
+        CHAR_THRESHOLD = 50
 
-        # Auto-correct orientation first
-        with tempfile.TemporaryDirectory() as tmp_dir:
+        # ignore_cleanup_errors=True prevents WinError 32 on Windows
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp_dir:
             working_pdf = self._detect_rotation_and_fix(pdf_path, tmp_dir)
-
             text = ""
 
-            # ── Stage 1: PyMuPDF native text ────────────────────────────────────
+            # PaddleOCR -- crash-safe subprocess mode from Insurance_pdf_extractor-main
             try:
-                doc = fitz.open(working_pdf)
-                raw = ""
-                for i in range(min(len(doc), max_pages)):
-                    raw += doc[i].get_text() or ""
-                doc.close()
-                raw = raw.strip()
-                print(f"[Snippet] Stage 1 (PyMuPDF): {len(raw)} chars")
-                if raw and not self._detect_slash_noise(raw):
-                    # Check for 180°-rotated text (reversed per line) and correct dynamically
-                    if self._check_if_reversed(raw):
-                        print("[Snippet] ⚠️ Detected 180°-rotated text encoding. Applying line reversal...")
-                        raw = self._reverse_text_lines(raw)
-                        print(f"[Snippet] Corrected sample: {raw[:120].strip()}")
-                    text = raw
+                import sys as _sys
+                _paddle_backend = str(
+                    Path(__file__).parent.parent / "Insurance_pdf_extractor-main" / "backend"
+                )
+                if _paddle_backend not in _sys.path:
+                    _sys.path.insert(0, _paddle_backend)
+                from paddleocr_enhancer import extract_with_paddleocr
+
+                pages_to_process = max_pages or 2
+                print(f"[Snippet] Extracting text using PaddleOCR ONLY (first {pages_to_process} pages)...")
+                paddle_text, _ = extract_with_paddleocr(
+                    str(working_pdf),
+                    use_gpu=False,
+                    enable_table=False,      # Fast plain-text OCR for classification
+                    max_pages=pages_to_process
+                )
+                paddle_text = (paddle_text or "").strip()
+                print(f"[Snippet] PaddleOCR extracted: {len(paddle_text)} chars")
+                if len(paddle_text) >= CHAR_THRESHOLD:
+                    text = paddle_text
                 else:
-                    print("[Snippet] Stage 1 output is noisy — skipping to Stage 2")
+                    print(f"[Snippet] PaddleOCR produced minimal text ({len(paddle_text)} chars)")
             except Exception as e:
-                print(f"[Snippet] Stage 1 failed: {e}")
+                print(f"[Snippet] PaddleOCR extraction error: {e}")
 
-            # ── Stage 2: pdfplumber (reversed-text + layout-aware) ───────────────
-            if len(text) < CHAR_THRESHOLD:
-                try:
-                    import pdfplumber
-                    plumber_text = ""
-                    with pdfplumber.open(working_pdf) as pdf:
-                        for i, page in enumerate(pdf.pages[:max_pages]):
-                            page_text = page.extract_text(layout=True) or ""
-                            plumber_text += page_text + "\n"
-                    plumber_text = plumber_text.strip()
-                    print(f"[Snippet] Stage 2 (pdfplumber): {len(plumber_text)} chars")
-                    if len(plumber_text) > len(text) and not self._detect_slash_noise(plumber_text):
-                        # Check for 180°-rotated text and correct dynamically
-                        if self._check_if_reversed(plumber_text):
-                            print("[Snippet] Stage 2: ⚠️ Detected reversed text. Applying correction...")
-                            plumber_text = self._reverse_text_lines(plumber_text)
-                            print(f"[Snippet] Stage 2 corrected sample: {plumber_text[:120].strip()}")
-                        text = plumber_text
-                    elif self._detect_slash_noise(plumber_text):
-                        print("[Snippet] Stage 2 also noisy — proceeding to OCR")
-                except Exception as e:
-                    print(f"[Snippet] Stage 2 (pdfplumber) failed: {e}")
-
-                    # ── Stage 3: Enhanced OCR (600 DPI + full enhancement + 4-angle rotation trial) ──
-            if len(text) < CHAR_THRESHOLD and OCR_AVAILABLE:
-                print(f"[Snippet] Stage 3 (Enhanced OCR 600 DPI + 4-angle) starting...")
-                try:
-                    from PIL import ImageOps, ImageFilter
-                    poppler = POPPLER_PATH if (POPPLER_PATH and os.path.exists(POPPLER_PATH)) else None
-                    try:
-                        images = convert_from_path(
-                            working_pdf, dpi=600, first_page=1, last_page=max_pages,
-                            poppler_path=poppler, fmt='jpeg'
-                        )
-                    except Exception as e:
-                        print(f"   [WARN] Stage 3 Image conversion failed at 600 DPI: {e}. Falling back to 200 DPI.")
-                        images = convert_from_path(
-                            working_pdf, dpi=200, first_page=1, last_page=max_pages,
-                            poppler_path=poppler, fmt='jpeg'
-                        )
-                    ocr_text = ""
-
-                    def _alnum_ratio(t):
-                        clean = re.sub(r'[^a-zA-Z0-9]', '', t)
-                        return len(clean) / max(len(t), 1)
-
-                    def _preprocess_img(img, contrast=1.6, sharpness=2.2, threshold=200):
-                        """Apply standard preprocessing pipeline."""
-                        img = ImageOps.grayscale(img)
-                        img = ImageEnhance.Contrast(img).enhance(contrast)
-                        img = ImageEnhance.Sharpness(img).enhance(sharpness)
-                        img = img.filter(ImageFilter.EDGE_ENHANCE_MORE)
-                        img = img.point(lambda p: p > threshold and 255)
-                        return img
-
-                    def _best_ocr(img, config="--oem 3 --psm 3"):
-                        """Try 4 rotations (0/90/180/270 deg), pick best by weighted alnum ratio."""
-                        best_text, best_score = "", 0.0
-                        for angle in [0, 90, 180, 270]:
-                            candidate = img.rotate(angle, expand=True) if angle else img
-                            t = pytesseract.image_to_string(candidate, config=config, lang="eng")
-                            score = _alnum_ratio(t) * len(t)
-                            if score > best_score:
-                                best_text, best_score = t, score
-                                if angle != 0:
-                                    print(f"[Snippet] Stage 3: {angle} deg rotation gave best OCR")
-                        return best_text
-
-                    for img in images:
-                        processed = _preprocess_img(img)
-                        # Try PSM 3 (auto) and PSM 6 (uniform block), pick longer
-                        t3 = _best_ocr(processed, "--oem 3 --psm 3")
-                        t6 = _best_ocr(processed, "--oem 3 --psm 6")
-                        ocr_text += t3 if len(t3) >= len(t6) else t6
-
-                    ocr_text = ocr_text.strip()
-                    if ocr_text and self._check_if_reversed(ocr_text):
-                        print("[Snippet] Stage 3 OCR: Detected reversed text - correcting...")
-                        ocr_text = self._reverse_text_lines(ocr_text)
-
-                    print(f"[Snippet] Stage 3 (OCR enhanced): {len(ocr_text)} chars")
-                    if len(ocr_text) > len(text):
-                        text = ocr_text
-                except Exception as e:
-                    print(f"[Snippet] Stage 3 failed: {e}")
-
-            # ── Stage 4: Adaptive DPI OCR fallback (try 400 then 300 DPI) ─────────────
-            if len(text) < CHAR_THRESHOLD and OCR_AVAILABLE:
-                print(f"[Snippet] Stage 4 (Adaptive DPI OCR) starting...")
-                try:
-                    poppler = POPPLER_PATH if (POPPLER_PATH and os.path.exists(POPPLER_PATH)) else None
-                    best_ocr_text = ""
-                    for dpi in [400, 300]:
-                        try:
-                            try:
-                                images = convert_from_path(
-                                    working_pdf, dpi=dpi, first_page=1, last_page=max_pages,
-                                    poppler_path=poppler
-                                )
-                            except Exception as e:
-                                print(f"[Snippet] Stage 4 ({dpi} DPI) failed: {e}. Trying fallback 200 DPI.")
-                                images = convert_from_path(
-                                    working_pdf, dpi=200, first_page=1, last_page=max_pages,
-                                    poppler_path=poppler
-                                )
-                            ocr_text = ""
-                            for img in images:
-                                t3 = pytesseract.image_to_string(img, config="--oem 3 --psm 3", lang="eng")
-                                t6 = pytesseract.image_to_string(img, config="--oem 3 --psm 6", lang="eng")
-                                ocr_text += t3 if len(t3) >= len(t6) else t6
-                            ocr_text = ocr_text.strip()
-                            if ocr_text and self._check_if_reversed(ocr_text):
-                                ocr_text = self._reverse_text_lines(ocr_text)
-                            print(f"[Snippet] Stage 4 ({dpi} DPI): {len(ocr_text)} chars")
-                            if len(ocr_text) > len(best_ocr_text):
-                                best_ocr_text = ocr_text
-                            if len(best_ocr_text) >= CHAR_THRESHOLD:
-                                break
-                        except Exception as dpi_err:
-                            print(f"[Snippet] Stage 4 ({dpi} DPI) failed: {dpi_err}")
-                    if len(best_ocr_text) > len(text):
-                        text = best_ocr_text
-                except Exception as e:
-                    print(f"[Snippet] Stage 4 failed: {e}")
-
-        final = text[:5000]
+        final = text[:50000]
         print(f"[Snippet] Final snippet ready: {len(final)} chars")
         return final
+
 
 
 
@@ -1481,7 +1531,7 @@ class UnifiedRouter:
                 except Exception as cache_err:
                     print(f"[Pre-Classify] Could not read cached text: {cache_err}")
 
-        # ── STEP 2: Assess text quality for LLM fallback decisions ───────────
+        # ── STEP 2: Assess text quality ──────────────────────────────────────
         clean_text_len = len(re.sub(r'[^a-zA-Z0-9]', '', text)) if text else 0
         meaningful_keywords = [
             "compensation", "insurance", "invoice", "premium", "claim", "policy",
@@ -1493,10 +1543,28 @@ class UnifiedRouter:
         has_meaningful_content = any(kw in text.lower() for kw in meaningful_keywords)
         is_noisy = file_ext == ".pdf" and (not text or clean_text_len < 50 or not has_meaningful_content)
 
-        if is_noisy:
-            print("[WARN] Text is poor/noisy — falling back to filename-only LLM classification.")
-        else:
+        if not is_noisy:
             print(f"\n[INFO] Classification Hint (first 400 chars):\n{'-'*70}\n{text[:400].strip()}\n{'-'*70}")
+
+        # ── STEP 2b: Keyword Scoring (runs on ALL extracted text, noisy or not) ─
+        # Try to classify deterministically using the keyword bank before spending
+        # any LLM tokens.  Uses ALL text from extract_snippet (all pages via
+        # PaddleOCR), so content on page 4+ is now included.
+        print("\n[STEP 2b] Keyword scoring classification...")
+        ks_cat, ks_score, ks_hits = self._keyword_score_classify(text)
+        if ks_cat:
+            # High-confidence keyword match — no LLM needed
+            canon = self._parse_classification(ks_cat) or ks_cat
+            provider = self._identify_provider(filename, text[:2000], request_id=request_id)
+            print(f"[KeywordScore] → Classified as {canon} (score={ks_score:.0%}, hits={ks_hits})")
+            print(f"\n[INFO] Classification Result: {canon} | Provider: {provider}")
+            return canon, provider
+
+        # Keyword score insufficient — log and fall through to LLM
+        if is_noisy:
+            print("[WARN] Text is poor/noisy and keyword score insufficient — falling back to filename-only LLM.")
+        else:
+            print(f"[INFO] Keyword score insufficient (best={ks_score:.0%}) — falling back to LLM.")
 
         # ── STEP 3a: Noisy / scanned PDF — filename-only LLM ─────────────────
         if is_noisy:
