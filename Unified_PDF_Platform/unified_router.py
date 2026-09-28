@@ -307,6 +307,24 @@ class ExcelExtractor:
                 model="gpt-4o",
                 messages=[{"role": "user", "content": prompt}]
             )
+
+            try:
+                import sys, os
+                _cur = os.path.abspath(__file__)
+                while os.path.basename(_cur) != 'Sales team - Copy' and os.path.dirname(_cur) != _cur:
+                    _cur = os.path.dirname(_cur)
+                if _cur not in sys.path: sys.path.append(_cur)
+                from core.universal_token_monitor import track_usage as _tm
+                _locals = locals()
+                _fn = _locals.get('filename') or _locals.get('file_name') or _locals.get('safe_filename')
+                if not _fn:
+                    _fp = _locals.get('file_path') or _locals.get('pdf_path') or _locals.get('working_path')
+                    if _fp: _fn = getattr(_fp, 'name', str(_fp))
+                _fn = str(_fn or 'gpu_doc')
+                if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
+                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
+            except Exception as e:
+                pass
             elapsed = time.time() - start_time
             if self.request_id:
                 request_monitor.record_ai_usage(
@@ -396,6 +414,24 @@ CRITICAL RULES:
                 messages=[{"role": "user", "content": prompt}],
                 response_format={ "type": "json_object" }
             )
+
+            try:
+                import sys, os
+                _cur = os.path.abspath(__file__)
+                while os.path.basename(_cur) != 'Sales team - Copy' and os.path.dirname(_cur) != _cur:
+                    _cur = os.path.dirname(_cur)
+                if _cur not in sys.path: sys.path.append(_cur)
+                from core.universal_token_monitor import track_usage as _tm
+                _locals = locals()
+                _fn = _locals.get('filename') or _locals.get('file_name') or _locals.get('safe_filename')
+                if not _fn:
+                    _fp = _locals.get('file_path') or _locals.get('pdf_path') or _locals.get('working_path')
+                    if _fp: _fn = getattr(_fp, 'name', str(_fp))
+                _fn = str(_fn or 'gpu_doc')
+                if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
+                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
+            except Exception as e:
+                pass
             elapsed = time.time() - start_time
             if self.request_id:
                 request_monitor.record_ai_usage(
@@ -470,6 +506,24 @@ RULES:
                 messages=[{"role": "user", "content": prompt}],
                 response_format={ "type": "json_object" }
             )
+
+            try:
+                import sys, os
+                _cur = os.path.abspath(__file__)
+                while os.path.basename(_cur) != 'Sales team - Copy' and os.path.dirname(_cur) != _cur:
+                    _cur = os.path.dirname(_cur)
+                if _cur not in sys.path: sys.path.append(_cur)
+                from core.universal_token_monitor import track_usage as _tm
+                _locals = locals()
+                _fn = _locals.get('filename') or _locals.get('file_name') or _locals.get('safe_filename')
+                if not _fn:
+                    _fp = _locals.get('file_path') or _locals.get('pdf_path') or _locals.get('working_path')
+                    if _fp: _fn = getattr(_fp, 'name', str(_fp))
+                _fn = str(_fn or 'gpu_doc')
+                if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
+                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
+            except Exception as e:
+                pass
             elapsed = time.time() - start_time
             if self.request_id:
                 request_monitor.record_ai_usage(
@@ -502,6 +556,24 @@ RULES:
                 model="gpt-4o",
                 messages=[{"role": "user", "content": prompt}],
             )
+
+            try:
+                import sys, os
+                _cur = os.path.abspath(__file__)
+                while os.path.basename(_cur) != 'Sales team - Copy' and os.path.dirname(_cur) != _cur:
+                    _cur = os.path.dirname(_cur)
+                if _cur not in sys.path: sys.path.append(_cur)
+                from core.universal_token_monitor import track_usage as _tm
+                _locals = locals()
+                _fn = _locals.get('filename') or _locals.get('file_name') or _locals.get('safe_filename')
+                if not _fn:
+                    _fp = _locals.get('file_path') or _locals.get('pdf_path') or _locals.get('working_path')
+                    if _fp: _fn = getattr(_fp, 'name', str(_fp))
+                _fn = str(_fn or 'gpu_doc')
+                if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
+                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
+            except Exception as e:
+                pass
             elapsed = time.time() - start_time
             if self.request_id:
                 request_monitor.record_ai_usage(
@@ -1464,6 +1536,24 @@ OUTPUT:"""
                     messages=[{"role": "user", "content": filename_prompt}],
                     temperature=0
                 )
+
+                try:
+                    import sys, os
+                    _cur = os.path.abspath(__file__)
+                    while os.path.basename(_cur) != 'Sales team - Copy' and os.path.dirname(_cur) != _cur:
+                        _cur = os.path.dirname(_cur)
+                    if _cur not in sys.path: sys.path.append(_cur)
+                    from core.universal_token_monitor import track_usage as _tm
+                    _locals = locals()
+                    _fn = _locals.get('filename') or _locals.get('file_name') or _locals.get('safe_filename')
+                    if not _fn:
+                        _fp = _locals.get('file_path') or _locals.get('pdf_path') or _locals.get('working_path')
+                        if _fp: _fn = getattr(_fp, 'name', str(_fp))
+                    _fn = str(_fn or 'gpu_doc')
+                    if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
+                    _tm(fn_response.usage, model=fn_response.model if hasattr(fn_response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
+                except Exception as e:
+                    pass
                 elapsed_fn = time.time() - start_time_fn
                 if request_id and request_monitor:
                     request_monitor.record_ai_usage(
@@ -1570,6 +1660,24 @@ OUTPUT:"""
                 max_tokens=30,
                 timeout=30
             )
+
+            try:
+                import sys, os
+                _cur = os.path.abspath(__file__)
+                while os.path.basename(_cur) != 'Sales team - Copy' and os.path.dirname(_cur) != _cur:
+                    _cur = os.path.dirname(_cur)
+                if _cur not in sys.path: sys.path.append(_cur)
+                from core.universal_token_monitor import track_usage as _tm
+                _locals = locals()
+                _fn = _locals.get('filename') or _locals.get('file_name') or _locals.get('safe_filename')
+                if not _fn:
+                    _fp = _locals.get('file_path') or _locals.get('pdf_path') or _locals.get('working_path')
+                    if _fp: _fn = getattr(_fp, 'name', str(_fp))
+                _fn = str(_fn or 'gpu_doc')
+                if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
+                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
+            except Exception as e:
+                pass
             elapsed = time.time() - start_time
             if request_id and request_monitor:
                 request_monitor.record_ai_usage(
@@ -1635,6 +1743,24 @@ Return ONLY the company name or UNKNOWN:"""
                 messages=[{"role": "user", "content": prov_prompt}],
                 temperature=0
             )
+
+            try:
+                import sys, os
+                _cur = os.path.abspath(__file__)
+                while os.path.basename(_cur) != 'Sales team - Copy' and os.path.dirname(_cur) != _cur:
+                    _cur = os.path.dirname(_cur)
+                if _cur not in sys.path: sys.path.append(_cur)
+                from core.universal_token_monitor import track_usage as _tm
+                _locals = locals()
+                _fn = _locals.get('filename') or _locals.get('file_name') or _locals.get('safe_filename')
+                if not _fn:
+                    _fp = _locals.get('file_path') or _locals.get('pdf_path') or _locals.get('working_path')
+                    if _fp: _fn = getattr(_fp, 'name', str(_fp))
+                _fn = str(_fn or 'gpu_doc')
+                if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
+                _tm(prov_response.usage, model=prov_response.model if hasattr(prov_response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
+            except Exception as e:
+                pass
             elapsed = time.time() - start_time
             if request_id and request_monitor:
                 request_monitor.record_ai_usage(
@@ -2624,6 +2750,24 @@ Return ONLY the company name or UNKNOWN:"""
                 response_format={"type": "json_object"},
                 temperature=0
             )
+
+            try:
+                import sys, os
+                _cur = os.path.abspath(__file__)
+                while os.path.basename(_cur) != 'Sales team - Copy' and os.path.dirname(_cur) != _cur:
+                    _cur = os.path.dirname(_cur)
+                if _cur not in sys.path: sys.path.append(_cur)
+                from core.universal_token_monitor import track_usage as _tm
+                _locals = locals()
+                _fn = _locals.get('filename') or _locals.get('file_name') or _locals.get('safe_filename')
+                if not _fn:
+                    _fp = _locals.get('file_path') or _locals.get('pdf_path') or _locals.get('working_path')
+                    if _fp: _fn = getattr(_fp, 'name', str(_fp))
+                _fn = str(_fn or 'gpu_doc')
+                if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
+                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
+            except Exception as e:
+                pass
             elapsed = time.time() - start_time
             if request_id and request_monitor:
                 request_monitor.record_ai_usage(

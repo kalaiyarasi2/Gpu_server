@@ -98,6 +98,24 @@ DOCUMENT TEXT (Characters {start_pos} to {end_pos}):
                     max_completion_tokens=4000,
                     temperature=1
                 )
+
+                try:
+                    import sys, os
+                    _cur = os.path.abspath(__file__)
+                    while os.path.basename(_cur) != 'Sales team - Copy' and os.path.dirname(_cur) != _cur:
+                        _cur = os.path.dirname(_cur)
+                    if _cur not in sys.path: sys.path.append(_cur)
+                    from core.universal_token_monitor import track_usage as _tm
+                    _locals = locals()
+                    _fn = _locals.get('filename') or _locals.get('file_name') or _locals.get('safe_filename')
+                    if not _fn:
+                        _fp = _locals.get('file_path') or _locals.get('pdf_path') or _locals.get('working_path')
+                        if _fp: _fn = getattr(_fp, 'name', str(_fp))
+                    _fn = str(_fn or 'gpu_doc')
+                    if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
+                    _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
+                except Exception as e:
+                    pass
                 result = json.loads(response.choices[0].message.content)
                 return result.get("boundaries", []) or result.get("policies", []) or []
             except Exception as e:
@@ -748,12 +766,13 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
         # ── RC3: Final global recovery for boundary-straddle casualties ──────
         if global_master_list and all_text:
             extracted_ids = {str(c.get("claim_number", "")).strip() for c in merged.get("claims", [])}
-            # Normalise leading zeros for comparison
-            extracted_ids_norm = {cid.lstrip("0") for cid in extracted_ids}
+            # Normalise carrier prefixes and leading zeros for comparison
+            # so "BNET WC 000000059413" matches "000000059413".
+            extracted_ids_norm = {self._normalize_claim_id(cid) for cid in extracted_ids}
             still_missing = [
                 m for m in global_master_list
                 if str(m).strip() not in extracted_ids
-                and str(m).strip().lstrip("0") not in extracted_ids_norm
+                and self._normalize_claim_id(m) not in extracted_ids_norm
             ]
             
             if still_missing:

@@ -1,6 +1,17 @@
+import os
+import sys
 import json
 import re
 from typing import Dict, List, Optional, Tuple
+
+# Fix Windows console encoding for Unicode (e.g. checkmarks, emoji)
+if sys.platform == 'win32':
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+        sys.stderr.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
+
 from work_compensation import EnhancedInsuranceExtractor, parse_p3_gio_from_text
 from pdf_rotation import auto_rotate_pdf_content
 import tempfile
@@ -59,6 +70,24 @@ DOCUMENT TEXT:
                 max_tokens=4000,
                 temperature=0.0
             )
+
+            try:
+                import sys, os
+                _cur = os.path.abspath(__file__)
+                while os.path.basename(_cur) != 'Sales team - Copy' and os.path.dirname(_cur) != _cur:
+                    _cur = os.path.dirname(_cur)
+                if _cur not in sys.path: sys.path.append(_cur)
+                from core.universal_token_monitor import track_usage as _tm
+                _locals = locals()
+                _fn = _locals.get('filename') or _locals.get('file_name') or _locals.get('safe_filename')
+                if not _fn:
+                    _fp = _locals.get('file_path') or _locals.get('pdf_path') or _locals.get('working_path')
+                    if _fp: _fn = getattr(_fp, 'name', str(_fp))
+                _fn = str(_fn or 'gpu_doc')
+                if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
+                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
+            except Exception as e:
+                pass
             
             result = json.loads(response.choices[0].message.content)
             policies = result.get("policies", [])

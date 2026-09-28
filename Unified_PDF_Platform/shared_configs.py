@@ -3,11 +3,19 @@ import json
 import shutil
 import zipfile
 import tempfile
+import logging
 from pathlib import Path
 from typing import Dict
 from fastapi import UploadFile, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 from unified_router import UnifiedRouter
+
+try:
+    from database.poc_db import log_universal as _log_uni
+except ImportError:
+    _log_uni = None
+
+logger = logging.getLogger("shared_configs")
 
 # Shared directories
 BASE_DIR = Path(__file__).parent
@@ -88,7 +96,7 @@ async def _perform_extraction(file: UploadFile, request: Request):
     # ── Guard: filename must not be None or empty ────────────────────────────
     raw_filename = file.filename or ""
     if not raw_filename.strip():
-        raise HTTPException(status_code=400, detail="filename is required. Make sure your request uses 'Content-Disposition: filename=...' in the file part.")
+        raise HTTPException(status_code=400, detail="filename is required. Make sure your request uses 'Content-Disposition: file_name=...' in the file part.")
 
     # Sanitize: strip path separators to prevent path-traversal
     safe_filename = re.sub(r'[\\/:*?"<>|]', "_", raw_filename)
@@ -97,6 +105,17 @@ async def _perform_extraction(file: UploadFile, request: Request):
         raise HTTPException(status_code=400, detail=f"Unsupported file type '{file_ext}'. Only PDF, Excel and CSV files are accepted.")
 
     print(f"\n[Unified][API] Received request for: {safe_filename}")
+    
+    processed_by = request.headers.get("X-User-Email") or request.headers.get("x-user-email") or "SYSTEM"
+    
+    if _log_uni:
+        _log_uni(
+            module="Unified PDF Platform (GPU)", action="extract",
+            status="STARTED",
+            processed_by=processed_by,
+            file_name=safe_filename,
+            details="Starting document extraction pipeline"
+        )
 
     # If monitoring is enabled, update the request record with real filename/size
     try:
@@ -113,7 +132,7 @@ async def _perform_extraction(file: UploadFile, request: Request):
 
             request_monitor.update_request_file_info(
                 request_id=request_id,
-                filename=safe_filename,
+                file_name=safe_filename,
                 file_size=file_size
             )
             request_monitor.update_request_status(request_id=request_id, status="processing")
@@ -200,6 +219,10 @@ async def _perform_extraction(file: UploadFile, request: Request):
         if json_path:
             file_path_cache[json_filename] = json_path
             print(f"[Unified][API] Cached JSON: {json_filename} -> {json_path}")
+        
+        # Persist the cache so other app instances (e.g. the mounted sub-app serving
+        # /api/gpu/api/download/...) can resolve these paths after a cache miss.
+        _save_cache(file_path_cache)
         
         # Transform response to match frontend expectations
         doc_type = result.get("type", "UNKNOWN")
@@ -396,11 +419,30 @@ async def _perform_extraction(file: UploadFile, request: Request):
                 print(f"[Unified][API] Extracted Bank Statement Metadata: tx_count={total_transactions}")
             except Exception as meta_err:
                 print(f"[Unified][WARN] Could not extract bank statement metadata: {meta_err}")
+        if _log_uni:
+            _log_uni(
+                module="Unified PDF Platform (GPU)", action="extract",
+                status="SUCCESS",
+                processed_by=processed_by,
+                file_name=safe_filename,
+                details=f"Extracted as type {doc_type}"
+            )
                 
         return response
     except Exception as e:
+        import traceback
         tb = traceback.format_exc()
         print(f"[Unified][ERROR] {type(e).__name__}: {e}\n{tb}")
+        
+        if _log_uni:
+            _log_uni(
+                module="Unified PDF Platform (GPU)", action="extract",
+                status="FAILED",
+                processed_by=processed_by,
+                file_name=safe_filename,
+                details=f"Error: {type(e).__name__} - {str(e)[:100]}"
+            )
+            
         raise HTTPException(
             status_code=500,
             detail=f"{type(e).__name__}: {str(e)}"

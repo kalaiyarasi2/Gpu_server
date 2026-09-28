@@ -191,6 +191,17 @@ class EnhancedInsuranceExtractor:
         self.output_dir = Path(output_dir) if output_dir else Path("outputs")
         self.output_dir.mkdir(parents=True, exist_ok=True)
     
+    @staticmethod
+    def _normalize_claim_id(claim_id: str) -> str:
+        """Strip carrier prefixes (e.g. 'BNET WC ') and leading zeros for comparison."""
+        val = str(claim_id).strip()
+        # Remove known carrier prefixes that may or may not appear
+        for prefix in ("BNET WC ", "BNET ", "WC "):
+            if val.startswith(prefix):
+                val = val[len(prefix):]
+                break
+        return val.lstrip("0")
+
     def _parse_llm_json_response(self, response_content: str, label: str = "LLM response") -> Dict:
         """
         Parses JSON content from an LLM response, handling markdown code blocks and attempting minor fixes.
@@ -1997,8 +2008,11 @@ Follow the format-specific instructions above. Validate your extractions."""
                 
             # MASTER LIST ENFORCEMENT
             if master_claim_list:
-                # Use case-insensitive comparison but be cautious with leading zeros
-                if claim_num not in master_claim_list and claim_num.lstrip('0') not in [m.lstrip('0') for m in master_claim_list]:
+                # Normalize both sides: strip carrier prefixes (e.g., "BNET WC ") and
+                # leading zeros so "BNET WC 000000059413" matches "000000059413".
+                _claim_norm = self._normalize_claim_id(claim_num)
+                _master_norm = [self._normalize_claim_id(m) for m in master_claim_list]
+                if claim_num not in master_claim_list and _claim_norm not in _master_norm:
                     print(f"      🗑️  Filtering claim {claim_num} (Not in master claim list)")
                     continue
 

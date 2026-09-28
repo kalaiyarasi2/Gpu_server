@@ -6,12 +6,16 @@ from pathlib import Path
 from typing import Dict, List, Optional, Any
 import logging
 
+MONITOR_DIR = Path(__file__).parent
+MONITOR_DIR.mkdir(parents=True, exist_ok=True)
+MONITOR_LOG_FILE = MONITOR_DIR / 'monitor.log'
+
 # Configure logging for the monitor
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('monitor/monitor.log'),
+        logging.FileHandler(str(MONITOR_LOG_FILE)),
         logging.StreamHandler()
     ]
 )
@@ -20,8 +24,8 @@ logger = logging.getLogger('monitor_db')
 class MonitorDatabase:
     """Database manager for request monitoring with thread-safe operations."""
     
-    def __init__(self, db_path: str = "monitor/requests.db"):
-        self.db_path = db_path
+    def __init__(self, db_path: Optional[str] = None):
+        self.db_path = db_path or str(MONITOR_DIR / "requests.db")
         self.lock = threading.Lock()
         self.init_database()
     
