@@ -34,9 +34,9 @@ import os
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)  # pdf_extractor root
 if parent_dir not in sys.path:
-    sys.path.insert(0, parent_dir)
+    sys.path.append(parent_dir)
 if current_dir not in sys.path:
-    sys.path.insert(0, current_dir)
+    sys.path.append(current_dir)
 # Import summary router
 try:
     from summary_api import router as summary_router
