@@ -41,7 +41,7 @@ TENANTS_CONFIG_DIR = _WORKSPACE_DIR / "config" / "tenants"
 # Default (no-op) extraction config — used when no extraction.json exists
 # ---------------------------------------------------------------------------
 _DEFAULT_CONFIG: Dict[str, Any] = {
-    "tenant_code": "DEFAULT",
+    "tenant_code": None,
     "base_engines": [],
     "output_tag": None,
     "output_subfolder": None,
@@ -240,7 +240,8 @@ class TenantExtractionEngine:
 
         if not self.has_extensions:
             logger.info(f"[TenantEngine] No extensions for tenant '{self.tenant_code}' — returning base result.")
-            result["tenant"] = self.output_tag
+            if self.output_tag:
+                result["tenant"] = self.output_tag
             return result
 
         # Run each enabled extension
@@ -261,6 +262,12 @@ class TenantExtractionEngine:
             ext_result = self._run_gpt_extension(ext, extracted_text)
             if ext_result is not None:
                 extensions_added[ext["name"]] = ext_result
+            else:
+                logger.warning(
+                    f"[TenantEngine][{self.tenant_code}] Extension '{ext.get('name')}' returned no result — "
+                    f"writing empty placeholder."
+                )
+                extensions_added[ext["name"]] = [] if str(ext.get("output_type", "")).lower() == "array" else {}
 
         # Merge extensions into the result under data{}
         if extensions_added:
@@ -272,8 +279,9 @@ class TenantExtractionEngine:
         # Apply field overrides / validation
         result = self._apply_field_overrides(result, source_doc_type)
 
-        # Tag the output
-        result["tenant"] = self.output_tag
+        # Tag the output (only when the tenant config defines a tag)
+        if self.output_tag:
+            result["tenant"] = self.output_tag
 
         logger.info(
             f"[TenantEngine][{self.tenant_code}] Enrichment complete. "

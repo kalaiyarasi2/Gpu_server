@@ -99,7 +99,8 @@ def _resolve_tenant(request: Request, path_or_query_tenant: Optional[str] = None
     except Exception:
         pass
 
-    return "WCUW"
+    logger.warning("[TenantRouter] No tenant in path/header/token — falling back to 'DEFAULT'.")
+    return "DEFAULT"
 
 
 # ---------------------------------------------------------------------------
@@ -499,3 +500,44 @@ async def tenant_list():
                     entry[fname.replace(".json", "")] = {}
         tenants.append(entry)
     return JSONResponse(content={"count": len(tenants), "tenants": tenants})
+
+
+@router.post("/{tenant}/save", summary="Save unified submission JSON to backend disk")
+async def tenant_save_submission(tenant: str, request: Request):
+    tenant_code = _resolve_tenant(request, tenant)
+    payload = await request.json()
+
+    # Apply the same shared finalize step used by the mail-to-mail flow
+    try:
+        import sys
+        if str(_WORKSPACE_DIR) not in sys.path:
+            sys.path.insert(0, str(_WORKSPACE_DIR))
+        from core.tenant.loaders import TenantConfigLoader
+        from core.submission.payload_transformer import PayloadTransformer
+
+        sub_cfg = TenantConfigLoader(_WORKSPACE_DIR).load_submission_config(tenant_code.lower())
+        if sub_cfg.transform_rules.unified_acord_lossrun:
+            payload = PayloadTransformer(sub_cfg).finalize_unified_payload(payload, sub_cfg)
+    except Exception as e:
+        logger.warning(f"[TenantRouter][{tenant_code}] finalize_unified_payload skipped: {e}")
+    
+    import datetime
+    from pathlib import Path
+    
+    # Path to output directory
+    tenant_sub_dir = Path(__file__).resolve().parent.parent.parent / "output" / tenant_code.lower() / "submissions"
+    tenant_sub_dir.mkdir(parents=True, exist_ok=True)
+    
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    email = payload.get("email", "SYSTEM")
+    if not email:
+        email = "SYSTEM"
+    safe_email = "".join(c if c.isalnum() or c in "._-" else "_" for c in email)
+    
+    out_file = tenant_sub_dir / f"submission_{timestamp}_{safe_email}.json"
+    out_file.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    
+    latest_file = tenant_sub_dir / "latest_submission.json"
+    latest_file.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    
+    return JSONResponse(content={"success": True, "saved_path": str(out_file)})
