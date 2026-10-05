@@ -34,9 +34,9 @@ import os
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)  # pdf_extractor root
 if parent_dir not in sys.path:
-    sys.path.insert(0, parent_dir)
+    sys.path.append(parent_dir)
 if current_dir not in sys.path:
-    sys.path.insert(0, current_dir)
+    sys.path.append(current_dir)
 # Import summary router
 try:
     from summary_api import router as summary_router
@@ -55,6 +55,7 @@ except ImportError:
 from ai_summary_file import router as ai_summary_router
 from claims_dashboard_api import router as claims_dashboard_router
 from management_claims_dashboard_api import router as management_claims_dashboard_router
+from tenant_router import router as tenant_router
 
 # Import monitoring components
 from monitor import add_monitoring_to_app
@@ -109,6 +110,7 @@ app.include_router(summary_router)
 app.include_router(ai_summary_router)
 app.include_router(claims_dashboard_router)
 app.include_router(management_claims_dashboard_router)
+app.include_router(tenant_router, prefix="/api/tenant")
 
 # --- Background Email Pipeline Management ---
 email_process = None
