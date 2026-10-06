@@ -18,7 +18,16 @@ import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Tuple, List, Dict, Optional
+import time
 import re as _re
+
+try:
+    import core_gpu
+except ImportError:
+    _root_dir = Path(__file__).resolve().parent.parent.parent.parent
+    if str(_root_dir) not in sys.path:
+        sys.path.insert(0, str(_root_dir))
+    import core_gpu
 
 # Fix Windows console encoding for Unicode (e.g. checkmarks, emoji)
 if sys.platform == 'win32':
@@ -187,8 +196,12 @@ def extract_with_paddleocr(pdf_path: str, use_gpu: bool = True, enable_table: bo
         print(f"   ⚠️ pdf2image not installed: {e}")
         return "", []
 
+    gpu_engine = core_gpu.get_gpu_engine()
+    effective_use_gpu = use_gpu and gpu_engine.is_cuda_available()
+
     print(f"🐼 PaddleOCR (Workers Comp): Starting extraction (crash-safe subprocess mode)...")
-    print(f"   GPU: {'Enabled' if use_gpu else 'Disabled'}")
+    print(f"   Hardware: {gpu_engine.get_device_string()}")
+    print(f"   GPU Acceleration: {'ACTIVE (CUDA)' if effective_use_gpu else 'INACTIVE (CPU mode)'}")
     print(f"   Table Detection: {'Enabled' if enable_table else 'Disabled'}")
     print(f"   Mode: Page-by-page isolated subprocess (no server crash risk)")
 
@@ -218,13 +231,22 @@ def extract_with_paddleocr(pdf_path: str, use_gpu: bool = True, enable_table: bo
                 page_num = idx + 1
                 with _gpu_sem:
                     print(f"      Page {page_num}/{total_pages}...", end=" ", flush=True)
+                    t0 = time.time()
                     text = _ocr_page_in_subprocess(
                         img_path=img_path,
-                        use_gpu=use_gpu,
+                        use_gpu=effective_use_gpu,
                         enable_table=enable_table,
                         timeout=300
                     )
-                    print(f"✓ ({len(text)} chars)")
+                    elapsed = time.time() - t0
+                    print(f"✓ ({len(text)} chars in {elapsed:.2f}s)")
+                    core_gpu.log_ocr_audit(
+                        module_name="Workers-Comp",
+                        engine_name="PaddleOCR-PPStructure" if enable_table else "PaddleOCR-Basic",
+                        page_idx=page_num,
+                        total_pages=total_pages,
+                        elapsed_sec=elapsed
+                    )
                     return idx, text
 
             with ThreadPoolExecutor(max_workers=_MAX_PARALLEL_WORKERS) as executor:
