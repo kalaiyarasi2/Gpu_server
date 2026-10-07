@@ -51,6 +51,7 @@ def move_to_trash(file_path: str, module_name: str, file_type: str = "processed"
     
     try:
         shutil.move(file_path, dest_path)
+        os.utime(dest_path, None)
         logger.info(f"File moved to trash: {dest_path}")
         return True
     except PermissionError:
@@ -83,6 +84,7 @@ def copy_to_trash(file_path: str, module_name: str, file_type: str = "processed"
             dest_path = os.path.join(trash_dir, filename)
             
         shutil.copy2(file_path, dest_path)
+        os.utime(dest_path, None)
         logger.info(f"File copied to trash: {dest_path}")
         return True
     except Exception as e:
