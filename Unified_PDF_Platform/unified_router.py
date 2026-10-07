@@ -1208,7 +1208,7 @@ class UnifiedRouter:
                 print(f"[Snippet] Extracting text using PaddleOCR ONLY (first {pages_to_process} pages)...")
                 paddle_text, _ = extract_with_paddleocr(
                     str(working_pdf),
-                    use_gpu=False,
+                    use_gpu=True,
                     enable_table=False,      # Fast plain-text OCR for classification
                     max_pages=pages_to_process
                 )
