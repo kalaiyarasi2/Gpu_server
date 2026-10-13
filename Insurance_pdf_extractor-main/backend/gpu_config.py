@@ -34,14 +34,12 @@ _MODE, _VRAM_GB = _detect_mode()
 # if you have a GPU with ≥ 8 GB VRAM.
 
 def _build_concurrency_config(mode: str, vram_gb: float) -> dict:
-    if mode == "GPU" and vram_gb >= 8:
-        max_workers = 4
-    elif mode == "GPU":
+    if mode == "GPU":
         max_workers = 2
     else:
-        # CPU fallback – use half the logical cores, minimum 1
+        # CPU fallback – keep low to avoid CPU/RAM starvation
         import multiprocessing
-        max_workers = max(1, multiprocessing.cpu_count() // 2)
+        max_workers = min(2, max(1, multiprocessing.cpu_count() // 2))
 
     return {
         "mode": mode,

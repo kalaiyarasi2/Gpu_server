@@ -27,12 +27,67 @@ if sys.platform == "win32":
     except Exception:
         pass
 
-# Dynamic worker count — reads from gpu_config (Tesla T4 → 4 workers automatically)
+# Dynamic worker count — capped at 2 to protect GPU/CPU memory
 try:
     from gpu_config import gpu_concurrency_config as _gpu_cfg
-    _MAX_PARALLEL_WORKERS = _gpu_cfg["rostaing_ocr"]["max_workers"]
+    _MAX_PARALLEL_WORKERS = min(2, _gpu_cfg["rostaing_ocr"]["max_workers"])
 except Exception:
     _MAX_PARALLEL_WORKERS = 2  # safe fallback if gpu_config unavailable
+
+# Shared GPU PaddleOCR pool (pdf_extractor/GPU). Persistent workers load the
+# models onto the GPU once and OCR pages in parallel.
+_PROJECT_ROOT = str(Path(__file__).resolve().parents[2])
+if _PROJECT_ROOT not in sys.path:
+    sys.path.append(_PROJECT_ROOT)
+try:
+    import GPU as _gpu_ocr
+except Exception as _gpu_import_err:  # GPU package missing / broken -> CPU path
+    _gpu_ocr = None
+    print(f"[PaddleOCR] GPU package unavailable, using CPU subprocess mode: {_gpu_import_err}")
+
+# Engine profile for the GPU workers — must match _subprocess_ocr_worker below.
+_GPU_PROFILE_BASIC = {
+    "kind": "basic",
+    "cls": True,
+    "kwargs": {"use_angle_cls": True, "det_limit_side_len": 2000},
+}
+_GPU_PROFILE_STRUCTURE = {"kind": "structure", "kwargs": {}}
+
+
+def _ocr_pages_on_gpu(image_paths: List[str], enable_table: bool) -> Optional[List[Optional[str]]]:
+    """
+    OCR all pages in parallel on the shared GPU pool.
+    Returns None if GPU OCR is unavailable, else a list of page texts where a
+    None entry means that page must fall back to the CPU subprocess path.
+    """
+    if _gpu_ocr is None or not _gpu_ocr.gpu_ocr_available():
+        return None
+    profile = _GPU_PROFILE_STRUCTURE if enable_table else _GPU_PROFILE_BASIC
+    total = len(image_paths)
+
+    def _progress(idx, res):
+        print(f"      Page {idx + 1}/{total} ✓ GPU{res.get('device')} "
+              f"pid={res.get('pid')} {res.get('elapsed')}s")
+
+    try:
+        raws = _gpu_ocr.ocr_images_parallel(image_paths, profile, on_page_done=_progress)
+    except Exception as e:
+        print(f"   ⚠️ GPU OCR pool error, falling back to CPU: {e}")
+        return None
+    if raws is None:
+        return None
+
+    texts: List[Optional[str]] = []
+    for raw in raws:
+        if raw is None:
+            texts.append(None)
+            continue
+        try:
+            texts.append(_format_structure_result(raw) if enable_table else _format_basic_result(raw))
+        except Exception as e:
+            print(f"      ⚠️ Formatting GPU result failed: {e}")
+            texts.append(None)
+    return texts
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -50,6 +105,8 @@ def _subprocess_ocr_worker():
     enable_table = sys.argv[4].lower() == "true"
 
     try:
+        os.environ.setdefault("FLAGS_allocator_strategy", "auto_growth")
+        os.environ.setdefault("FLAGS_fraction_of_gpu_memory_to_use", "0")
         from paddleocr import PPStructure, PaddleOCR
         import numpy as np
         from PIL import Image
@@ -74,7 +131,7 @@ def _subprocess_ocr_worker():
                 show_log=False,
                 lang='en',
                 use_angle_cls=True,
-                det_limit_side_len=4000
+                det_limit_side_len=2000
             )
             result = ocr_engine.ocr(img_array, cls=True)
             page_text = _format_basic_result(result)
@@ -188,7 +245,8 @@ def extract_with_paddleocr(pdf_path: str, use_gpu: bool = True, enable_table: bo
                 dpi=300,
                 output_folder=tmp_dir,
                 fmt="png",
-                paths_only=True          # Returns file paths, not PIL objects → saves RAM
+                paths_only=True,         # Returns file paths, not PIL objects → saves RAM
+                thread_count=_gpu_ocr.render_threads() if _gpu_ocr else 1,  # parallel rasterisation
             )
             if max_pages and max_pages > 0:
                 convert_kwargs["first_page"] = 1
@@ -197,11 +255,27 @@ def extract_with_paddleocr(pdf_path: str, use_gpu: bool = True, enable_table: bo
             image_paths = convert_from_path(pdf_path, **convert_kwargs)
 
             total_pages = len(image_paths)
-            print(f"   🔍 Processing {total_pages} pages — ⚡ PARALLEL mode ({_MAX_PARALLEL_WORKERS} workers)...")
 
             # Pre-allocate results list to preserve page order regardless of completion order
             page_results  = ["" ] * total_pages
             page_metadata = [{}  ] * total_pages
+            page_device   = ["cpu"] * total_pages
+
+            # ── GPU PATH: all pages in parallel on the persistent GPU pool ──
+            gpu_texts = _ocr_pages_on_gpu([str(p) for p in image_paths], enable_table) if use_gpu else None
+            if gpu_texts is not None:
+                print(f"   ⚡ GPU parallel OCR done for "
+                      f"{sum(t is not None for t in gpu_texts)}/{total_pages} pages")
+                cpu_indices = [i for i, t in enumerate(gpu_texts) if t is None]
+                for i, t in enumerate(gpu_texts):
+                    if t is not None:
+                        page_results[i] = t
+                        page_device[i] = "gpu"
+            else:
+                cpu_indices = list(range(total_pages))
+
+            if cpu_indices:
+                print(f"   🔍 Processing {len(cpu_indices)} pages — CPU subprocess mode ({_MAX_PARALLEL_WORKERS} workers)...")
 
             # Semaphore ensures at most _MAX_PARALLEL_WORKERS subprocesses run at once
             # even if the executor has more threads queued.
@@ -221,28 +295,31 @@ def extract_with_paddleocr(pdf_path: str, use_gpu: bool = True, enable_table: bo
                     print(f"✓ ({len(text)} chars)")
                     return idx, text
 
-            # Submit all pages at once; executor caps concurrency to _MAX_PARALLEL_WORKERS
-            with ThreadPoolExecutor(max_workers=_MAX_PARALLEL_WORKERS) as executor:
-                futures = {
-                    executor.submit(_ocr_page_task, i, str(path)): i
-                    for i, path in enumerate(image_paths)
-                }
-                for future in as_completed(futures):
-                    try:
-                        idx, page_text = future.result()
-                    except Exception as exc:
-                        idx = futures[future]
-                        print(f"      ⚠️  Page {idx+1} future raised: {exc}")
-                        page_text = ""
-
-                    page_results[idx]  = page_text
-                    page_metadata[idx] = {
-                        "page_number": idx + 1,
-                        "text": page_text,
-                        "is_scanned": True,
-                        "extraction_method": "paddleocr-structure" if enable_table else "paddleocr-basic",
-                        "confidence": 0.92
+            # CPU / fallback path: only the pages the GPU pool did not handle
+            if cpu_indices:
+                with ThreadPoolExecutor(max_workers=_MAX_PARALLEL_WORKERS) as executor:
+                    futures = {
+                        executor.submit(_ocr_page_task, i, str(image_paths[i])): i
+                        for i in cpu_indices
                     }
+                    for future in as_completed(futures):
+                        try:
+                            idx, page_text = future.result()
+                        except Exception as exc:
+                            idx = futures[future]
+                            print(f"      ⚠️  Page {idx+1} future raised: {exc}")
+                            page_text = ""
+                        page_results[idx] = page_text
+
+            for idx in range(total_pages):
+                page_metadata[idx] = {
+                    "page_number": idx + 1,
+                    "text": page_results[idx],
+                    "is_scanned": True,
+                    "extraction_method": "paddleocr-structure" if enable_table else "paddleocr-basic",
+                    "ocr_device": page_device[idx],
+                    "confidence": 0.92
+                }
 
             extracted_pages = page_results
             metadata        = page_metadata
