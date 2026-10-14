@@ -263,10 +263,13 @@ def poll(cleanup: bool = True, mark_read: bool = True) -> int:
                 attachment_paths.append(r["json"])
         
         if attachment_paths:
-            recipient = os.getenv("RECIPIENT_EMAIL", "althafm3017@gmail.com")
-            subject   = f"Extraction Results - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-            body      = f"Attached are the extraction results for {len(results)} file(s)."
-            send_email_with_results(recipient, subject, body, list(set(attachment_paths)))
+            recipient = os.getenv("RECIPIENT_EMAIL") or os.getenv("SENDER_EMAIL")
+            if recipient:
+                subject   = f"Extraction Results - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+                body      = f"Attached are the extraction results for {len(results)} file(s)."
+                send_email_with_results(recipient, subject, body, list(set(attachment_paths)))
+            else:
+                logger.info("Skipping email dispatch: RECIPIENT_EMAIL not set in environment.")
 
     csv_path = save_and_cleanup(results, all_pdfs, cleanup=cleanup)
     
