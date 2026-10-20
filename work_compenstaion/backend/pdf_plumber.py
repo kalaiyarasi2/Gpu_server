@@ -95,7 +95,7 @@ PAGE SAMPLES:
         )
 
         try:
-            import sys, os
+            import sys
             _cur = os.path.abspath(__file__)
             while os.path.basename(_cur) != 'Sales team - Copy' and os.path.dirname(_cur) != _cur:
                 _cur = os.path.dirname(_cur)

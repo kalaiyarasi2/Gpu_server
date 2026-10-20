@@ -37,16 +37,30 @@ def auto_rotate_pdf_content(input_pdf, output_pdf):
                 rotated_any = True
                 print(f"  - Page {i+1}: rotated by {angle}°")
 
+        original_page_count = len(doc)
+
+        if not rotated_any:
+            # Do NOT re-save: PyMuPDF can corrupt fillable/damaged PDFs on save.
+            doc.close()
+            print(f"  ✅ PDF already correctly oriented (original kept)")
+            return False
+
         doc.save(output_pdf)
         doc.close()
 
-        if rotated_any:
-            print(f"  ✅ PDF rotated: {output_pdf}")
-            return True
-        else:
-            print(f"  ✅ PDF already correctly oriented: {output_pdf}")
+        # Safety net: if the rotated save is broken, keep using the original.
+        try:
+            check = fitz.open(output_pdf)
+            saved_pages = len(check)
+            check.close()
+        except Exception:
+            saved_pages = 0
+        if saved_pages != original_page_count:
+            print(f"  ⚠️ Rotated PDF invalid ({saved_pages}/{original_page_count} pages). Using original.")
             return False
-        return rotated_any
+
+        print(f"  ✅ PDF rotated: {output_pdf}")
+        return True
             
     except Exception as e:
         print(f"  ❌ Error processing {input_pdf}: {e}")

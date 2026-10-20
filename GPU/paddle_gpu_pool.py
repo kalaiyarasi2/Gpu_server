@@ -46,6 +46,28 @@ _WORKER_SETTINGS: Dict[str, Any] = {}
 
 def _worker_init(devices: List[int], gpu_mem_mb: int, rec_batch_num: int, cpu_threads: int) -> None:
     """Runs once per worker process BEFORE paddle is imported."""
+    from pathlib import Path
+    import sys
+    import site
+
+    # Remove any Email_pipeline entries that might shadow paddleocr's internal 'tools' package
+    sys.path = [p for p in sys.path if "email_pipeline" not in p.replace("\\", "/").lower()]
+
+    # Prioritize paddleocr package directory so 'from tools.infer' resolves to paddleocr.tools
+    for sp in site.getsitepackages():
+        ocr_pkg = os.path.join(sp, "paddleocr")
+        if os.path.isdir(ocr_pkg) and ocr_pkg not in sys.path:
+            sys.path.insert(0, ocr_pkg)
+
+    # Purge any shadowed modules if already imported in this process
+    for mod in ["tools", "auth"]:
+        if mod in sys.modules and "paddleocr" not in str(getattr(sys.modules[mod], "__file__", "")):
+            del sys.modules[mod]
+
+    gpu_parent = str(Path(__file__).resolve().parents[1])
+    if gpu_parent not in sys.path:
+        sys.path.insert(0, gpu_parent)
+
     device = devices[os.getpid() % len(devices)] if devices else 0
     os.environ["CUDA_VISIBLE_DEVICES"] = str(device)
     # Grow GPU memory on demand instead of grabbing a big fixed chunk, so
@@ -78,6 +100,17 @@ def _get_engine(profile: Dict[str, Any]):
                 paddle.device.cuda.empty_cache()
         except Exception:
             pass
+
+    import sys
+    import site
+    sys.path = [p for p in sys.path if "email_pipeline" not in p.replace("\\", "/").lower()]
+    for sp in site.getsitepackages():
+        ocr_pkg = os.path.join(sp, "paddleocr")
+        if os.path.isdir(ocr_pkg) and ocr_pkg not in sys.path:
+            sys.path.insert(0, ocr_pkg)
+    for mod in ["tools", "auth"]:
+        if mod in sys.modules and "paddleocr" not in str(getattr(sys.modules[mod], "__file__", "")):
+            del sys.modules[mod]
 
     from paddleocr import PaddleOCR, PPStructure  # heavy import only in workers
 
@@ -158,6 +191,45 @@ def _worker_ping(profile: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
 # ─────────────────────────────────────────────────────────────────────────────
 #  PARENT-PROCESS SIDE  (pool manager, used by the extractors)
 # ─────────────────────────────────────────────────────────────────────────────
+_MISSING = object()
+
+
+class _IsolatedSpawnExecutor(ProcessPoolExecutor):
+    """
+    ProcessPoolExecutor whose spawned workers do NOT re-import the parent's
+    __main__ module (e.g. app.py).
+
+    With the "spawn" start method, Windows re-runs the parent's main script in
+    every child. For app.py that means importing torch + all sub-apps inside
+    the GPU worker, after which `import paddle` fails with
+    "generic_type: type '_gpuDeviceProperties' is already registered!".
+    Hiding __main__'s __file__/__spec__ while a worker is started makes the
+    child skip that step; it only imports GPU.paddle_gpu_pool.
+    """
+
+    _spawn_lock = threading.Lock()
+
+    def _spawn_process(self):  # called synchronously for each new worker
+        import sys as _sys
+        main = _sys.modules.get("__main__")
+        if main is None:
+            return super()._spawn_process()
+        with self._spawn_lock:
+            saved_file = getattr(main, "__file__", _MISSING)
+            saved_spec = getattr(main, "__spec__", _MISSING)
+            try:
+                if saved_file is not _MISSING:
+                    del main.__file__
+                if saved_spec is not _MISSING:
+                    main.__spec__ = None
+                return super()._spawn_process()
+            finally:
+                if saved_file is not _MISSING:
+                    main.__file__ = saved_file
+                if saved_spec is not _MISSING:
+                    main.__spec__ = saved_spec
+
+
 class PaddleGPUPool:
     def __init__(self, config: Optional[GPUConfig] = None):
         self.config = config or get_gpu_config()
@@ -168,6 +240,13 @@ class PaddleGPUPool:
     # ── lifecycle ────────────────────────────────────────────────────────────
     def _create(self) -> ProcessPoolExecutor:
         cfg = self.config
+        # Ensure child processes on Windows spawn can resolve the 'GPU' package
+        from pathlib import Path
+        gpu_parent = str(Path(__file__).resolve().parents[1])
+        curr_pp = os.environ.get("PYTHONPATH", "")
+        if gpu_parent not in curr_pp.split(os.pathsep):
+            os.environ["PYTHONPATH"] = f"{gpu_parent}{os.pathsep}{curr_pp}" if curr_pp else gpu_parent
+
         kwargs = dict(
             max_workers=cfg.workers,
             mp_context=mp.get_context("spawn"),  # CUDA is not fork-safe
@@ -177,7 +256,7 @@ class PaddleGPUPool:
         if cfg.max_tasks_per_child > 0:
             kwargs["max_tasks_per_child"] = cfg.max_tasks_per_child
         print(f"[GPU-OCR] Starting pool: {cfg.summary()}")
-        return ProcessPoolExecutor(**kwargs)
+        return _IsolatedSpawnExecutor(**kwargs)
 
     def _get(self):
         with self._lock:

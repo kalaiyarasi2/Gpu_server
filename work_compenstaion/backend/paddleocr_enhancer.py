@@ -28,17 +28,21 @@ if sys.platform == 'win32':
     except Exception:
         pass
 
-# Dynamic worker count (capped at 2 to prevent RAM and VRAM exhaustion)
-_MAX_PARALLEL_WORKERS = 2
-try:
-    import torch
-    if torch.cuda.is_available():
-        vram_gb = torch.cuda.get_device_properties(0).total_memory / (1024 ** 3)
-        _MAX_PARALLEL_WORKERS = 2 if vram_gb >= 8 else 1
-    else:
-        _MAX_PARALLEL_WORKERS = 1
-except Exception:
-    _MAX_PARALLEL_WORKERS = 2
+# Worker count (read from GPU_OCR_WORKERS in .env, default 1)
+def _get_worker_count() -> int:
+    env_w = os.environ.get("GPU_OCR_WORKERS", "").strip()
+    if env_w.isdigit():
+        return max(1, int(env_w))
+    for env_path in [Path(__file__).resolve().parents[2] / ".env", Path(__file__).resolve().parents[3] / ".env"]:
+        if env_path.exists():
+            for line in env_path.read_text(encoding="utf-8", errors="ignore").splitlines():
+                if line.strip().startswith("GPU_OCR_WORKERS="):
+                    val = line.split("=", 1)[1].strip().strip('"').strip("'")
+                    if val.isdigit():
+                        return max(1, int(val))
+    return 1
+
+_MAX_PARALLEL_WORKERS = _get_worker_count()
 
 # Shared GPU PaddleOCR pool (pdf_extractor/GPU). Persistent workers load the
 # models onto the GPU once and OCR pages in parallel.

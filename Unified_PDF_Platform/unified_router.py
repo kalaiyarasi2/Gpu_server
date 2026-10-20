@@ -1123,10 +1123,35 @@ class UnifiedRouter:
 
             original_stem = Path(pdf_path).stem
             normalized_path = os.path.join(tmp_dir, f"{original_stem}.pdf")
-            doc.save(normalized_path)
+            original_page_count = len(doc)
+
+            if not rotated_any:
+                # No change needed -> copy the original bytes untouched.
+                # Re-saving via PyMuPDF can strip AcroForm widgets or emit a
+                # 0-page file for PDFs with damaged object streams (seen with
+                # PyMuPDF 1.24.x on fillable ACORD forms).
+                doc.close()
+                import shutil
+                if os.path.normcase(os.path.abspath(pdf_path)) != os.path.normcase(os.path.abspath(normalized_path)):
+                    shutil.copy2(pdf_path, normalized_path)
+                return normalized_path
+
+            doc.save(normalized_path, garbage=0, deflate=False)
             doc.close()
-            if rotated_any:
-                print(f"[Rotation] Normalization applied -> {normalized_path}")
+
+            # Safety net: never hand a broken file downstream.
+            try:
+                check = fitz.open(normalized_path)
+                saved_pages = len(check)
+                check.close()
+            except Exception:
+                saved_pages = 0
+            if saved_pages != original_page_count:
+                print(f"[Rotation] WARNING: normalized PDF has {saved_pages} pages "
+                      f"(expected {original_page_count}). Using original file.")
+                return pdf_path
+
+            print(f"[Rotation] Normalization applied -> {normalized_path}")
             return normalized_path
         except Exception as e:
             print(f"[Rotation] Rotation check failed: {e}")

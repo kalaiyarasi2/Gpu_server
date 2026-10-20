@@ -27,12 +27,21 @@ if sys.platform == "win32":
     except Exception:
         pass
 
-# Dynamic worker count — capped at 2 to protect GPU/CPU memory
-try:
-    from gpu_config import gpu_concurrency_config as _gpu_cfg
-    _MAX_PARALLEL_WORKERS = min(2, _gpu_cfg["rostaing_ocr"]["max_workers"])
-except Exception:
-    _MAX_PARALLEL_WORKERS = 2  # safe fallback if gpu_config unavailable
+# Worker count (read from GPU_OCR_WORKERS in .env, default 1)
+def _get_worker_count() -> int:
+    env_w = os.environ.get("GPU_OCR_WORKERS", "").strip()
+    if env_w.isdigit():
+        return max(1, int(env_w))
+    for env_path in [Path(__file__).resolve().parents[2] / ".env", Path(__file__).resolve().parents[3] / ".env"]:
+        if env_path.exists():
+            for line in env_path.read_text(encoding="utf-8", errors="ignore").splitlines():
+                if line.strip().startswith("GPU_OCR_WORKERS="):
+                    val = line.split("=", 1)[1].strip().strip('"').strip("'")
+                    if val.isdigit():
+                        return max(1, int(val))
+    return 1
+
+_MAX_PARALLEL_WORKERS = _get_worker_count()
 
 # Shared GPU PaddleOCR pool (pdf_extractor/GPU). Persistent workers load the
 # models onto the GPU once and OCR pages in parallel.

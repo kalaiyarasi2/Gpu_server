@@ -87,7 +87,10 @@ def get_gmail_service():
 
 
 # ── Module-level service (imported by tools.py) ───────────────────────────────
-gmail = get_gmail_service()
+try:
+    gmail = get_gmail_service()
+except Exception:
+    gmail = None
 
 
 # ── Quick connection test ─────────────────────────────────────────────────────
