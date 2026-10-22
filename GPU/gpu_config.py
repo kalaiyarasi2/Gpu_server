@@ -22,6 +22,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import sys
 from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import List
@@ -67,6 +68,16 @@ def _query_nvidia_smi() -> List[dict]:
 
 
 def _paddle_has_cuda() -> bool:
+    # If torch is already loaded in this process, importing paddle on Windows causes a fatal
+    # pybind11 collision ("generic_type: type '_gpuDeviceProperties' is already registered!").
+    # In that case, safely inspect installed distribution metadata.
+    if "torch" in sys.modules:
+        try:
+            import importlib.metadata
+            installed = {d.metadata["Name"].lower() for d in importlib.metadata.distributions()}
+            return "paddlepaddle-gpu" in installed
+        except Exception:
+            return False
     try:
         import paddle  # noqa: WPS433 (import inside function on purpose)
         return bool(paddle.device.is_compiled_with_cuda())
