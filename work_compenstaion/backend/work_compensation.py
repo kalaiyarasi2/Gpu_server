@@ -238,17 +238,42 @@ class EnhancedInsuranceExtractor:
             if form_data:
                 print(f"✅ Extracted data from fillable form fields/XFA.")
 
-            # 3. EXTRACT TEXT USING PADDLEOCR (pure OCR, no hybrid)
-            _paddle_mod = _load_wc_module("paddleocr_enhancer")
-            extract_with_paddleocr = _paddle_mod.extract_with_paddleocr
+            # 3. SMART ROUTING: Digital (pdftotext layout) vs Scanned (PaddleOCR)
+            file_type = "scanned"
+            try:
+                import sys as _sys
+                from pathlib import Path as _P
+                _gpu_server_root = str(_P(__file__).resolve().parents[2])
+                if _gpu_server_root not in _sys.path:
+                    _sys.path.insert(0, _gpu_server_root)
+                from smart_pdf_connector import SmartPDFConnector
+                connector = SmartPDFConnector()
+                ident_res = connector.identify(pdf_path)
+                file_type = ident_res.file_type.value if hasattr(ident_res.file_type, "value") else str(ident_res.file_type)
+            except Exception as _id_err:
+                print(f"⚠️ [SmartConnector] Identification warning in WC: {_id_err}")
 
-            print(f"🐼 Running PaddleOCR (crash-safe subprocess mode)...")
-            paddle_text, pages_metadata = extract_with_paddleocr(pdf_path, use_gpu=True, enable_table=False)
+            if file_type == "digital":
+                print(f"📄 DIGITAL ACORD FORM DETECTED -> Using pdftotext layout extraction (0% OCR overhead)...")
+                try:
+                    _layout_mod = _load_wc_module("digital_layout_extractor")
+                    paddle_text, pages_metadata = _layout_mod.extract_digital_layout(pdf_path)
+                    print(f"✅ Digital layout extracted {len(paddle_text)} chars from {len(pages_metadata)} pages in milliseconds.")
+                except Exception as _lay_err:
+                    print(f"⚠️ pdftotext layout extraction failed ({_lay_err}), falling back to pdfplumber...")
+                    extract_pdf_with_pdfplumber = _pdf_plumber_mod.extract_pdf_with_pdfplumber
+                    paddle_text, pages_metadata = extract_pdf_with_pdfplumber(pdf_path)
+            else:
+                # Scanned or semi-scanned PDF: use PaddleOCR
+                print(f"📸 SCANNED / HYBRID ACORD DETECTED -> Running PaddleOCR (crash-safe subprocess mode)...")
+                _paddle_mod = _load_wc_module("paddleocr_enhancer")
+                extract_with_paddleocr = _paddle_mod.extract_with_paddleocr
+                paddle_text, pages_metadata = extract_with_paddleocr(pdf_path, use_gpu=True, enable_table=False)
 
-            if not paddle_text or not pages_metadata:
-                print(f"⚠️ PaddleOCR returned empty text, falling back to pdfplumber...")
-                extract_pdf_with_pdfplumber = _pdf_plumber_mod.extract_pdf_with_pdfplumber
-                paddle_text, pages_metadata = extract_pdf_with_pdfplumber(pdf_path)
+                if not paddle_text or not pages_metadata:
+                    print(f"⚠️ PaddleOCR returned empty text, falling back to pdfplumber...")
+                    extract_pdf_with_pdfplumber = _pdf_plumber_mod.extract_pdf_with_pdfplumber
+                    paddle_text, pages_metadata = extract_pdf_with_pdfplumber(pdf_path)
             
             # 4. Logical Rearrangement
             print(f"📊 Rearranging {len(pages_metadata)} pages logically based on content...")

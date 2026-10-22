@@ -1180,11 +1180,12 @@ class UnifiedRouter:
         return None, best["score"], best["hits"]
 
     def extract_snippet(self, pdf_path, max_pages=2):
-        """Text extraction for classification using PaddleOCR ONLY.
+        """Text extraction for classification using SmartPDFConnector.
 
-        All fallback text extraction engines (PyMuPDF, pdfplumber, Tesseract) have been
-        removed. PaddleOCR extracts noise-free text directly from rendered page images.
-        Processes the first 2 pages (max_pages=2) for high-speed classification.
+        Uses FileIdentifier to classify whether the PDF is digital, semi-scanned, or scanned:
+          - Digital: Fast PyMuPDF extraction (<0.10s, 0% GPU load).
+          - Fully Scanned: PaddleOCR on the first max_pages (GPU accelerated).
+          - Semi-Scanned: PyMuPDF for digital pages, PaddleOCR for scanned pages.
         """
         import tempfile
         CHAR_THRESHOLD = 50
@@ -1194,36 +1195,40 @@ class UnifiedRouter:
             working_pdf = self._detect_rotation_and_fix(pdf_path, tmp_dir)
             text = ""
 
-            # PaddleOCR -- crash-safe subprocess mode from Insurance_pdf_extractor-main
             try:
                 import sys as _sys
-                _paddle_backend = str(
-                    Path(__file__).parent.parent / "Insurance_pdf_extractor-main" / "backend"
-                )
-                if _paddle_backend not in _sys.path:
-                    _sys.path.insert(0, _paddle_backend)
-                from paddleocr_enhancer import extract_with_paddleocr
+                _gpu_server_root = str(Path(__file__).resolve().parent.parent)
+                if _gpu_server_root not in _sys.path:
+                    _sys.path.insert(0, _gpu_server_root)
+
+                from smart_pdf_connector import extract_classification_snippet as _smart_snippet
 
                 pages_to_process = max_pages or 2
-                print(f"[Snippet] Extracting text using PaddleOCR ONLY (first {pages_to_process} pages)...")
-                paddle_text, _ = extract_with_paddleocr(
-                    str(working_pdf),
-                    use_gpu=True,            # shared GPU pool (pdf_extractor/GPU); auto CPU fallback
-                    enable_table=False,      # Fast plain-text OCR for classification
-                    max_pages=pages_to_process
-                )
-                paddle_text = (paddle_text or "").strip()
-                print(f"[Snippet] PaddleOCR extracted: {len(paddle_text)} chars")
-                if len(paddle_text) >= CHAR_THRESHOLD:
-                    text = paddle_text
-                else:
-                    print(f"[Snippet] PaddleOCR produced minimal text ({len(paddle_text)} chars)")
+                print(f"[Snippet] Using SmartPDFConnector for classification snippet (max {pages_to_process} pages)...")
+                text = _smart_snippet(working_pdf, max_pages=pages_to_process)
             except Exception as e:
-                print(f"[Snippet] PaddleOCR extraction error: {e}")
+                print(f"[Snippet] SmartPDFConnector error, falling back to direct PaddleOCR: {e}")
+                try:
+                    _paddle_backend = str(
+                        Path(__file__).parent.parent / "Insurance_pdf_extractor-main" / "backend"
+                    )
+                    if _paddle_backend not in _sys.path:
+                        _sys.path.insert(0, _paddle_backend)
+                    from paddleocr_enhancer import extract_with_paddleocr
+                    paddle_text, _ = extract_with_paddleocr(
+                        str(working_pdf),
+                        use_gpu=True,
+                        enable_table=False,
+                        max_pages=max_pages or 2
+                    )
+                    text = (paddle_text or "").strip()
+                except Exception as p_err:
+                    print(f"[Snippet] Fallback extraction error: {p_err}")
 
-        final = text[:50000]
+        final = (text or "")[:50000]
         print(f"[Snippet] Final snippet ready: {len(final)} chars")
         return final
+
 
 
 

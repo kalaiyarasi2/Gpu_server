@@ -245,8 +245,29 @@ class EnhancedInsuranceExtractor:
         """
         from config import config
         
+        # ── STAGE 0: SMART CONNECTOR ROUTING (Digital via pdfplumber, Scanned via PaddleOCR) ──
         try:
-            # FORCE SCANNED/GPU PATH
+            import sys
+            from pathlib import Path
+            _gpu_root = str(Path(__file__).resolve().parents[2])
+            if _gpu_root not in sys.path:
+                sys.path.insert(0, _gpu_root)
+            from smart_pdf_connector import extract_document_text
+
+            smart_result = extract_document_text(
+                pdf_path,
+                preferred_digital_engine="pdfplumber",
+                enable_table=False,
+                use_gpu=True,
+            )
+            if smart_result.text and len(smart_result.text.strip()) > 50:
+                print(f"   ✅ SMART CONNECTOR SUCCESS: Extracted {len(smart_result.text)} chars ({smart_result.file_type.upper()})")
+                return smart_result.text, smart_result.pages_metadata
+        except Exception as _sc_err:
+            print(f"   ⚠️ SmartPDFConnector bypass/fallback: {_sc_err}")
+
+        try:
+            # Fallback to multi-stage OCR pipeline if needed
             is_scanned = True 
             
             # Check if we should use Vision for scanned PDFs
@@ -254,6 +275,7 @@ class EnhancedInsuranceExtractor:
             
             if is_scanned:
                 print(f"🚀 MULTI-STAGE OCR PIPELINE: Starting extraction...")
+
                 
                 # ═══════════════════════════════════════════════════════════════
                 # STAGE 1: PaddleOCR (Fast, GPU-accelerated Table & Layout Preservation)
