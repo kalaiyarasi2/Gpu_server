@@ -1,13 +1,29 @@
+import os
+import sys
 import json
 import re
+import tempfile
+import shutil
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+# Ensure core package is accessible
+for p in Path(__file__).resolve().parents:
+    if p.name == "Sales team - Copy" or (p / "core" / "prompt_cache_manager.py").exists():
+        if str(p) not in sys.path:
+            sys.path.insert(0, str(p))
+        break
+
+try:
+    from core.prompt_cache_manager import cached_chat_completion
+except ImportError:
+    cached_chat_completion = None
+
 from insurance_extractor import EnhancedInsuranceExtractor, filter_claims_by_claim_year, MIN_INCLUDED_CLAIM_YEAR
 from pdf_rotation import auto_rotate_pdf_content
 from auto_rotation_ocr import run_pipeline_preserve_layout
 from pdf_detector import PDFDetector
-import tempfile
-import shutil
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Overlap added to each chunk boundary so claim rows straddling a boundary
 # are fully visible in both chunks (RC2 / RC2b fix).
@@ -57,8 +73,8 @@ class PolicyChunker:
             end_pos = window["end"]
             text_preview = window["text"]
 
-            # RC6: All examples now use generic placeholders – no real company names
-            prompt = f"""Analyze the following insurance document text and identify all UNIQUE policy sections.
+            # RC6: Generic boundary identification instructions for prompt caching
+            static_instructions = """Analyze the following insurance document text and identify all UNIQUE policy sections.
 Look for "Policy Number", "Policy #", "Pol #", "NUMBER: [ID]" or similar headers that start a new section for a specific policy.
 Note: Policy numbers may be on the line BELOW the label "Policy Number".
 
@@ -72,32 +88,43 @@ Look for "Carrier:", "Policy Company:", or branding near the policy number.
 Return a JSON object with a list of detected boundaries and the EXACT snippet of text that identifies the header.
 
 Example Response:
-{{
+{
   "boundaries": [
-    {{
+    {
       "identifier": "[POLICY_NUMBER] - [YEAR]",
       "carrier": "[INSURANCE_COMPANY_NAME]",
       "header_snippet": "[EXACT TEXT FROM DOCUMENT THAT MARKS A NEW SECTION]"
-    }}
+    }
   ]
-}}
+}
 
 Important:
 - The "header_snippet" MUST be EXACT text copied verbatim from the document below.
 - Identify boundaries for ALL carriers, ANY company name format.
-
-DOCUMENT TEXT (Characters {start_pos} to {end_pos}):
-{text_preview}
 """
+            user_text = f"DOCUMENT TEXT (Characters {start_pos} to {end_pos}):\n{text_preview}"
+
             try:
-                # print(f"   --> Scanning for policies from character {start_pos} to {end_pos}...")
-                response = self.client.chat.completions.create(
-                    model="gpt-5.5",
-                    messages=[{"role": "user", "content": prompt}],
-                    response_format={"type": "json_object"},
-                    max_completion_tokens=4000,
-                    temperature=1
-                )
+                if cached_chat_completion:
+                    response = cached_chat_completion(
+                        client=self.client,
+                        static_system_prompt=static_instructions,
+                        dynamic_user_content=user_text,
+                        model="gpt-5.5",
+                        poc_name="Insurance_pdf_extractor",
+                        file_name="policy_boundary_scan",
+                        step_name="boundary_scan",
+                        response_format={"type": "json_object"},
+                        max_completion_tokens=4000
+                    )
+                else:
+                    response = self.client.chat.completions.create(
+                        model="gpt-5.5",
+                        messages=[{"role": "user", "content": f"{static_instructions}\n\n{user_text}"}],
+                        response_format={"type": "json_object"},
+                        max_completion_tokens=4000,
+                        temperature=1
+                    )
 
                 try:
                     import sys, os
@@ -226,6 +253,7 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
         temp_rotated_dir = tempfile.mkdtemp()
         temp_rotated_pdf = os.path.join(temp_rotated_dir, "rotated_temp.pdf")
         original_pdf_path = pdf_path
+        self.current_filename = os.path.basename(original_pdf_path)
         
         is_scanned = None
         try:
@@ -507,6 +535,20 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
         master_format_info = self._analyze_document_format(all_text[:15000])
         # ──────────────────────────────────────────────────────────────────────
         
+        # ── TIER 1: High-Efficiency Single-Shot for Documents <= 5 Pages ─────
+        is_small_doc = (num_pages is not None and num_pages <= 5) or len(all_text) <= 25000
+        if is_small_doc:
+            page_desc = f"{num_pages} pages" if num_pages else f"{len(all_text)} chars"
+            print(f"\n⚡ FAST PATH ACTIVATED: Small document detected ({page_desc} <= 5 pages).")
+            print("   🚀 High-efficiency single-shot extraction: bypassing chunking to minimize LLM calls (1-3 calls max).")
+            return super()._extract_all_claims(
+                all_text,
+                vision_pattern=vision_pattern,
+                pre_built_master_list=global_master_list or None,
+                cached_format_info=master_format_info,
+                pre_built_detected_info=global_detected
+            )
+
         chunker = PolicyChunker(self.client)
         boundaries = chunker.detect_policy_boundaries(all_text)
         
@@ -530,7 +572,8 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
                 print("   ℹ️ Single policy or no boundaries detected. Proceeding with single-shot extraction.")
                 return super()._extract_all_claims(all_text, vision_pattern=vision_pattern,
                                                    pre_built_master_list=global_master_list or None,
-                                                   cached_format_info=master_format_info)
+                                                   cached_format_info=master_format_info,
+                                                   pre_built_detected_info=global_detected)
         else:
             # RC2: split_into_chunks now adds CHUNK_OVERLAP_CHARS boundary overlap
             chunks = chunker.split_into_chunks(all_text, boundaries, overlap=CHUNK_OVERLAP_CHARS)
@@ -627,7 +670,8 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
                 chunk["text"],
                 vision_pattern=vision_pattern,
                 pre_built_master_list=global_master_list or None,
-                cached_format_info=master_format_info
+                cached_format_info=master_format_info,
+                pre_built_detected_info=global_detected
             )
             # Inject internal tracking ID (used only in chunking_report, not in claims)
             if isinstance(chunk_res, dict):

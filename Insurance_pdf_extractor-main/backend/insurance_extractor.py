@@ -1230,7 +1230,8 @@ DOCUMENT TEXT (first 4000 chars):
             
         # STAGE 1: Analyze document format (Supports RC8 Smart Caching)
         if cached_format_info:
-            format_info = self._smart_verify_format(all_text, cached_format_info)
+            format_info = cached_format_info
+            print(f"   ✓ Directly using cached document format ({format_info.get('claim_layout', 'standard')}).")
         else:
             format_info = self._analyze_document_format(all_text)
 
@@ -1554,7 +1555,16 @@ Before adding a claim to your JSON, verify:
 ✓ All financial values are numbers (not strings)
 ✓ Financial calculations balance (Paid + Reserve ≈ Incurred)
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️ CRITICAL REMINDER:
+- This document may have MULTIPLE POLICY PERIODS or MULTIPLE POLICY SECTIONS
+- You MUST scan the ENTIRE document from beginning to end
+- Extract claims from ALL policy sections, NOT just the first one
+- Continue extracting until you reach the end of the document
+- Do NOT stop extraction after finding the first policy section totals
+
+Follow the format-specific instructions above. Validate your extractions."""
+
+        user_content = f"""━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📄 TEXT TO ANALYZE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -1566,24 +1576,23 @@ Before adding a claim to your JSON, verify:
 
 Return ONLY the JSON object. No explanations. No markdown. Just the JSON.
 
-Extract ALL claims. Do not skip any claim.
+Extract ALL claims. Do not skip any claim."""
 
-⚠️ CRITICAL REMINDER:
-- This document may have MULTIPLE POLICY PERIODS or MULTIPLE POLICY SECTIONS
-- You MUST scan the ENTIRE document from beginning to end
-- Extract claims from ALL policy sections, NOT just the first one
-- Continue extracting until you reach the end of the document
-- Do NOT stop extraction after finding the first policy section totals
+        static_instructions = prompt
+        full_prompt = f"{static_instructions}\n\n{user_content}"
 
-Follow the format-specific instructions above. Validate your extractions."""
-
-        # Step 1: Initial Extraction Attempt
+        # Step 1: Initial Extraction Attempt (with Prompt Caching across all chunks)
         data = {"claims": []}
         try:
             response = call_llm_deterministically(
                 self.client,
-                prompt,
-                model="gpt-5.5"
+                prompt=full_prompt,
+                system_prompt=static_instructions,
+                user_content=user_content,
+                model="gpt-5.5",
+                poc_name="Insurance_pdf_extractor",
+                file_name=getattr(self, "current_filename", "insurance_doc"),
+                step_name="chunk_claims_extraction"
             )
             
             response_text = response.choices[0].message.content
