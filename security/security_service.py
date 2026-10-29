@@ -80,7 +80,7 @@ class SecurityGateway:
         # Default config if file doesn't exist
         return {
             "max_file_size_mb": 1024,
-            "allowed_extensions": [".pdf", ".xlsx", ".xls", ".csv"],
+            "allowed_extensions": [".pdf", ".xlsx", ".xls", ".csv", ".json"],
             "clamav_host": "localhost",
             "clamav_port": 3310,
             "clamav_timeout": 30,

@@ -1,4 +1,5 @@
 import os
+import json
 import hashlib
 import mimetypes
 import logging
@@ -27,14 +28,15 @@ class FileValidationResult:
 class FileValidator:
     def __init__(self, config: dict):
         self.max_size_bytes = config.get("max_file_size_mb", 1024) * 1024 * 1024
-        self.allowed_extensions = [ext.lower() for ext in config.get("allowed_extensions", [".pdf", ".xlsx", ".xls", ".csv"])]
+        self.allowed_extensions = [ext.lower() for ext in config.get("allowed_extensions", [".pdf", ".xlsx", ".xls", ".csv", ".json"])]
         
         # Mapping of extension to allowed mimetypes
         self.allowed_mime_types = {
             ".pdf": ["application/pdf"],
             ".xlsx": ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/zip"],
             ".xls": ["application/vnd.ms-excel", "application/CDFV2"],
-            ".csv": ["text/csv", "text/plain"]
+            ".csv": ["text/csv", "text/plain"],
+            ".json": ["application/json", "text/plain", "text/json"]
         }
 
     def validate(self, file_path: str) -> FileValidationResult:
@@ -106,8 +108,10 @@ class FileValidator:
     def _is_mime_allowed_for_ext(self, mime: str, ext: str) -> bool:
         """Check if the detected MIME type is appropriate for the extension."""
         allowed = self.allowed_mime_types.get(ext, [])
-        # Some flexibility for CSVs and text files
+        # Some flexibility for CSVs, JSON, and text files
         if ext == ".csv" and ("text" in mime or mime == "application/octet-stream"):
+            return True
+        if ext == ".json" and ("json" in mime or "text" in mime or mime == "application/octet-stream"):
             return True
         # fallback allowing excel to be detected as zip
         if ext == ".xlsx" and mime == "application/zip":
@@ -129,6 +133,12 @@ class FileValidator:
             elif ext == ".xls":
                 if not header.startswith(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"):
                     return False, "Missing OLE2 magic bytes for XLS"
+            elif ext == ".json":
+                try:
+                    with open(file_path, "r", encoding="utf-8-sig") as jf:
+                        json.load(jf)
+                except Exception as je:
+                    return False, f"Invalid JSON structure: {je}"
             # CSV is plain text, hard to validate structure purely by header reliably
                     
             return True, ""
