@@ -9,11 +9,13 @@ report as a downloadable .txt file or JSON.
 import os
 import sys
 import json
+import math
+import io
 import tempfile
 import traceback
 import time
 import uuid
-from typing import Optional, Dict, Any, Tuple
+from typing import Optional, Dict, Any, Tuple, List
 from pathlib import Path
 
 import pandas as pd
@@ -596,7 +598,7 @@ class ManagementDashboardAnalyzer:
         return json.dumps(metrics, indent=2)
 
     @staticmethod
-    def excel_to_text(file_path: str, year_filter: Optional[int] = None) -> Tuple[str, str, Dict[str, Any]]:
+    def excel_to_text(file_path: str, year_filter: Optional[int] = None) -> Tuple[str, str, Dict[str, Any], pd.DataFrame]:
         """
         Read every sheet in the Excel workbook and convert to a
         pipe-delimited text representation, and calculate metrics.
@@ -606,7 +608,7 @@ class ManagementDashboardAnalyzer:
             year_filter: Optional year to filter by (e.g., 2025). If None, all years are included.
             
         Returns:
-            Tuple of (text_data, metrics_json, filter_metadata)
+            Tuple of (text_data, metrics_json, filter_metadata, full_df)
         """
         parts: list[str] = []
         all_dfs = []
@@ -657,10 +659,10 @@ class ManagementDashboardAnalyzer:
             "message": f"Analysis includes only claims from year {year_filter}" if year_filter else "All years included in analysis"
         }
 
-        return "\n".join(parts), metrics_json, filter_metadata
+        return "\n".join(parts), metrics_json, filter_metadata, full_df
 
     @staticmethod
-    def json_to_text(file_path: str, year_filter: Optional[int] = None) -> Tuple[str, str, Dict[str, Any]]:
+    def json_to_text(file_path: str, year_filter: Optional[int] = None) -> Tuple[str, str, Dict[str, Any], pd.DataFrame]:
         """
         Read JSON file, convert to a DataFrame, map keys to standard columns,
         and calculate metrics.
@@ -670,7 +672,7 @@ class ManagementDashboardAnalyzer:
             year_filter: Optional year to filter by. If None, all years are included.
             
         Returns:
-            Tuple of (text_data, metrics_json, filter_metadata)
+            Tuple of (text_data, metrics_json, filter_metadata, df)
         """
         import json
         with open(file_path, "r", encoding="utf-8") as f:
@@ -697,7 +699,7 @@ class ManagementDashboardAnalyzer:
                 "total_claims_after_filter": 0,
                 "filtered_claims_excluded": 0,
                 "message": "No data to filter"
-            }
+            }, pd.DataFrame()
 
         df = pd.DataFrame(items)
 
@@ -794,7 +796,138 @@ class ManagementDashboardAnalyzer:
             "message": f"Analysis includes only claims from year {year_filter}" if year_filter else "All years included in analysis"
         }
 
-        return "\n".join(parts), metrics_json, filter_metadata
+        return "\n".join(parts), metrics_json, filter_metadata, df
+
+    def _track_tokens(self, response):
+        try:
+            import sys, os
+            _cur = os.path.abspath(__file__)
+            while os.path.basename(_cur) != 'Sales team - Copy' and os.path.dirname(_cur) != _cur:
+                _cur = os.path.dirname(_cur)
+            if _cur not in sys.path: sys.path.append(_cur)
+            from core.universal_token_monitor import track_usage as _tm
+            _locals = locals()
+            _fn = _locals.get('filename') or _locals.get('file_name') or _locals.get('safe_filename')
+            if not _fn:
+                _fp = _locals.get('file_path') or _locals.get('pdf_path') or _locals.get('working_path')
+                if _fp: _fn = getattr(_fp, 'name', str(_fp))
+            _fn = str(_fn or 'gpu_doc')
+            if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
+            _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
+        except Exception:
+            pass
+
+    def _analyze_claim_chunk(
+        self,
+        chunk_text: str,
+        chunk_num: int,
+        total_chunks: int,
+        start_row: int,
+        end_row: int,
+        total_rows: int,
+        model: str = "gpt-4o",
+        temperature: float = 0.2,
+    ) -> str:
+        """
+        Analyze a single chunk of claims data with GPT-4o, extracting qualitative risk patterns.
+        """
+        prompt = (
+            f"You are an expert Workers' Compensation Claims Analytics and Risk Management AI.\n"
+            f"You are analyzing Chunk {chunk_num} of {total_chunks} (Claims {start_row} to {end_row} out of {total_rows} total claims in the portfolio).\n\n"
+            f"CRITICAL REQUIREMENT: Review EVERY single claim in this batch without skipping any data. "
+            f"Extract comprehensive qualitative findings that will be synthesized into the portfolio-wide Management Dashboard:\n\n"
+            f"1. **Dominant Injury Causes & Mechanisms**: Primary injury descriptions, repetitive trauma, equipment/machinery accidents, slips/trips/falls, and root cause trends in this chunk.\n"
+            f"2. **Litigation & High-Severity Claims**: Note specific claims with attorney involvement, litigated status, or high incurred/reserve amounts in this chunk.\n"
+            f"3. **Employer / Location Concentrations**: Note specific client locations or departments showing repeat claims or elevated severity.\n"
+            f"4. **Class Codes & High-Risk Exposures**: Operational hazards or class code patterns evident in this chunk.\n"
+            f"5. **Safety & Risk Management Insights**: Concrete safety hazards and preventative recommendations based on the accidents in this chunk.\n\n"
+            f"=== CLAIMS DATA FOR CHUNK {chunk_num}/{total_chunks} (Rows {start_row}-{end_row}) ===\n{chunk_text}"
+        )
+
+        response = self.client.chat.completions.create(
+            model=model,
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a senior Workers' Compensation claims auditor and safety engineer. Provide thorough, structured, and fact-based qualitative analysis of the provided claims batch."
+                },
+                {"role": "user", "content": prompt}
+            ],
+            temperature=temperature,
+        )
+        self._track_tokens(response)
+        return response.choices[0].message.content
+
+    def _generate_dashboard_chunked(
+        self,
+        df: pd.DataFrame,
+        metrics_json: str,
+        model: str = "gpt-4o",
+        temperature: float = 0.2,
+        year_filter: Optional[int] = None,
+    ) -> str:
+        """
+        Dynamically divides rows into chunks, analyzes each chunk to ensure zero data loss,
+        and aggregates results into the full 10-section Management Claims Dashboard.
+        """
+        total_rows = len(df)
+        max_rows_per_chunk = 100  # Strict 100-step rule: 101-200 -> 2 chunks, 201-300 -> 3 chunks, 301-400 -> 4 chunks
+        num_chunks = max(2, math.ceil(total_rows / max_rows_per_chunk))
+        chunk_size = math.ceil(total_rows / num_chunks)
+
+        print(f"📊 Dynamic row-based chunking active: {total_rows} claims dynamically divided into {num_chunks} chunks (~{chunk_size} claims per chunk). Zero data will be missed.")
+
+        chunk_insights: List[str] = []
+        for i in range(num_chunks):
+            start_idx = i * chunk_size
+            end_idx = min((i + 1) * chunk_size, total_rows)
+            chunk_df = df.iloc[start_idx:end_idx]
+
+            print(f"🔄 Processing Chunk {i + 1}/{num_chunks}: Claims {start_idx + 1} to {end_idx} ({len(chunk_df)} claims)...")
+            chunk_text = chunk_df.to_csv(sep="|", index=False, na_rep="")
+
+            chunk_summary = self._analyze_claim_chunk(
+                chunk_text=chunk_text,
+                chunk_num=i + 1,
+                total_chunks=num_chunks,
+                start_row=start_idx + 1,
+                end_row=end_idx,
+                total_rows=total_rows,
+                model=model,
+                temperature=temperature,
+            )
+            chunk_insights.append(f"### [CHUNK {i + 1} OF {num_chunks} – CLAIMS {start_idx + 1} TO {end_idx} ANALYSIS]:\n{chunk_summary}")
+
+        combined_chunk_text = "\n\n".join(chunk_insights)
+
+        # Include top 10 claims sample data for immediate context
+        top_claims_df = df.head(10)
+        sample_claims_text = top_claims_df.to_csv(sep="|", index=False, na_rep="")
+
+        year_note = ""
+        if year_filter is not None:
+            year_note = f"\n\n**IMPORTANT: This analysis is filtered to include ONLY claims from year {year_filter}. All metrics and calculations reflect data from {year_filter} exclusively.**\n\n"
+
+        final_prompt = (
+            f"{year_note}"
+            f"Analyze the following Loss Run data and generate the full Management Claims Dashboard as specified.\n\n"
+            f"=== PRE-CALCULATED METRICS (JSON) ===\n{metrics_json}\n\n"
+            f"=== COMPREHENSIVE CLAIM ANALYSIS ACROSS ALL {total_rows} CLAIMS ({num_chunks} DYNAMIC CHUNKS ANALYZED – ZERO DATA LOSS) ===\n"
+            f"{combined_chunk_text}\n\n"
+            f"=== TOP 10 CLAIMS SAMPLE DATA ===\n{sample_claims_text}"
+        )
+
+        print(f"✨ Synthesizing final Management Claims Dashboard across all {num_chunks} chunk analyses...")
+        response = self.client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": MANAGEMENT_DASHBOARD_PROMPT},
+                {"role": "user", "content": final_prompt},
+            ],
+            temperature=temperature,
+        )
+        self._track_tokens(response)
+        return response.choices[0].message.content
 
     def generate_dashboard(
         self,
@@ -803,16 +936,55 @@ class ManagementDashboardAnalyzer:
         model: str = "gpt-4o",
         temperature: float = 0.2,
         year_filter: Optional[int] = None,
+        df: Optional[pd.DataFrame] = None,
     ) -> str:
         """
-        Send textualised Excel data to OpenAI and return the report.
+        Generate dashboard report:
+        - If claims > 100: uses dynamic row-based chunking with zero data loss.
+        - If claims <= 100: uses direct single call for maximum speed.
+        - If single call exceeds context length or fails with 400: automatically falls back to dynamic chunking.
         """
+        # Determine total rows
+        total_rows = len(df) if df is not None and not df.empty else 0
+        if total_rows == 0:
+            try:
+                metrics_data = json.loads(metrics_json)
+                total_rows = int(metrics_data.get("Executive Summary", {}).get("Total Claims", 0))
+            except Exception:
+                pass
+
+        # If df is not provided, attempt to reconstruct from excel_text
+        if (df is None or df.empty) and excel_text.strip():
+            try:
+                lines = [l for l in excel_text.splitlines() if not l.startswith("===") and l.strip()]
+                if lines:
+                    df = pd.read_csv(io.StringIO("\n".join(lines)), sep="|")
+                    if total_rows == 0:
+                        total_rows = len(df)
+            except Exception as e:
+                print(f"Notice: Could not parse DataFrame from text: {e}")
+
+        # If claims > 100, directly execute dynamic row-based chunking
+        if total_rows > 100 and df is not None and not df.empty:
+            print(f"📊 Dataset contains {total_rows} claims (> 100 claims threshold). Executing dynamic row-based chunking...")
+            try:
+                return self._generate_dashboard_chunked(
+                    df=df,
+                    metrics_json=metrics_json,
+                    model=model,
+                    temperature=temperature,
+                    year_filter=year_filter,
+                )
+            except Exception as chunk_err:
+                print(f"⚠️ Error during dynamic chunking execution: {chunk_err}. Falling back to single call attempt...")
+
+        # Single call path (for <= 100 claims or fallback)
         try:
-            # Add year filter note if applicable
             year_note = ""
             if year_filter is not None:
                 year_note = f"\n\n**IMPORTANT: This analysis is filtered to include ONLY claims from year {year_filter}. All metrics and calculations reflect data from {year_filter} exclusively.**\n\n"
-            
+
+            print(f"🚀 Executing single-call dashboard generation ({total_rows} claims)...")
             response = self.client.chat.completions.create(
                 model=model,
                 messages=[
@@ -829,27 +1001,25 @@ class ManagementDashboardAnalyzer:
                 ],
                 temperature=temperature,
             )
-
-            try:
-                import sys, os
-                _cur = os.path.abspath(__file__)
-                while os.path.basename(_cur) != 'Sales team - Copy' and os.path.dirname(_cur) != _cur:
-                    _cur = os.path.dirname(_cur)
-                if _cur not in sys.path: sys.path.append(_cur)
-                from core.universal_token_monitor import track_usage as _tm
-                _locals = locals()
-                _fn = _locals.get('filename') or _locals.get('file_name') or _locals.get('safe_filename')
-                if not _fn:
-                    _fp = _locals.get('file_path') or _locals.get('pdf_path') or _locals.get('working_path')
-                    if _fp: _fn = getattr(_fp, 'name', str(_fp))
-                _fn = str(_fn or 'gpu_doc')
-                if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
-                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
-            except Exception as e:
-                pass
+            self._track_tokens(response)
             return response.choices[0].message.content
+
         except Exception as e:
-            return f"Error generating Management Dashboard: {str(e)}"
+            err_str = str(e)
+            # Automatic fallback: if context length exceeded or 400 error occurs, fall back to dynamic chunking
+            if ("context_length_exceeded" in err_str or "400" in err_str or "maximum context length" in err_str) and df is not None and not df.empty:
+                print(f"⚠️ Single call context length exceeded ({err_str}). Triggering dynamic chunking fallback...")
+                try:
+                    return self._generate_dashboard_chunked(
+                        df=df,
+                        metrics_json=metrics_json,
+                        model=model,
+                        temperature=temperature,
+                        year_filter=year_filter,
+                    )
+                except Exception as fb_err:
+                    return f"Error generating Management Dashboard after chunking fallback: {str(fb_err)}"
+            return f"Error generating Management Dashboard: {err_str}"
 
 
 # ── FastAPI Router ───────────────────────────────────────────────────────────
@@ -929,10 +1099,10 @@ async def generate_management_dashboard(
         # Process
         analyzer = ManagementDashboardAnalyzer()
         if ext == ".json":
-            excel_text, metrics_json, filter_metadata = analyzer.json_to_text(str(input_file_path), year_filter=year_filter)
+            excel_text, metrics_json, filter_metadata, full_df = analyzer.json_to_text(str(input_file_path), year_filter=year_filter)
             empty_err_msg = f"No data found for year {year_filter} in JSON." if year_filter is not None else "JSON file has no readable data."
         else:
-            excel_text, metrics_json, filter_metadata = analyzer.excel_to_text(str(input_file_path), year_filter=year_filter)
+            excel_text, metrics_json, filter_metadata, full_df = analyzer.excel_to_text(str(input_file_path), year_filter=year_filter)
             empty_err_msg = f"No data found for year {year_filter}. The Excel file may not contain claims from this year." if year_filter is not None else "Excel file has no readable data."
 
         if not excel_text.strip():
@@ -944,6 +1114,7 @@ async def generate_management_dashboard(
             model=model,
             temperature=temperature,
             year_filter=year_filter,
+            df=full_df,
         )
         
         # Add filter information to dashboard text

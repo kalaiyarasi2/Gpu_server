@@ -475,6 +475,16 @@ async def get_claim_analysis(body: ClaimSummaryRequest):
 
         # Year aggregation
         year = c.get("claim_year")
+        if not year:
+            inj_dt = str(c.get("injury_date_time") or "").strip()
+            if len(inj_dt) >= 4 and inj_dt[:4].isdigit():
+                try:
+                    year = int(inj_dt[:4])
+                except Exception:
+                    year = 1900
+            else:
+                year = 1900
+
         if year:
             ya = year_agg[year]
             ya["claim_count"] += 1

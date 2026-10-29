@@ -1507,6 +1507,7 @@ Return JSON:
    - DO NOT use "Date Rcvd" or "First Aware" - these are reporting dates
    - Convert all dates to YYYY-MM-DD format
    - Look for: "DOL:", "Loss Date:", "Injury Date:", "Occ Date:", "Accident Date:"
+   - If Date of Loss / Injury Date is blank, empty, or missing in the document: set injury_date_time to "1900-01-01" (default sentinel date).
 
 4. STATUS
    - C or Closed or RECLOSED → "Closed"
@@ -1956,24 +1957,32 @@ Extract ALL claims. Do not skip any claim."""
             # 3c. Extract Claim Year from Injury Date (STRICTLY FROM DATE)
             # RC-FIX: Ignore LLM-provided claim_year; derive it directly from injury_date_time
             # to prevent hallucinations.
-            injury_date = str(claim.get("injury_date_time", "")).strip()
-            claim["claim_year"] = None
-            if injury_date:
-                # Expecting YYYY-MM-DD format as normalized by previous steps
+            raw_injury_date = claim.get("injury_date_time")
+            if not raw_injury_date or str(raw_injury_date).strip().lower() in ("", "none", "null", "not provided", "n/a"):
+                claim["injury_date_time"] = "1900-01-01"
+                claim["claim_year"] = 1900
+            else:
+                injury_date = str(raw_injury_date).strip()
+                claim["claim_year"] = None
                 if len(injury_date) >= 4:
                     try:
                         claim["claim_year"] = int(injury_date[:4])
                     except (ValueError, TypeError):
                         pass
-            
-            # If still None, attempt to fallback from legacy formats if present
-            if claim["claim_year"] is None:
-                 match = re.search(r'(?:19|20)\d{2}', injury_date)
-                 if match:
-                    try:
-                        claim["claim_year"] = int(match.group(0))
-                    except:
-                        pass
+                
+                # If still None, attempt to fallback from legacy formats if present
+                if claim["claim_year"] is None:
+                    match = re.search(r'(?:19|20)\d{2}', injury_date)
+                    if match:
+                        try:
+                            claim["claim_year"] = int(match.group(0))
+                        except:
+                            pass
+
+                # Fallback to sentinel date if year still unparsed
+                if claim["claim_year"] is None:
+                    claim["injury_date_time"] = "1900-01-01"
+                    claim["claim_year"] = 1900
 
             # 4. Calculate Quality Score (Checksum Match)
             # Use same logic as _validate_financial_data for consistency
@@ -2059,12 +2068,12 @@ Extract ALL claims. Do not skip any claim."""
                 existing_has_date = bool(
                     existing_claim.get("injury_date_time")
                     and str(existing_claim.get("injury_date_time", "")).strip().lower()
-                    not in ("", "null", "none", "not provided", "n/a")
+                    not in ("", "null", "none", "not provided", "n/a", "1900-01-01")
                 )
                 new_has_date = bool(
                     claim.get("injury_date_time")
                     and str(claim.get("injury_date_time", "")).strip().lower()
-                    not in ("", "null", "none", "not provided", "n/a")
+                    not in ("", "null", "none", "not provided", "n/a", "1900-01-01")
                 )
 
                 # RC4 FIX: Only replace if new claim has STRICTLY better math.
@@ -2094,9 +2103,9 @@ Extract ALL claims. Do not skip any claim."""
                 ]
                 for field in DETAIL_FIELDS:
                     if (winner.get(field) is None or winner.get(field) == "null"
-                            or str(winner.get(field, "")).strip().lower() in ("", "none", "not provided", "n/a")):
+                            or str(winner.get(field, "")).strip().lower() in ("", "none", "not provided", "n/a", "1900-01-01")):
                         loser_val = loser.get(field)
-                        if loser_val and str(loser_val).strip().lower() not in ("", "none", "null", "not provided", "n/a"):
+                        if loser_val and str(loser_val).strip().lower() not in ("", "none", "null", "not provided", "n/a", "1900-01-01"):
                             winner[field] = loser_val
                 seen_claim_numbers[claim_num] = (winner, max(old_score, quality_score))
             
@@ -2139,6 +2148,13 @@ Extract ALL claims. Do not skip any claim."""
             elif raw_name and raw_name.lower() in _NAME_SENTINELS_GLOBAL:
                 # Sentinel placeholder — clear it so downstream can detect it as missing
                 claim["employee_name"] = None
+
+            # Ensure final fallback to 1900-01-01 if injury_date_time was cleared or missing
+            if not claim.get("injury_date_time") or str(claim.get("injury_date_time", "")).strip().lower() in ("", "none", "null", "not provided", "n/a"):
+                claim["injury_date_time"] = "1900-01-01"
+                claim["claim_year"] = 1900
+            elif claim.get("injury_date_time") == "1900-01-01":
+                claim["claim_year"] = 1900
                     
             final_claims.append(claim)
             
@@ -2615,6 +2631,7 @@ Return ONLY the JSON object for claim {target_claim_number}."""
                     "carrier_name": carrier_name_value,
                 }
             )
+
         schema_output = {
             "claims": included_claims,
             "SummaryLevel": summary_level,
