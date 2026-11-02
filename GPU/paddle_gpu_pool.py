@@ -71,9 +71,9 @@ def _worker_init(devices: List[int], gpu_mem_mb: int, rec_batch_num: int, cpu_th
     device = devices[os.getpid() % len(devices)] if devices else 0
     os.environ["CUDA_VISIBLE_DEVICES"] = str(device)
     # Grow GPU memory on demand instead of grabbing a big fixed chunk, so
-    # several workers can share one card safely.
-    os.environ.setdefault("FLAGS_allocator_strategy", "auto_growth")
-    os.environ.setdefault("FLAGS_fraction_of_gpu_memory_to_use", "0")
+    # several workers can share one card safely without running out of memory (capped at 60%).
+    os.environ["FLAGS_allocator_strategy"] = "auto_growth"
+    os.environ["FLAGS_fraction_of_gpu_memory_to_use"] = "0.6"
     # Keep CPU-side pre/post-processing from oversubscribing the cores.
     os.environ["OMP_NUM_THREADS"] = str(cpu_threads)
     os.environ["MKL_NUM_THREADS"] = str(cpu_threads)
@@ -111,6 +111,17 @@ def _get_engine(profile: Dict[str, Any]):
     for mod in ["tools", "auth"]:
         if mod in sys.modules and "paddleocr" not in str(getattr(sys.modules[mod], "__file__", "")):
             del sys.modules[mod]
+
+    try:
+        import paddle
+        if paddle.device.is_compiled_with_cuda():
+            paddle.set_flags({
+                "FLAGS_allocator_strategy": "auto_growth",
+                "FLAGS_fraction_of_gpu_memory_to_use": 0.6,
+            })
+            paddle.device.cuda.empty_cache()
+    except Exception:
+        pass
 
     from paddleocr import PaddleOCR, PPStructure  # heavy import only in workers
 
@@ -179,6 +190,13 @@ def _worker_ocr_page(img_path: str, profile: Dict[str, Any]) -> Dict[str, Any]:
         }
     except Exception as exc:  # returned, not raised, so one bad page never breaks the batch
         return {"ok": False, "error": f"{type(exc).__name__}: {exc}", "pid": os.getpid()}
+    finally:
+        try:
+            import paddle
+            if paddle.device.is_compiled_with_cuda():
+                paddle.device.cuda.empty_cache()
+        except Exception:
+            pass
 
 
 def _worker_ping(profile: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:

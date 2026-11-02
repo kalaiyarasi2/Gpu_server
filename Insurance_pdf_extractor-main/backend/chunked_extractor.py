@@ -107,13 +107,14 @@ DOCUMENT TEXT (Characters {start_pos} to {end_pos}):
                     if _cur not in sys.path: sys.path.append(_cur)
                     from core.universal_token_monitor import track_usage as _tm
                     _locals = locals()
-                    _fn = _locals.get('filename') or _locals.get('file_name') or _locals.get('safe_filename')
+                    _fn = getattr(self, 'current_filename', None) or _locals.get('filename') or _locals.get('file_name') or _locals.get('safe_filename')
                     if not _fn:
                         _fp = _locals.get('file_path') or _locals.get('pdf_path') or _locals.get('working_path')
                         if _fp: _fn = getattr(_fp, 'name', str(_fp))
                     _fn = str(_fn or 'gpu_doc')
                     if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
-                    _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
+                    _sid = getattr(self, 'current_session_id', None)
+                    _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction", session_id=_sid)
                 except Exception as e:
                     pass
                 result = json.loads(response.choices[0].message.content)
@@ -265,8 +266,14 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
         session_id = f"{timestamp}_{file_slug}"
         session_dir = self.output_dir / f"extraction_{session_id}"
         session_dir.mkdir(parents=True, exist_ok=True)
-        
         self.current_session_dir = session_dir
+        self.current_filename = os.path.basename(original_pdf_path)
+        self.current_session_id = session_id
+        try:
+            from core.universal_token_monitor import set_context
+            set_context(file_name=self.current_filename, session_id=self.current_session_id, poc_name="Gpu_server")
+        except Exception:
+            pass
 
         # Save the processed PDF to the output directory for reference
         processed_pdf_name = f"processed_{os.path.basename(original_pdf_path)}"

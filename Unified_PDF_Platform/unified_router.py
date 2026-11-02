@@ -3175,6 +3175,11 @@ Return ONLY the company name or UNKNOWN:"""
         print("="*70)
         file_path = Path(file_path)
         print(f"[INFO] Input: {file_path.name}")
+        try:
+            from core.universal_token_monitor import set_context
+            set_context(file_name=file_path.name, poc_name="Gpu_server")
+        except Exception:
+            pass
         print(f"[INFO] Started: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')}")
         print("="*70)
         

@@ -122,8 +122,18 @@ def _subprocess_ocr_worker():
     enable_table = sys.argv[4].lower() == "true"
 
     try:
-        os.environ.setdefault("FLAGS_allocator_strategy", "auto_growth")
-        os.environ.setdefault("FLAGS_fraction_of_gpu_memory_to_use", "0")
+        os.environ["FLAGS_allocator_strategy"] = "auto_growth"
+        os.environ["FLAGS_fraction_of_gpu_memory_to_use"] = "0.6"
+        try:
+            import paddle
+            if paddle.device.is_compiled_with_cuda():
+                paddle.set_flags({
+                    "FLAGS_allocator_strategy": "auto_growth",
+                    "FLAGS_fraction_of_gpu_memory_to_use": 0.6,
+                })
+                paddle.device.cuda.empty_cache()
+        except Exception:
+            pass
         from paddleocr import PPStructure, PaddleOCR
         import numpy as np
         from PIL import Image
@@ -311,7 +321,7 @@ def extract_with_paddleocr(pdf_path: str, use_gpu: bool = True, enable_table: bo
                     print(f"      Page {page_num}/{total_pages}...", end=" ", flush=True)
                     text = _ocr_page_in_subprocess(
                         img_path=img_path,
-                        use_gpu=use_gpu,
+                        use_gpu=False,  # Fallback to CPU to avoid competing for GPU memory
                         enable_table=enable_table,
                         timeout=300
                     )
