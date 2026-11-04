@@ -3172,6 +3172,17 @@ Return ONLY the company name or UNKNOWN:"""
         self.request_id = request_id
         print("\n" + "="*70)
         print("[STEP] UNIFIED PDF INTELLIGENT ROUTER (7-LAYER VERSION)")
+        try:
+            import sys as _sys, os as _os
+            _cur = _os.path.abspath(__file__)
+            while _os.path.basename(_cur) != 'Sales team - Copy' and _os.path.dirname(_cur) != _cur:
+                _cur = _os.path.dirname(_cur)
+            if _cur not in _sys.path:
+                _sys.path.insert(0, _cur)
+            from core.universal_token_monitor import start_file_session
+            start_file_session(file_name=Path(file_path).name, poc_name="Gpu_server")
+        except Exception:
+            pass
         print("="*70)
         file_path = Path(file_path)
         print(f"[INFO] Input: {file_path.name}")

@@ -25,6 +25,51 @@ EXTRACTED_TEXT_DIR = BASE_DIR / "extracted_text"
 EXTRACTED_TEXT_DIR.mkdir(exist_ok=True)
 
 # Shared state
+if not getattr(UnifiedRouter._pre_classify, "_vendor_shield_installed", False):
+    _orig_pre_classify = UnifiedRouter._pre_classify
+
+    def _shielded_pre_classify(self, filename, file_ext, text_snippet=""):
+        text_lower = (text_snippet or "").lower()
+
+        # 1. Distinctive Bank / Financial Statement signals
+        bank_signals = {
+            "summary of account": 3, "account summary": 3, "beginning balance": 3, "previous balance": 3,
+            "ending balance": 3, "new balance": 3, "routing number": 3, "deposits and other credits": 3,
+            "payments and other credits": 3, "checks and other debits": 3, "purchases and other debits": 3,
+            "daily balance summary": 3, "statement period": 3, "credit limit": 3, "available credit": 3,
+            "minimum payment due": 3, "cash advances": 2, "balance transfers": 2, "credit union": 2,
+            "checking account": 2, "savings account": 2, "billing cycle": 2, "transaction date": 1,
+            "withdrawal": 1, "deposit": 1, "overdraft": 1,
+        }
+        bank_score = sum(weight for kw, weight in bank_signals.items() if kw in text_lower)
+        strong_insurance = any(kw in text_lower for kw in [
+            "hmo blue", "hmo blue ne", "unitedhealthcare", "uhc", "bcbs",
+            "blue cross", "blue shield", "medlink", "medsupp", "cobra",
+            "subscriber premium", "member premium", "benefit billing"
+        ])
+
+        if bank_score >= 6 and not strong_insurance:
+            print(f"[Pre-Classify] Distinctive Bank / Card Statement score {bank_score} → BANK_STATEMENT")
+            return "BANK_STATEMENT", f"Bank statement content signals (score {bank_score})"
+
+        # 2. Distinctive Vendor / Tax / Utility signals
+        vendor_tax_signals = [
+            "tax invoice", "gstin", "gst number", "cgst", "sgst", "irn:", "hsn code", "sac:",
+            "bandwidth", "internet access", "telecom", "airtel", "spectra", "zoho", "quickbooks",
+            "freshbooks", "software license", "avanquest", "pdfescape"
+        ]
+        has_vendor_tax = any(kw in text_lower for kw in ["tax invoice", "gstin", "gst number", "cgst", "sgst", "irn:", "hsn code", "sac:"])
+        vendor_hits = sum(1 for kw in vendor_tax_signals if kw in text_lower)
+
+        if (has_vendor_tax or vendor_hits >= 3) and not strong_insurance:
+            print(f"[Pre-Classify] Distinctive Vendor / Tax invoice signals detected ({vendor_hits} hits) → invoice_poc_extractor")
+            return "invoice_poc_extractor", f"Vendor invoice content signals ({vendor_hits} matches)"
+
+        return _orig_pre_classify(self, filename, file_ext, text_snippet=text_snippet)
+
+    _shielded_pre_classify._vendor_shield_installed = True
+    UnifiedRouter._pre_classify = _shielded_pre_classify
+
 router_engine = UnifiedRouter()
 file_path_cache: Dict[str, str] = {}
 

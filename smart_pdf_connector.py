@@ -49,7 +49,7 @@ _CANDIDATE_DIRS = [
     Path("C:/Users/Intern/gpu/Gpu_server/File_identifier"),
 ]
 
-for _d in _CANDIDATE_DIRS:
+for _d in reversed(_CANDIDATE_DIRS):
     if _d.exists():
         _d_str = str(_d.resolve())
         if _d_str not in sys.path:
@@ -464,32 +464,52 @@ class SmartPDFConnector:
             print(f"[SmartConnector] PyMuPDF pages error: {e}")
         return "\n\n".join(text_parts)
 
-    def _extract_paddleocr_full(self, pdf_path: Path, enable_table: bool = True) -> List[Dict[str, Any]]:
-        """Extracts full document using PaddleOCR with graceful fallbacks."""
+    def _extract_paddleocr_full(
+        self,
+        pdf_path: Path,
+        enable_table: bool = True,
+        max_pages: Optional[int] = None,
+    ) -> List[Dict[str, Any]]:
+        """Extracts document using PaddleOCR with optional max_pages limit and graceful fallbacks."""
         if _PADDLEOCR_AVAILABLE and extract_with_paddleocr:
             try:
                 _, pages_metadata = extract_with_paddleocr(
                     str(pdf_path),
                     use_gpu=self.use_gpu,
                     enable_table=enable_table,
+                    max_pages=max_pages,
                 )
                 if pages_metadata:
                     for p in pages_metadata:
                         p.setdefault("extraction_method", "paddleocr")
                     return pages_metadata
+            except TypeError:
+                # Fallback if an older extract_with_paddleocr signature doesn't accept max_pages
+                try:
+                    _, pages_metadata = extract_with_paddleocr(
+                        str(pdf_path),
+                        use_gpu=self.use_gpu,
+                        enable_table=enable_table,
+                    )
+                    if pages_metadata:
+                        for p in pages_metadata:
+                            p.setdefault("extraction_method", "paddleocr")
+                        return pages_metadata
+                except Exception as e:
+                    print(f"[SmartConnector] PaddleOCR error: {e}. Falling back to Tesseract.")
             except Exception as e:
                 print(f"[SmartConnector] PaddleOCR error: {e}. Falling back to Tesseract.")
 
         # Tesseract fallback
-        return self._extract_tesseract_full(pdf_path)
+        return self._extract_tesseract_full(pdf_path, max_pages=max_pages)
 
     def _extract_paddleocr_pages(self, pdf_path: Path, max_pages: int = 2) -> str:
-        """Extract first N pages via PaddleOCR or Tesseract."""
-        pages = self._extract_paddleocr_full(pdf_path, enable_table=False)
+        """Extract ONLY the first N pages via PaddleOCR (using native max_pages + PDF slice fallback)."""
+        pages = self._extract_paddleocr_full(pdf_path, enable_table=False, max_pages=max_pages)
         parts = [p.get("text", "") for p in pages if p.get("page_number", 999) <= max_pages]
         return "\n\n".join(parts)
 
-    def _extract_tesseract_full(self, pdf_path: Path) -> List[Dict[str, Any]]:
+    def _extract_tesseract_full(self, pdf_path: Path, max_pages: Optional[int] = None) -> List[Dict[str, Any]]:
         """Fallback OCR using pytesseract."""
         pages_metadata = []
         try:
@@ -498,7 +518,8 @@ class SmartPDFConnector:
             import pypdfium2 as pdfium
 
             pdf = pdfium.PdfDocument(str(pdf_path))
-            for idx in range(len(pdf)):
+            limit = min(len(pdf), max_pages) if max_pages else len(pdf)
+            for idx in range(limit):
                 page = pdf[idx]
                 image = page.render(scale=2.0).to_pil()
                 text = pytesseract.image_to_string(image, config="--psm 6")

@@ -318,14 +318,14 @@ def extract_with_paddleocr(pdf_path: str, use_gpu: bool = True, enable_table: bo
             def _ocr_page_task(idx: int, img_path: str):
                 page_num = idx + 1
                 with _gpu_sem:
-                    print(f"      Page {page_num}/{total_pages}...", end=" ", flush=True)
+                    print(f"      [OCR] Starting Page {page_num}/{total_pages}...", flush=True)
                     text = _ocr_page_in_subprocess(
                         img_path=img_path,
                         use_gpu=False,  # Fallback to CPU to avoid competing for GPU memory
                         enable_table=enable_table,
                         timeout=300
                     )
-                    print(f"✓ ({len(text)} chars)")
+                    print(f"      [OCR] Finished Page {page_num}/{total_pages} ({len(text)} chars)", flush=True)
                     return idx, text
 
             # CPU / fallback path: only the pages the GPU pool did not handle

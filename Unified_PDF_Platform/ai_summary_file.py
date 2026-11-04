@@ -73,7 +73,13 @@ class UnderwritingAnalyzer:
         if isinstance(data, list):
             claims = data
         elif isinstance(data, dict):
-            claims = data.get("claims") or data.get("data") or []
+            if "loss_runs" in data and isinstance(data["loss_runs"], dict):
+                lr = data["loss_runs"]
+                claims = lr.get("claims") or lr.get("data") or []
+            elif "claims" in data:
+                claims = data.get("claims") or []
+            else:
+                claims = data.get("data") or []
             if not isinstance(claims, list):
                 claims = []
 
@@ -148,8 +154,18 @@ class UnderwritingAnalyzer:
         
         # Try to infer prospect name from data if not provided
         if not prospect_name and isinstance(data_json, dict):
-            # Check demographics from Work Comp ACORD
-            demographics = data_json.get("data", {}).get("demographics", {}) if isinstance(data_json.get("data"), dict) else {}
+            # Check demographics from Work Comp ACORD or Loss Run
+            demographics = {}
+            if "acord" in data_json and isinstance(data_json["acord"], dict):
+                acord_obj = data_json["acord"].get("data") if isinstance(data_json["acord"].get("data"), dict) else data_json["acord"]
+                demographics = acord_obj.get("demographics", {}) if isinstance(acord_obj, dict) else {}
+            elif isinstance(data_json.get("data"), dict):
+                demographics = data_json.get("data", {}).get("demographics", {})
+
+            lr_meta = {}
+            if "loss_runs" in data_json and isinstance(data_json["loss_runs"], dict):
+                lr_meta = data_json["loss_runs"].get("extraction_metadata", {})
+
             prospect_name = (
                 data_json.get("company_name") or
                 data_json.get("applicant_name") or
@@ -157,7 +173,9 @@ class UnderwritingAnalyzer:
                 data_json.get("insured_name") or
                 data_json.get("prospect") or
                 demographics.get("applicantName") or
-                demographics.get("legalEntityName")
+                demographics.get("legalEntityName") or
+                lr_meta.get("insured_name") or
+                lr_meta.get("company_name")
             )
             
         final_prospect = prospect_name if prospect_name else "[Identify Company Name from the data if possible, otherwise write 'Unknown']"
