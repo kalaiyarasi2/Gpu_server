@@ -112,6 +112,14 @@ app.include_router(claims_dashboard_router)
 app.include_router(management_claims_dashboard_router)
 app.include_router(tenant_router, prefix="/api/tenant")
 
+# ── Universal Multi-Tenant Router (Generic for all 50+ tenants) ────────────────
+try:
+    from tenant_router import router as tenant_router
+    app.include_router(tenant_router, prefix="/api/tenant")
+    print("[INFO] Universal Multi-Tenant Router mounted at /api/tenant")
+except Exception as _tenant_err:
+    print(f"[WARN] Multi-Tenant router could not be loaded: {_tenant_err}")
+
 # --- Background Email Pipeline Management ---
 email_process = None
 

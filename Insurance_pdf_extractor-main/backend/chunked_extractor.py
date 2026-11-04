@@ -254,6 +254,15 @@ class ChunkedInsuranceExtractor(EnhancedInsuranceExtractor):
         temp_rotated_pdf = os.path.join(temp_rotated_dir, "rotated_temp.pdf")
         original_pdf_path = pdf_path
         self.current_filename = os.path.basename(original_pdf_path)
+        try:
+            from core.universal_token_monitor import get_context, set_context, start_file_session
+            _ctx = get_context()
+            if _ctx.get("session_id") and _ctx.get("file_name") == self.current_filename:
+                set_context(file_name=self.current_filename, poc_name="Insurance_pdf_extractor")
+            else:
+                start_file_session(file_name=self.current_filename, poc_name="Insurance_pdf_extractor")
+        except Exception:
+            pass
         
         is_scanned = None
         try:
