@@ -142,7 +142,7 @@ class UnderwritingAnalyzer:
     def generate_underwriting_report(
         self, 
         data_json: Any, 
-        model: str = "gpt-4o-mini", 
+        model: str = "gpt-5.4-nano", 
         temperature: float = 0.2,
         prospect_name: Optional[str] = None
     ) -> str:
@@ -779,7 +779,7 @@ FINAL UNDERWRITING DECISION: [Decision]"""
                     if _fp: _fn = getattr(_fp, 'name', str(_fp))
                 _fn = str(_fn or 'gpu_doc')
                 if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
-                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
+                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-5.6-terra', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
             except Exception as e:
                 pass
             return response.choices[0].message.content
@@ -837,7 +837,7 @@ async def get_underwriting_summary(
         ]
     ),
     download: bool = Query(False, description="Set to true to download the summary as a .txt file"),
-    model: str = Query("gpt-4o-mini", description="OpenAI model to use"),
+    model: str = Query("gpt-5.4-nano", description="OpenAI model to use"),
     temperature: float = Query(0.2, description="Sampling temperature"),
     prospect_name: Optional[str] = Query(None, description="Optional prospect/company name")
 ):
@@ -880,7 +880,7 @@ if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description="Generate an Underwriting Assessment Report using AI.")
     parser.add_argument("input_file", help="Path to the JSON or TXT file containing submission data/claims.")
-    parser.add_argument("--model", default="gpt-4o-mini", help="OpenAI model to use (default: gpt-4o-mini).")
+    parser.add_argument("--model", default="gpt-5.4-nano", help="OpenAI model to use (default: gpt-5.4-nano).")
     parser.add_argument("--output", help="Path to save the generated markdown report.")
     parser.add_argument("--prospect", help="Name of the prospect/company to include in the report.")
     

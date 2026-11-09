@@ -484,7 +484,7 @@ def save_successful_extraction(
     text: str,
     extracted_data: Dict,
     client,                         # OpenAI client (or compatible)
-    model: str = "gpt-4o",
+    model: str = "gpt-5.6-terra",
 ) -> bool:
     """
     Analyses a successful extraction and saves it as a carrier profile.
@@ -520,7 +520,7 @@ JSON only. No markdown fences. No explanation."""
         resp = client.chat.completions.create(
             messages=[{"role": "user", "content": id_prompt}],
             model=model,
-            temperature=0,
+            temperature=1,
             response_format={"type": "json_object"},
         )
 
@@ -538,7 +538,7 @@ JSON only. No markdown fences. No explanation."""
                 if _fp: _fn = getattr(_fp, 'name', str(_fp))
             _fn = str(_fn or 'gpu_doc')
             if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
-            _tm(resp.usage, model=resp.model if hasattr(resp, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
+            _tm(resp.usage, model=resp.model if hasattr(resp, 'model') else 'gpt-5.6-terra', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
         except Exception as e:
             pass
         meta = json.loads(resp.choices[0].message.content)

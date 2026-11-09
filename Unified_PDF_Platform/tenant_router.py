@@ -209,11 +209,19 @@ async def _execute_tenant_extraction(
     # 5. Run TenantExtractionEngine (reads config/tenants/<tenant_code>/extraction.json)
     engine = _get_engine(tenant_code)
     try:
+        # Determine effective document type: if base extraction classified it as WORK_COMP, use WORK_COMP so verifications trigger!
+        effective_doc_type = doc_type
+        base_type = str(base_result.get("type", "")).upper()
+        if "WORK_COMP" in base_type or "ACORD" in base_type:
+            effective_doc_type = "WORK_COMP"
+        elif "INSURANCE" in base_type or "CLAIM" in base_type:
+            effective_doc_type = "INSURANCE"
+
         enriched = await run_in_threadpool(
             engine.enrich,
             base_json_path,
             extracted_text,
-            doc_type
+            effective_doc_type
         )
     except Exception as e:
         logger.error(f"[TenantRouter][{tenant_code}] Enrichment failed: {e}")

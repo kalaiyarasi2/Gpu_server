@@ -345,13 +345,13 @@ Return the full text as Markdown-style tables where appropriate."""
         
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5.6-terra",
                 messages=[
                     {"role": "system", "content": system_msg},
                     {"role": "user", "content": [{"type": "text", "text": prompt}, {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{img_base64}"}}]}
                 ],
-                max_tokens=4000, 
-                temperature=0.0
+                max_completion_tokens=4000, 
+                temperature=1
             )
 
             try:
@@ -368,7 +368,7 @@ Return the full text as Markdown-style tables where appropriate."""
                     if _fp: _fn = getattr(_fp, 'name', str(_fp))
                 _fn = str(_fn or 'gpu_doc')
                 if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
-                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
+                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-5.6-terra', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
             except Exception as e:
                 pass
             return response.choices[0].message.content, 0.95

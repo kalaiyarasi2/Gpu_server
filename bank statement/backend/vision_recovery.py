@@ -238,12 +238,18 @@ Return JSON of MISSING fields only:
 If NOTHING is missing, return {{"missing_fields": []}}.
 """
         try:
+            if hasattr(image, "size") and max(image.size) > 2048:
+                from PIL import Image as _PIL_Img
+                resample = getattr(_PIL_Img, "Resampling", _PIL_Img).LANCZOS
+                image = image.copy()
+                image.thumbnail((2048, 2048), resample)
+
             buffered = io.BytesIO()
             image.save(buffered, format="PNG")
             img_base64 = base64.b64encode(buffered.getvalue()).decode('utf-8')
             
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5.6-terra",
                 messages=[{
                     "role": "user",
                     "content": [
@@ -255,8 +261,8 @@ If NOTHING is missing, return {{"missing_fields": []}}.
                     ]
                 }],
                 response_format={"type": "json_object"},
-                max_tokens=4000, # Increased from 2000 to prevent truncation
-                temperature=0.0
+                max_completion_tokens=4000, # Increased from 2000 to prevent truncation
+                temperature=1
             )
 
             try:
@@ -273,7 +279,7 @@ If NOTHING is missing, return {{"missing_fields": []}}.
                     if _fp: _fn = getattr(_fp, 'name', str(_fp))
                 _fn = str(_fn or 'gpu_doc')
                 if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
-                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
+                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-5.6-terra', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
             except Exception as e:
                 pass
             
@@ -353,12 +359,18 @@ If NOTHING is missing, return {{"missing_fields": []}}.
             "Return ONLY the extracted text, no explanations."
         )
         try:
+            if hasattr(image, "size") and max(image.size) > 2048:
+                from PIL import Image as _PIL_Img
+                resample = getattr(_PIL_Img, "Resampling", _PIL_Img).LANCZOS
+                image = image.copy()
+                image.thumbnail((2048, 2048), resample)
+
             buffered = _io.BytesIO()
             image.save(buffered, format="PNG")
             img_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
 
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5.6-terra",
                 messages=[{
                     "role": "user",
                     "content": [
@@ -369,8 +381,8 @@ If NOTHING is missing, return {{"missing_fields": []}}.
                         }
                     ]
                 }],
-                max_tokens=4000,
-                temperature=0.0
+                max_completion_tokens=4000,
+                temperature=1
             )
 
             try:
@@ -387,7 +399,7 @@ If NOTHING is missing, return {{"missing_fields": []}}.
                     if _fp: _fn = getattr(_fp, 'name', str(_fp))
                 _fn = str(_fn or 'gpu_doc')
                 if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
-                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
+                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-5.6-terra', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
             except Exception as e:
                 pass
             return response.choices[0].message.content or ""

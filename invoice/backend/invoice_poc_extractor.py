@@ -23,6 +23,27 @@ from dotenv import load_dotenv
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
+try:
+    _cur = Path(__file__).resolve()
+    while _cur.name != "Sales team - Copy" and _cur.parent != _cur:
+        _cur = _cur.parent
+    _mon = _cur / "Gpu_server"
+    if str(_mon) not in sys.path:
+        sys.path.insert(0, str(_mon))
+    from monitor.patch_openai import patch_openai_for_monitoring
+    patch_openai_for_monitoring()
+except Exception:
+    pass
+
+def sanitize_data(val):
+    if isinstance(val, str):
+        return re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', val)
+    elif isinstance(val, dict):
+        return {k: sanitize_data(v) for k, v in val.items()}
+    elif isinstance(val, list):
+        return [sanitize_data(v) for v in val]
+    return val
+
 # Configure Tesseract path if provided in environment
 TESSERACT_PATH = os.getenv("TESSERACT_PATH")
 if TESSERACT_PATH:
@@ -208,13 +229,13 @@ Extract data from the document text provided below.
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-5.6-terra",
             messages=[
                 {"role": "system", "content": "You are a precise data extractor."},
                 {"role": "user", "content": prompt}
             ],
             response_format={"type": "json_object"},
-            temperature=0
+            temperature=1
         )
 
         try:
@@ -231,11 +252,11 @@ Extract data from the document text provided below.
                 if _fp: _fn = getattr(_fp, 'name', str(_fp))
             _fn = str(_fn or 'gpu_doc')
             if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
-            _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
+            _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-5.6-terra', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
         except Exception as e:
             pass
         data = json.loads(response.choices[0].message.content)
-        return data
+        return sanitize_data(data)
     except Exception as e:
         print(f"  [ERROR] LLM Error: {e}")
         return {"HEADER": {}, "LINE_ITEMS": []}
@@ -256,9 +277,12 @@ def process_single_pdf(pdf_path: str, client: OpenAI) -> Dict:
     # SAVE LOCALLY AS TXT
     pdf_stem = Path(pdf_path).stem
     txt_path = Path(pdf_path).parent / f"{pdf_stem}_extracted_text.txt"
-    with open(txt_path, "w", encoding="utf-8") as f:
-        f.write(text)
-    print(f"  [INFO] Saved text to: {txt_path}")
+    try:
+        with open(txt_path, "w", encoding="utf-8") as f:
+            f.write(text)
+        print(f"  [INFO] Saved text to: {txt_path}")
+    except Exception as e:
+        print(f"  [WARN] Could not save extracted text locally: {e}")
     
     # Step 2: LLM Extract
     data = extract_fields_with_llm(text, client, os.path.basename(pdf_path))
@@ -310,11 +334,22 @@ def main():
     # Extraction
     data = process_single_pdf(pdf_path, client)
     
-    # Save JSON
+    # Save JSON (with retry for Windows file locks)
     json_path = Path(pdf_path).with_suffix(".json")
-    with open(json_path, "w") as f:
-        json.dump(data, f, indent=4)
-    print(f"[OK] Saved JSON: {json_path}")
+    for _ in range(5):
+        try:
+            with open(json_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=4)
+            print(f"[OK] Saved JSON: {json_path}")
+            break
+        except PermissionError:
+            import time
+            time.sleep(0.5)
+    else:
+        alt_json = Path(pdf_path).parent / f"{Path(pdf_path).stem}_out.json"
+        with open(alt_json, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=4)
+        print(f"[OK] Saved JSON (alternate): {alt_json}")
     
     # Flatten and Save Excel
     rows = flatten_data(data, os.path.basename(pdf_path))
@@ -325,9 +360,33 @@ def main():
         if col not in df.columns: df[col] = None
     df = df[cols]
     
+    # Remove illegal characters that cause openpyxl.utils.exceptions.IllegalCharacterError
+    try:
+        from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
+        def _clean_cell(val):
+            if isinstance(val, str):
+                return ILLEGAL_CHARACTERS_RE.sub('', val)
+            return val
+        if hasattr(df, 'map'):
+            df = df.map(_clean_cell)
+        else:
+            df = df.applymap(_clean_cell)
+    except Exception:
+        pass
+
     excel_path = Path(pdf_path).with_suffix(".xlsx")
-    df.to_excel(excel_path, index=False)
-    print(f"[OK] Saved Excel: {excel_path}")
+    for _ in range(5):
+        try:
+            df.to_excel(excel_path, index=False)
+            print(f"[OK] Saved Excel: {excel_path}")
+            break
+        except PermissionError:
+            import time
+            time.sleep(0.5)
+    else:
+        alt_excel = Path(pdf_path).parent / f"{Path(pdf_path).stem}_out.xlsx"
+        df.to_excel(alt_excel, index=False)
+        print(f"[OK] Saved Excel (alternate): {alt_excel}")
     
     print("\n--- EXTRACTION PREVIEW ---")
     print(df.head().to_string(index=False))

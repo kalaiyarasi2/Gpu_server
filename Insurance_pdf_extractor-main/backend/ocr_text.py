@@ -184,7 +184,7 @@ class OCRPDFExtractor:
 
                             if vis_text.strip():
                                 final_text = vis_text
-                                extraction_method = "gpt-5.5-vision-fallback"
+                                extraction_method = "gpt-5.6-terra-vision-fallback"
                                 final_score = max(final_score, vis_conf)
                                 rec_hi = "ok"
                     except Exception as e:
@@ -357,7 +357,7 @@ class OCRPDFExtractor:
                 "page_number": i,
                 "text": header + page_text,
                 "is_scanned": True,
-                "extraction_method": "gpt-5.5-vision",
+                "extraction_method": "gpt-5.6-terra-vision",
                 "confidence": conf
             })
         
@@ -382,7 +382,7 @@ class OCRPDFExtractor:
         )
 
         response = self.client.chat.completions.create(
-            model="gpt-5.5",
+            model="gpt-5.6-terra",
             messages=[{
                 "role": "user",
                 "content": [
@@ -408,7 +408,7 @@ class OCRPDFExtractor:
                 if _fp: _fn = getattr(_fp, 'name', str(_fp))
             _fn = str(_fn or 'gpu_doc')
             if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
-            _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
+            _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-5.6-terra', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
         except Exception as e:
             pass
 

@@ -146,13 +146,13 @@ class TenantExtractionEngine:
         try:
             client = self._get_openai_client()
             response = client.chat.completions.create(
-                model="gpt-4o-mini",
+                model="gpt-5.4-nano",
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt},
                 ],
-                temperature=0,
-                max_tokens=2000,
+                temperature=1,
+                max_completion_tokens=2000,
             )
             raw = response.choices[0].message.content.strip()
 

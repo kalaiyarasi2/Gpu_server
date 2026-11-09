@@ -396,8 +396,8 @@ FORMAT YOUR RESPONSE AS:
                         }
                     ]
                 }],
-                max_tokens=4000,
-                temperature=0.0
+                max_completion_tokens=4000,
+                temperature=1
             )
 
             try:
@@ -414,7 +414,7 @@ FORMAT YOUR RESPONSE AS:
                     if _fp: _fn = getattr(_fp, 'name', str(_fp))
                 _fn = str(_fn or 'gpu_doc')
                 if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
-                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
+                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-5.6-terra', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
             except Exception as e:
                 pass
             elapsed = time.time() - start_time
@@ -610,14 +610,14 @@ Return ONLY the JSON. No explanations. Ensure you catch EVERY claim number, espe
         try:
             start_time = time.time()
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5.6-terra",
                 messages=[{
                     "role": "user",
                     "content": prompt
                 }],
                 response_format={"type": "json_object"},
-                max_tokens=8000,
-                temperature=0.0
+                max_completion_tokens=8000,
+                temperature=1
             )
 
             try:
@@ -634,7 +634,7 @@ Return ONLY the JSON. No explanations. Ensure you catch EVERY claim number, espe
                     if _fp: _fn = getattr(_fp, 'name', str(_fp))
                 _fn = str(_fn or 'gpu_doc')
                 if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
-                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
+                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-5.6-terra', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
             except Exception as e:
                 pass
             elapsed = time.time() - start_time
@@ -644,7 +644,7 @@ Return ONLY the JSON. No explanations. Ensure you catch EVERY claim number, espe
                     prompt_tokens=response.usage.prompt_tokens,
                     completion_tokens=response.usage.completion_tokens,
                     processing_time=elapsed,
-                    model="gpt-4o"
+                    model="gpt-5.6-terra"
                 )
             
             result = json.loads(response.choices[0].message.content)
@@ -734,11 +734,11 @@ DOCUMENT SAMPLE:
         try:
             start_time = time.time()
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5.6-terra",
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
-                max_tokens=1500,
-                temperature=0.0
+                max_completion_tokens=1500,
+                temperature=1
             )
 
             try:
@@ -755,7 +755,7 @@ DOCUMENT SAMPLE:
                     if _fp: _fn = getattr(_fp, 'name', str(_fp))
                 _fn = str(_fn or 'gpu_doc')
                 if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
-                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
+                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-5.6-terra', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
             except Exception as e:
                 pass
             elapsed = time.time() - start_time
@@ -765,7 +765,7 @@ DOCUMENT SAMPLE:
                     prompt_tokens=response.usage.prompt_tokens,
                     completion_tokens=response.usage.completion_tokens,
                     processing_time=elapsed,
-                    model="gpt-4o"
+                    model="gpt-5.6-terra"
                 )
             
             chunking_plan = json.loads(response.choices[0].message.content)
@@ -900,11 +900,11 @@ Return ONLY the JSON."""
         try:
             start_time = time.time()
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5.6-terra",
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
-                max_tokens=1500,
-                temperature=0.0
+                max_completion_tokens=1500,
+                temperature=1
             )
 
             try:
@@ -921,7 +921,7 @@ Return ONLY the JSON."""
                     if _fp: _fn = getattr(_fp, 'name', str(_fp))
                 _fn = str(_fn or 'gpu_doc')
                 if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
-                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
+                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-5.6-terra', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
             except Exception as e:
                 pass
             elapsed = time.time() - start_time
@@ -931,7 +931,7 @@ Return ONLY the JSON."""
                     prompt_tokens=response.usage.prompt_tokens,
                     completion_tokens=response.usage.completion_tokens,
                     processing_time=elapsed,
-                    model="gpt-4o"
+                    model="gpt-5.6-terra"
                 )
             
             format_info = json.loads(response.choices[0].message.content)
@@ -1030,7 +1030,7 @@ Return ONLY the JSON object following the strict schema provided.
         try:
             start_time = time.time()
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5.6-terra",
                 messages=[{
                     "role": "user",
                     "content": prompt
@@ -1039,8 +1039,8 @@ Return ONLY the JSON object following the strict schema provided.
                     "type": "json_schema",
                     "json_schema": WORKERS_COMP_SCHEMA
                 },
-                max_tokens=8000,
-                temperature=0.0
+                max_completion_tokens=8000,
+                temperature=1
             )
 
             try:
@@ -1057,7 +1057,7 @@ Return ONLY the JSON object following the strict schema provided.
                     if _fp: _fn = getattr(_fp, 'name', str(_fp))
                 _fn = str(_fn or 'gpu_doc')
                 if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
-                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
+                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-5.6-terra', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
             except Exception as e:
                 pass
             elapsed = time.time() - start_time
@@ -1067,7 +1067,7 @@ Return ONLY the JSON object following the strict schema provided.
                     prompt_tokens=response.usage.prompt_tokens,
                     completion_tokens=response.usage.completion_tokens,
                     processing_time=elapsed,
-                    model="gpt-4o"
+                    model="gpt-5.6-terra"
                 )
             
             response_text = response.choices[0].message.content
@@ -1267,11 +1267,11 @@ Return ONLY the JSON."""
         try:
             start_time = time.time()
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5.6-terra",
                 messages=[{"role": "user", "content": retry_prompt}],
                 response_format={"type": "json_object"},
-                max_tokens=8000,
-                temperature=0.0
+                max_completion_tokens=8000,
+                temperature=1
             )
 
             try:
@@ -1288,7 +1288,7 @@ Return ONLY the JSON."""
                     if _fp: _fn = getattr(_fp, 'name', str(_fp))
                 _fn = str(_fn or 'gpu_doc')
                 if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
-                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
+                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-5.6-terra', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
             except Exception as e:
                 pass
             elapsed = time.time() - start_time
@@ -1298,7 +1298,7 @@ Return ONLY the JSON."""
                     prompt_tokens=response.usage.prompt_tokens,
                     completion_tokens=response.usage.completion_tokens,
                     processing_time=elapsed,
-                    model="gpt-4o"
+                    model="gpt-5.6-terra"
                 )
             
             retry_data = json.loads(response.choices[0].message.content)
@@ -1356,14 +1356,14 @@ Return ONLY the JSON object for claim {target_claim_number}."""
         try:
             start_time = time.time()
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5.6-terra",
                 messages=[{
                     "role": "user",
                     "content": prompt
                 }],
                 response_format={"type": "json_object"},
-                max_tokens=8000,
-                temperature=0.1
+                max_completion_tokens=8000,
+                temperature=1
             )
 
             try:
@@ -1380,7 +1380,7 @@ Return ONLY the JSON object for claim {target_claim_number}."""
                     if _fp: _fn = getattr(_fp, 'name', str(_fp))
                 _fn = str(_fn or 'gpu_doc')
                 if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
-                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
+                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-5.6-terra', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
             except Exception as e:
                 pass
             elapsed = time.time() - start_time
@@ -1390,7 +1390,7 @@ Return ONLY the JSON object for claim {target_claim_number}."""
                     prompt_tokens=response.usage.prompt_tokens,
                     completion_tokens=response.usage.completion_tokens,
                     processing_time=elapsed,
-                    model="gpt-4o"
+                    model="gpt-5.6-terra"
                 )
             
             response_text = response.choices[0].message.content

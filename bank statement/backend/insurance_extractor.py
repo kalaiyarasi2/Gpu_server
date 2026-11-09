@@ -277,14 +277,14 @@ Return ONLY the JSON. No explanations. Ensure you catch EVERY claim number, espe
 
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5.6-terra",
                 messages=[{
                     "role": "user",
                     "content": prompt
                 }],
                 response_format={"type": "json_object"},
-                max_tokens=8000,
-                temperature=0.0
+                max_completion_tokens=8000,
+                temperature=1
             )
 
             try:
@@ -301,7 +301,7 @@ Return ONLY the JSON. No explanations. Ensure you catch EVERY claim number, espe
                     if _fp: _fn = getattr(_fp, 'name', str(_fp))
                 _fn = str(_fn or 'gpu_doc')
                 if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
-                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
+                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-5.6-terra', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
             except Exception as e:
                 pass
             
@@ -381,7 +381,7 @@ IMPORTANT:
 
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5.6-terra",
                 messages=[{
                     "role": "user",
                     "content": [
@@ -394,8 +394,8 @@ IMPORTANT:
                         }
                     ]
                 }],
-                max_tokens=8000,
-                temperature=0.0  # Zero temperature for exact extraction
+                max_completion_tokens=8000,
+                temperature=1  # Zero temperature for exact extraction
             )
 
             try:
@@ -412,7 +412,7 @@ IMPORTANT:
                     if _fp: _fn = getattr(_fp, 'name', str(_fp))
                 _fn = str(_fn or 'gpu_doc')
                 if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
-                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
+                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-5.6-terra', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
             except Exception as e:
                 pass
             
@@ -526,11 +526,11 @@ DOCUMENT SAMPLE:
         
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5.6-terra",
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
-                max_tokens=1500,
-                temperature=0.0
+                max_completion_tokens=1500,
+                temperature=1
             )
 
             try:
@@ -547,7 +547,7 @@ DOCUMENT SAMPLE:
                     if _fp: _fn = getattr(_fp, 'name', str(_fp))
                 _fn = str(_fn or 'gpu_doc')
                 if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
-                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
+                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-5.6-terra', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
             except Exception as e:
                 pass
             
@@ -686,11 +686,11 @@ Return ONLY the JSON. Ensure the dynamic_instruction is highly technical and spe
 
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5.6-terra",
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
-                max_tokens=1500,
-                temperature=0.0
+                max_completion_tokens=1500,
+                temperature=1
             )
 
             try:
@@ -707,7 +707,7 @@ Return ONLY the JSON. Ensure the dynamic_instruction is highly technical and spe
                     if _fp: _fn = getattr(_fp, 'name', str(_fp))
                 _fn = str(_fn or 'gpu_doc')
                 if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
-                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
+                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-5.6-terra', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
             except Exception as e:
                 pass
             
@@ -1020,14 +1020,14 @@ Follow the format-specific instructions above. Validate your extractions."""
         data = {"claims": []}
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5.6-terra",
                 messages=[{
                     "role": "user",
                     "content": prompt
                 }],
                 response_format={"type": "json_object"},
-                max_tokens=8000,
-                temperature=0.0
+                max_completion_tokens=8000,
+                temperature=1
             )
 
             try:
@@ -1044,7 +1044,7 @@ Follow the format-specific instructions above. Validate your extractions."""
                     if _fp: _fn = getattr(_fp, 'name', str(_fp))
                 _fn = str(_fn or 'gpu_doc')
                 if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
-                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
+                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-5.6-terra', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
             except Exception as e:
                 pass
             
@@ -1460,11 +1460,11 @@ Return ONLY the JSON."""
 
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5.6-terra",
                 messages=[{"role": "user", "content": retry_prompt}],
                 response_format={"type": "json_object"},
-                max_tokens=8000,
-                temperature=0.0
+                max_completion_tokens=8000,
+                temperature=1
             )
 
             try:
@@ -1481,7 +1481,7 @@ Return ONLY the JSON."""
                     if _fp: _fn = getattr(_fp, 'name', str(_fp))
                 _fn = str(_fn or 'gpu_doc')
                 if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
-                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
+                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-5.6-terra', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
             except Exception as e:
                 pass
             
@@ -1539,14 +1539,14 @@ Return ONLY the JSON object for claim {target_claim_number}."""
 
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5.6-terra",
                 messages=[{
                     "role": "user",
                     "content": prompt
                 }],
                 response_format={"type": "json_object"},
-                max_tokens=8000,
-                temperature=0.1
+                max_completion_tokens=8000,
+                temperature=1
             )
 
             try:
@@ -1563,7 +1563,7 @@ Return ONLY the JSON object for claim {target_claim_number}."""
                     if _fp: _fn = getattr(_fp, 'name', str(_fp))
                 _fn = str(_fn or 'gpu_doc')
                 if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
-                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
+                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-5.6-terra', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
             except Exception as e:
                 pass
             

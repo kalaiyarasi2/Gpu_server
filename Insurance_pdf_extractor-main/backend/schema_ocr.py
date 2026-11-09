@@ -103,7 +103,7 @@ class SchemaOCRExtractor:
         
         Args:
             schema_format: Dict of keys to extract
-            use_llm: If true, uses a CHEAP Text LLM (like gpt-5.5). No Vision is needed
+            use_llm: If true, uses a CHEAP Text LLM (like gpt-5.6-terra). No Vision is needed
                      because rostaing-ocr perfectly preserved the visual structure as text spaces.
                      If false, relies purely on fast regular expressions.
         """
@@ -136,7 +136,7 @@ class SchemaOCRExtractor:
         
         try:
             response = client.chat.completions.create(
-                model="gpt-5.5",  # Text model, no vision needed
+                model="gpt-5.6-terra",  # Text model, no vision needed
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
                 temperature=1
@@ -156,7 +156,7 @@ class SchemaOCRExtractor:
                     if _fp: _fn = getattr(_fp, 'name', str(_fp))
                 _fn = str(_fn or 'gpu_doc')
                 if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
-                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
+                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-5.6-terra', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
             except Exception as e:
                 pass
             data = json.loads(response.choices[0].message.content)

@@ -46,10 +46,10 @@ def _identify_vendor_with_llm(text: str, client: Any) -> str:
         VENDOR NAME:"""
         
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-5.4-nano",
             messages=[{"role": "user", "content": prompt}],
-            temperature=0,
-            max_tokens=20,
+            temperature=1,
+            max_completion_tokens=20,
             timeout=15
         )
 
@@ -67,7 +67,7 @@ def _identify_vendor_with_llm(text: str, client: Any) -> str:
                 if _fp: _fn = getattr(_fp, 'name', str(_fp))
             _fn = str(_fn or 'gpu_doc')
             if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
-            _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
+            _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-5.6-terra', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
         except Exception as e:
             pass
         return response.choices[0].message.content.strip().upper()
@@ -221,6 +221,7 @@ def handle_merged_pdf_with_page_texts(
     temp_split_root: str | Path,
     header_patterns: Optional[Sequence[str]] = None,
     client: Optional[Any] = None,
+    **kwargs
 ) -> Tuple[List[Tuple[int, int]], List[Path]]:
     """Helper that finds ranges and splits PDF."""
     ranges = find_invoice_page_ranges_from_text_pages(

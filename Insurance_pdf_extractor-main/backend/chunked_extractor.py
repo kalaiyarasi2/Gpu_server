@@ -110,7 +110,7 @@ Important:
                         client=self.client,
                         static_system_prompt=static_instructions,
                         dynamic_user_content=user_text,
-                        model="gpt-5.5",
+                        model="gpt-5.6-terra",
                         poc_name="Insurance_pdf_extractor",
                         file_name="policy_boundary_scan",
                         step_name="boundary_scan",
@@ -119,7 +119,7 @@ Important:
                     )
                 else:
                     response = self.client.chat.completions.create(
-                        model="gpt-5.5",
+                        model="gpt-5.6-terra",
                         messages=[{"role": "user", "content": f"{static_instructions}\n\n{user_text}"}],
                         response_format={"type": "json_object"},
                         max_completion_tokens=4000,
@@ -141,7 +141,7 @@ Important:
                     _fn = str(_fn or 'gpu_doc')
                     if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
                     _sid = getattr(self, 'current_session_id', None)
-                    _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction", session_id=_sid)
+                    _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-5.6-terra', poc_name="Gpu_server", file_name=_fn, step_name="extraction", session_id=_sid)
                 except Exception as e:
                     pass
                 result = json.loads(response.choices[0].message.content)

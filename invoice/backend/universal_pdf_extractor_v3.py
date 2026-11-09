@@ -601,9 +601,9 @@ JSON OUTPUT:"""
                     "content": prompt
                 }
             ],
-            model="gpt-4.1",
-            temperature=0,  # Zero temperature for maximum consistency
-            max_tokens=14000,
+            model="gpt-5.6-terra",
+            temperature=1,  # Zero temperature for maximum consistency
+            max_completion_tokens=14000,
         )
 
         try:
@@ -620,7 +620,7 @@ JSON OUTPUT:"""
                 if _fp: _fn = getattr(_fp, 'name', str(_fp))
             _fn = str(_fn or 'gpu_doc')
             if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
-            _tm(chat_completion.usage, model=chat_completion.model if hasattr(chat_completion, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
+            _tm(chat_completion.usage, model=chat_completion.model if hasattr(chat_completion, 'model') else 'gpt-5.6-terra', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
         except Exception as e:
             pass
         

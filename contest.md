@@ -839,7 +839,7 @@ DOCUMENT TEXT:
 
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5.6-terra",
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
                 max_tokens=4000,
@@ -1346,7 +1346,7 @@ Return JSON structure:
 }}
 """
         response = self.client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-5.6-terra",
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"},
             temperature=0.0
@@ -1400,7 +1400,7 @@ Return JSON:
 }}
 """
         response = self.client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-5.6-terra",
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"},
             temperature=0.0
@@ -1527,7 +1527,7 @@ Return JSON:
 }}
 """
                             response = self.client.chat.completions.create(
-                                model="gpt-4o",
+                                model="gpt-5.6-terra",
                                 messages=[{"role": "user", "content": prompt}],
                                 response_format={"type": "json_object"},
                                 temperature=0.0
@@ -2112,7 +2112,7 @@ Return ONLY the JSON. No explanations. Ensure you catch EVERY claim number, espe
 
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5.6-terra",
                 messages=[{
                     "role": "user",
                     "content": prompt
@@ -2198,7 +2198,7 @@ IMPORTANT:
 
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5.6-terra",
                 messages=[{
                     "role": "user",
                     "content": [
@@ -2325,7 +2325,7 @@ DOCUMENT SAMPLE:
         
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5.6-terra",
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
                 max_tokens=1500,
@@ -2467,7 +2467,7 @@ Return ONLY the JSON. Ensure the dynamic_instruction is highly technical and spe
 
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5.6-terra",
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
                 max_tokens=1500,
@@ -2783,7 +2783,7 @@ Follow the format-specific instructions above. Validate your extractions."""
         data = {"claims": []}
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5.6-terra",
                 messages=[{
                     "role": "user",
                     "content": prompt
@@ -3205,7 +3205,7 @@ Return ONLY the JSON."""
 
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5.6-terra",
                 messages=[{"role": "user", "content": retry_prompt}],
                 response_format={"type": "json_object"},
                 max_tokens=8000,
@@ -3266,7 +3266,7 @@ Return ONLY the JSON object for claim {target_claim_number}."""
 
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5.6-terra",
                 messages=[{
                     "role": "user",
                     "content": prompt
@@ -3945,7 +3945,7 @@ class OCRPDFExtractor:
         )
 
         response = self.client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-5.6-terra",
             messages=[{
                 "role": "user",
                 "content": [
@@ -4076,7 +4076,7 @@ PAGE SAMPLES:
 """
         
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-5.6-terra",
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"},
             max_tokens=800,
@@ -9125,7 +9125,7 @@ If NOTHING is missing, return {{"missing_fields": []}}.
             img_base64 = base64.b64encode(buffered.getvalue()).decode('utf-8')
             
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5.6-terra",
                 messages=[{
                     "role": "user",
                     "content": [
@@ -9222,7 +9222,7 @@ If NOTHING is missing, return {{"missing_fields": []}}.
             img_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
 
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5.6-terra",
                 messages=[{
                     "role": "user",
                     "content": [
@@ -12083,7 +12083,7 @@ DOCUMENT TEXT (Characters {start_pos} to {end_pos}):
             try:
                 # print(f"   --> Scanning for policies from character {start_pos} to {end_pos}...")
                 response = self.client.chat.completions.create(
-                    model="gpt-4o",
+                    model="gpt-5.6-terra",
                     messages=[{"role": "user", "content": prompt}],
                     response_format={"type": "json_object"},
                     max_tokens=4000,
@@ -13026,7 +13026,7 @@ class GeneralDataValidator:
 
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o", # Use gpt-4o for semantic auditing
+                model="gpt-5.6-terra", # Use gpt-5.6-terra for semantic auditing
                 messages=messages,
                 response_format={"type": "json_object"},
                 temperature=0.0
@@ -13145,7 +13145,7 @@ Return ONLY a JSON object:
 
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5.6-terra",
                 messages=messages,
                 response_format={"type": "json_object"},
                 temperature=0.0
@@ -13184,7 +13184,7 @@ Return ONLY a JSON object describing the pattern:
 """
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5.6-terra",
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
                 temperature=0.0
@@ -15388,7 +15388,7 @@ class EnhancedInsuranceExtractor:
                 "page_number": i,
                 "text": page_header + page_text,
                 "is_scanned": is_scanned,
-                "extraction_method": "gpt-4o-vision",
+                "extraction_method": "gpt-5.6-terra-vision",
                 "confidence": confidence
             })
             
@@ -15533,7 +15533,7 @@ Return ONLY the JSON. No explanations. Ensure you catch EVERY claim number, espe
 
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5.6-terra",
                 messages=[{
                     "role": "user",
                     "content": prompt
@@ -15624,7 +15624,7 @@ IMPORTANT:
 
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5.6-terra",
                 messages=[{
                     "role": "user",
                     "content": [
@@ -15752,7 +15752,7 @@ DOCUMENT SAMPLE:
         
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5.6-terra",
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
                 max_tokens=1500,
@@ -15918,7 +15918,7 @@ Return ONLY the JSON. Ensure the dynamic_rules is extremely precise."""
 
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5.6-terra",
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
                 max_tokens=1500,
@@ -15979,7 +15979,7 @@ DOCUMENT TEXT (first 4000 chars):
 """
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5.6-terra",
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
                 max_tokens=200,
@@ -16394,7 +16394,7 @@ Follow the format-specific instructions above. Validate your extractions."""
         data = {"claims": []}
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5.6-terra",
                 messages=[{
                     "role": "user",
                     "content": prompt
@@ -17081,7 +17081,7 @@ Return ONLY the JSON."""
 
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5.6-terra",
                 messages=[{"role": "user", "content": retry_prompt}],
                 response_format={"type": "json_object"},
                 max_tokens=8000,
@@ -17148,7 +17148,7 @@ Return ONLY the JSON object for claim {target_claim_number}."""
 
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5.6-terra",
                 messages=[{
                     "role": "user",
                     "content": prompt
@@ -18086,7 +18086,7 @@ class OCRPDFExtractor:
         )
 
         response = self.client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-5.6-terra",
             messages=[{
                 "role": "user",
                 "content": [
@@ -18350,7 +18350,7 @@ PAGE SAMPLES:
 """
         
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-5.6-terra",
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"},
             max_tokens=800,
@@ -20021,7 +20021,7 @@ DO NOT repeat fields already found in the text.
             img_base64 = base64.b64encode(buffered.getvalue()).decode('utf-8')
             
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5.6-terra",
                 messages=[{
                     "role": "user",
                     "content": [
@@ -20066,7 +20066,7 @@ DO NOT repeat fields already found in the text.
             img_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
 
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5.6-terra",
                 messages=[{
                     "role": "user",
                     "content": [
@@ -21116,7 +21116,7 @@ Extract data from the document text provided below.
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-5.6-terra",
             messages=[
                 {"role": "system", "content": "You are a precise data extractor."},
                 {"role": "user", "content": prompt}
@@ -24710,7 +24710,7 @@ def save_successful_extraction(
     text: str,
     extracted_data: Dict,
     client,                         # OpenAI client (or compatible)
-    model: str = "gpt-4o",
+    model: str = "gpt-5.6-terra",
 ) -> bool:
     """
     Analyses a successful extraction and saves it as a carrier profile.
@@ -25330,7 +25330,7 @@ class OCRPDFExtractor:
         )
 
         response = self.client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-5.6-terra",
             messages=[{
                 "role": "user",
                 "content": [
@@ -25939,7 +25939,7 @@ class StructuredExcelExtractor:
         try:
 
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5.6-terra",
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"}
             )
@@ -27066,7 +27066,7 @@ DOCUMENT TEXT:
         try:
             start_time = time.time()
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5.6-terra",
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
                 max_tokens=2000,
@@ -27079,7 +27079,7 @@ DOCUMENT TEXT:
                     prompt_tokens=response.usage.prompt_tokens,
                     completion_tokens=response.usage.completion_tokens,
                     processing_time=elapsed,
-                    model="gpt-4o"
+                    model="gpt-5.6-terra"
                 )
             
             result = json.loads(response.choices[0].message.content)
@@ -27175,7 +27175,7 @@ DOCUMENT TEXT:
         try:
             start_time = time.time()
             response = client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5.6-terra",
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
                 max_tokens=4000,
@@ -28444,7 +28444,7 @@ JSON OUTPUT:"""
                     "content": prompt
                 }
             ],
-            model="gpt-4o",
+            model="gpt-5.6-terra",
             temperature=0,  # Zero temperature for maximum consistency
             max_tokens=16383,  # Increased for large-page robustness
         )
@@ -28455,7 +28455,7 @@ JSON OUTPUT:"""
                 prompt_tokens=chat_completion.usage.prompt_tokens,
                 completion_tokens=chat_completion.usage.completion_tokens,
                 processing_time=elapsed,
-                model="gpt-4o"
+                model="gpt-5.6-terra"
             )
         
         response_text = chat_completion.choices[0].message.content
@@ -33706,8 +33706,8 @@ ai_metrics.py
 =============
 AI token usage, cost, and efficiency calculator.
 
-Supports: gpt-4o, gpt-4o-mini, gpt-5, gpt-5-mini, gpt-5-nano
-Default model: gpt-4o
+Supports: gpt-5.6-terra, gpt-4o-mini, gpt-5, gpt-5-mini, gpt-5-nano
+Default model: gpt-5.6-terra
 
 Usage
 -----
@@ -33718,7 +33718,7 @@ Usage
         completion_tokens=850,
         processing_time_sec=3.2,
         pages=5,
-        model="gpt-4o",
+        model="gpt-5.6-terra",
     )
     print(result)                        # MetricsResult dataclass
     print(result.to_json())              # Strict JSON string
@@ -33736,14 +33736,14 @@ from typing import Literal
 # ---------------------------------------------------------------------------
 
 PRICING: dict[str, dict[str, float]] = {
-    "gpt-4o":      {"input": 0.0025,  "output": 0.01},
+    "gpt-5.6-terra":      {"input": 0.0025,  "output": 0.01},
     "gpt-4o-mini": {"input": 0.00015, "output": 0.0006},
     "gpt-5":       {"input": 0.00125, "output": 0.01},
     "gpt-5-mini":  {"input": 0.00025, "output": 0.002},
     "gpt-5-nano":  {"input": 0.00005, "output": 0.0004},
 }
 
-DEFAULT_MODEL = "gpt-4o"
+DEFAULT_MODEL = "gpt-5.6-terra"
 
 CostLevel = Literal["low", "medium", "high"]
 TimeLevel = Literal["fast", "average", "slow"]
@@ -33827,7 +33827,7 @@ def compute_metrics(
     processing_time_sec : Wall-clock processing time in seconds.
     pages               : Number of document pages processed.
     model               : Model identifier.  Unknown models fall back to
-                          the gpt-4o pricing tier.
+                          the gpt-5.6-terra pricing tier.
 
     Returns
     -------
@@ -36328,7 +36328,7 @@ __all__ = [
                     <td style="font-size: 0.8rem; font-family: monospace;">${req.request_id.substring(0, 8)}...</td>
                     <td>${req.filename}</td>
                     <td>${req.pages || 0}</td>
-                    <td><span class="model-badge">${req.model || 'gpt-4o'}</span></td>
+                    <td><span class="model-badge">${req.model || 'gpt-5.6-terra'}</span></td>
                     <td>${req.tokens.toLocaleString()}</td>
                     <td class="cost-val">${formatCurrency(req.cost)}</td>
                 `;
@@ -39144,7 +39144,7 @@ class ExcelExtractor:
         try:
             start_time = time.time()
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5.6-terra",
                 messages=[{"role": "user", "content": prompt}]
             )
             elapsed = time.time() - start_time
@@ -39154,7 +39154,7 @@ class ExcelExtractor:
                     prompt_tokens=response.usage.prompt_tokens,
                     completion_tokens=response.usage.completion_tokens,
                     processing_time=elapsed,
-                    model="gpt-4o"
+                    model="gpt-5.6-terra"
                 )
             summary = response.choices[0].message.content
             print("-" * 40)
@@ -39339,7 +39339,7 @@ RULES:
         try:
             start_time = time.time()
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5.6-terra",
                 messages=[{"role": "user", "content": prompt}],
             )
             elapsed = time.time() - start_time
@@ -39349,7 +39349,7 @@ RULES:
                     prompt_tokens=response.usage.prompt_tokens,
                     completion_tokens=response.usage.completion_tokens,
                     processing_time=elapsed,
-                    model="gpt-4o"
+                    model="gpt-5.6-terra"
                 )
             idx_str = response.choices[0].message.content.strip()
             match = re.search(r'-?\d+', idx_str)
@@ -43685,7 +43685,7 @@ DOCUMENT TEXT:
 
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5.6-terra",
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
                 max_tokens=4000,
@@ -44339,7 +44339,7 @@ class Config:
     
     # AI Model Settings
     USE_VISION_EXTRACTION = False  # Set to True for direct image-based extraction (Higher Cost)
-    VISION_MODEL = "gpt-4o"  # Model for vision tasks
+    VISION_MODEL = "gpt-5.6-terra"  # Model for vision tasks
     USE_LOCAL_MODELS = False  # Set to True to run models locally
     HF_API_TOKEN = os.getenv('HF_API_TOKEN', '')
     
@@ -45956,7 +45956,7 @@ Return the full text as Markdown-style tables where appropriate."""
         
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5.6-terra",
                 messages=[
                     {"role": "system", "content": system_msg},
                     {"role": "user", "content": [{"type": "text", "text": prompt}, {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{img_base64}"}}]}
@@ -46372,7 +46372,7 @@ PAGE SAMPLES:
 """
         
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-5.6-terra",
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"},
             max_tokens=800,
@@ -48216,7 +48216,7 @@ Return ONLY the JSON. No explanations. Ensure you catch EVERY claim number, espe
         try:
             start_time = time.time()
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5.6-terra",
                 messages=[{
                     "role": "user",
                     "content": prompt
@@ -48232,7 +48232,7 @@ Return ONLY the JSON. No explanations. Ensure you catch EVERY claim number, espe
                     prompt_tokens=response.usage.prompt_tokens,
                     completion_tokens=response.usage.completion_tokens,
                     processing_time=elapsed,
-                    model="gpt-4o"
+                    model="gpt-5.6-terra"
                 )
             
             result = json.loads(response.choices[0].message.content)
@@ -48322,7 +48322,7 @@ DOCUMENT SAMPLE:
         try:
             start_time = time.time()
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5.6-terra",
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
                 max_tokens=1500,
@@ -48335,7 +48335,7 @@ DOCUMENT SAMPLE:
                     prompt_tokens=response.usage.prompt_tokens,
                     completion_tokens=response.usage.completion_tokens,
                     processing_time=elapsed,
-                    model="gpt-4o"
+                    model="gpt-5.6-terra"
                 )
             
             chunking_plan = json.loads(response.choices[0].message.content)
@@ -48470,7 +48470,7 @@ Return ONLY the JSON."""
         try:
             start_time = time.time()
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5.6-terra",
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
                 max_tokens=1500,
@@ -48483,7 +48483,7 @@ Return ONLY the JSON."""
                     prompt_tokens=response.usage.prompt_tokens,
                     completion_tokens=response.usage.completion_tokens,
                     processing_time=elapsed,
-                    model="gpt-4o"
+                    model="gpt-5.6-terra"
                 )
             
             format_info = json.loads(response.choices[0].message.content)
@@ -48577,7 +48577,7 @@ Return ONLY the JSON object following the strict schema provided.
         try:
             start_time = time.time()
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5.6-terra",
                 messages=[{
                     "role": "user",
                     "content": prompt
@@ -48596,7 +48596,7 @@ Return ONLY the JSON object following the strict schema provided.
                     prompt_tokens=response.usage.prompt_tokens,
                     completion_tokens=response.usage.completion_tokens,
                     processing_time=elapsed,
-                    model="gpt-4o"
+                    model="gpt-5.6-terra"
                 )
             
             response_text = response.choices[0].message.content
@@ -48796,7 +48796,7 @@ Return ONLY the JSON."""
         try:
             start_time = time.time()
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5.6-terra",
                 messages=[{"role": "user", "content": retry_prompt}],
                 response_format={"type": "json_object"},
                 max_tokens=8000,
@@ -48809,7 +48809,7 @@ Return ONLY the JSON."""
                     prompt_tokens=response.usage.prompt_tokens,
                     completion_tokens=response.usage.completion_tokens,
                     processing_time=elapsed,
-                    model="gpt-4o"
+                    model="gpt-5.6-terra"
                 )
             
             retry_data = json.loads(response.choices[0].message.content)
@@ -48867,7 +48867,7 @@ Return ONLY the JSON object for claim {target_claim_number}."""
         try:
             start_time = time.time()
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5.6-terra",
                 messages=[{
                     "role": "user",
                     "content": prompt
@@ -48883,7 +48883,7 @@ Return ONLY the JSON object for claim {target_claim_number}."""
                     prompt_tokens=response.usage.prompt_tokens,
                     completion_tokens=response.usage.completion_tokens,
                     processing_time=elapsed,
-                    model="gpt-4o"
+                    model="gpt-5.6-terra"
                 )
             
             response_text = response.choices[0].message.content

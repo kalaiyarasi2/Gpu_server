@@ -32,7 +32,7 @@ class Config:
     
     # AI Model Settings
     USE_VISION_EXTRACTION = False  # Set to True for direct image-based extraction (Higher Cost)
-    VISION_MODEL = "gpt-4o"  # Model for vision tasks
+    VISION_MODEL = "gpt-5.6-terra"  # Model for vision tasks
     USE_LOCAL_MODELS = False  # Set to True to run models locally
     HF_API_TOKEN = os.getenv('HF_API_TOKEN', '')
     

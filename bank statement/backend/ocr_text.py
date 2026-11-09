@@ -379,6 +379,12 @@ class OCRPDFExtractor:
         if not self.client:
             raise ValueError("OpenAI API key is required for Vision OCR. Set OPENAI_API_KEY.")
 
+        # Downscale image if exceeding OpenAI Vision patch limit (30,000 patches, max 2048px)
+        if hasattr(image, "size") and max(image.size) > 2048:
+            resample = getattr(Image, "Resampling", Image).LANCZOS
+            image = image.copy()
+            image.thumbnail((2048, 2048), resample)
+
         buffered = BytesIO()
         image.save(buffered, format="PNG")
         img_base64 = base64.b64encode(buffered.getvalue()).decode()
@@ -393,7 +399,7 @@ class OCRPDFExtractor:
         )
 
         response = self.client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-5.6-terra",
             messages=[{
                 "role": "user",
                 "content": [
@@ -401,8 +407,8 @@ class OCRPDFExtractor:
                     {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{img_base64}"}}
                 ]
             }],
-            max_tokens=4000,
-            temperature=0.0
+            max_completion_tokens=4000,
+            temperature=1
         )
 
         try:
@@ -419,7 +425,7 @@ class OCRPDFExtractor:
                 if _fp: _fn = getattr(_fp, 'name', str(_fp))
             _fn = str(_fn or 'gpu_doc')
             if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
-            _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
+            _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-5.6-terra', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
         except Exception as e:
             pass
 

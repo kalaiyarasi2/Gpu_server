@@ -592,7 +592,7 @@ class EnhancedInsuranceExtractor:
                 "page_number": i,
                 "text": page_header + page_text,
                 "is_scanned": is_scanned,
-                "extraction_method": "gpt-5.5-vision",
+                "extraction_method": "gpt-5.6-terra-vision",
                 "confidence": confidence
             })
             
@@ -741,7 +741,7 @@ Return ONLY the JSON. No explanations. Ensure you catch EVERY claim number, espe
             response = call_llm_deterministically(
                 self.client,
                 prompt,
-                model="gpt-5.5"
+                model="gpt-5.6-terra"
             )
             
             result = self._parse_llm_json_response(response.choices[0].message.content, label="_detect_claim_numbers_ai")
@@ -834,7 +834,7 @@ IMPORTANT:
                         "url": f"data:image/png;base64,{img_base64}"
                     }
                 }],
-                model="gpt-5.5"
+                model="gpt-5.6-terra"
             )
             
             response_text = response.choices[0].message.content
@@ -950,7 +950,7 @@ DOCUMENT SAMPLE:
             response = call_llm_deterministically(
                 self.client,
                 prompt,
-                model="gpt-5.5"
+                model="gpt-5.6-terra"
             )
             
             chunking_plan = self._parse_llm_json_response(response.choices[0].message.content, label="_chunk_text_dynamically")
@@ -1114,7 +1114,7 @@ Return ONLY the JSON. Ensure the dynamic_rules is extremely precise."""
             format_info = self._parse_llm_json_response(call_llm_deterministically(
                 self.client,
                 prompt,
-                model="gpt-5.5"
+                model="gpt-5.6-terra"
             ).choices[0].message.content, label="_analyze_document_format")
             
             print(f"   ✓ Format detected: {format_info.get('format_type', 'unknown')}")
@@ -1171,7 +1171,7 @@ DOCUMENT TEXT (first 4000 chars):
             result = self._parse_llm_json_response(call_llm_deterministically(
                 self.client,
                 prompt,
-                model="gpt-4o-mini"  # Fast model for simple yes/no layout check — full model used for actual extraction
+                model="gpt-5.4-nano"  # Fast model for simple yes/no layout check — full model used for actual extraction
             ).choices[0].message.content, label="_smart_verify_format")
             
             if result.get("is_match"):
@@ -1590,7 +1590,7 @@ Extract ALL claims. Do not skip any claim."""
                 prompt=full_prompt,
                 system_prompt=static_instructions,
                 user_content=user_content,
-                model="gpt-5.5",
+                model="gpt-5.6-terra",
                 poc_name="Insurance_pdf_extractor",
                 file_name=getattr(self, "current_filename", "insurance_doc"),
                 step_name="chunk_claims_extraction"
@@ -2294,7 +2294,7 @@ Return ONLY the JSON."""
             response = call_llm_deterministically(
                 self.client,
                 retry_prompt,
-                model="gpt-5.5"
+                model="gpt-5.6-terra"
             )
             
             retry_data = self._parse_llm_json_response(response.choices[0].message.content, label="_extract_missing_claims_by_number")
@@ -2359,7 +2359,7 @@ Return ONLY the JSON object for claim {target_claim_number}."""
             response = call_llm_deterministically(
                 self.client,
                 prompt,
-                model="gpt-5.5"
+                model="gpt-5.6-terra"
             )
             
             response_text = response.choices[0].message.content

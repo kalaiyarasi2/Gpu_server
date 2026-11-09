@@ -142,7 +142,7 @@ class UniversalDocumentAnalyzer:
     def generate_summary(
         self, 
         data_json: Any,
-        model: str = "gpt-4o-mini",
+        model: str = "gpt-5.4-nano",
         temperature: float = 0.2
     ) -> str:
         """
@@ -292,7 +292,7 @@ Format professionally with headers and bullet points.
                     if _fp: _fn = getattr(_fp, 'name', str(_fp))
                 _fn = str(_fn or 'gpu_doc')
                 if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
-                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
+                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-5.6-terra', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
             except Exception as e:
                 pass
             return response.choices[0].message.content

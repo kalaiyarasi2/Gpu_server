@@ -134,7 +134,7 @@ class ClaimsAnalyzer:
     def generate_claim_summary(
         self, 
         claims_json: dict,
-        model: str = "gpt-5.5",
+        model: str = "gpt-5.6-terra",
         temperature: float = 0.2
     ) -> str:
         """
@@ -142,7 +142,7 @@ class ClaimsAnalyzer:
         
         Args:
             claims_json: Dictionary containing claims data
-            model: OpenAI model to use (default: gpt-5.5)
+            model: OpenAI model to use (default: gpt-5.6-terra)
             temperature: LLM temperature setting (default: 0.2 for consistent output)
             
         Returns:
@@ -267,7 +267,7 @@ Please provide a comprehensive summary following the structure and using the PRE
                     if _fp: _fn = getattr(_fp, 'name', str(_fp))
                 _fn = str(_fn or 'gpu_doc')
                 if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
-                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
+                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-5.6-terra', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
             except Exception as e:
                 pass
             
@@ -346,7 +346,7 @@ def main():
         print("Generating summary with OpenAI LLM...")
         summary_output = analyzer.generate_claim_summary(
             claims_data,
-            model="gpt-5.5",
+            model="gpt-5.6-terra",
             temperature=1
         )
         

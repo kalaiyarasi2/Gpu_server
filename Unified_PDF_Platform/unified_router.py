@@ -431,7 +431,7 @@ class ExcelExtractor:
         try:
             start_time = time.time()
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5.6-terra",
                 messages=[{"role": "user", "content": prompt}]
             )
 
@@ -449,7 +449,7 @@ class ExcelExtractor:
                     if _fp: _fn = getattr(_fp, 'name', str(_fp))
                 _fn = str(_fn or 'gpu_doc')
                 if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
-                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
+                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-5.6-terra', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
             except Exception as e:
                 pass
             elapsed = time.time() - start_time
@@ -459,7 +459,7 @@ class ExcelExtractor:
                     prompt_tokens=response.usage.prompt_tokens,
                     completion_tokens=response.usage.completion_tokens,
                     processing_time=elapsed,
-                    model="gpt-4o"
+                    model="gpt-5.6-terra"
                 )
             summary = response.choices[0].message.content
             print("-" * 40)
@@ -537,7 +537,7 @@ CRITICAL RULES:
         try:
             start_time = time.time()
             response = self.client.chat.completions.create(
-                model="gpt-4o-mini",
+                model="gpt-5.4-nano",
                 messages=[{"role": "user", "content": prompt}],
                 response_format={ "type": "json_object" }
             )
@@ -556,7 +556,7 @@ CRITICAL RULES:
                     if _fp: _fn = getattr(_fp, 'name', str(_fp))
                 _fn = str(_fn or 'gpu_doc')
                 if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
-                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
+                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-5.6-terra', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
             except Exception as e:
                 pass
             elapsed = time.time() - start_time
@@ -566,7 +566,7 @@ CRITICAL RULES:
                     prompt_tokens=response.usage.prompt_tokens,
                     completion_tokens=response.usage.completion_tokens,
                     processing_time=elapsed,
-                    model="gpt-4o-mini"
+                    model="gpt-5.4-nano"
                 )
             mapping = json.loads(response.choices[0].message.content)
             print(f"  [OK] Mapping generated: {mapping}")
@@ -629,7 +629,7 @@ RULES:
         try:
             start_time = time.time()
             response = self.client.chat.completions.create(
-                model="gpt-4o-mini",
+                model="gpt-5.4-nano",
                 messages=[{"role": "user", "content": prompt}],
                 response_format={ "type": "json_object" }
             )
@@ -648,7 +648,7 @@ RULES:
                     if _fp: _fn = getattr(_fp, 'name', str(_fp))
                 _fn = str(_fn or 'gpu_doc')
                 if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
-                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
+                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-5.6-terra', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
             except Exception as e:
                 pass
             elapsed = time.time() - start_time
@@ -658,7 +658,7 @@ RULES:
                     prompt_tokens=response.usage.prompt_tokens,
                     completion_tokens=response.usage.completion_tokens,
                     processing_time=elapsed,
-                    model="gpt-4o-mini"
+                    model="gpt-5.4-nano"
                 )
             meta = json.loads(response.choices[0].message.content)
             print(f"[Metadata] AI extracted: {meta}")
@@ -680,7 +680,7 @@ RULES:
         try:
             start_time = time.time()
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5.6-terra",
                 messages=[{"role": "user", "content": prompt}],
             )
 
@@ -698,7 +698,7 @@ RULES:
                     if _fp: _fn = getattr(_fp, 'name', str(_fp))
                 _fn = str(_fn or 'gpu_doc')
                 if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
-                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
+                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-5.6-terra', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
             except Exception as e:
                 pass
             elapsed = time.time() - start_time
@@ -708,7 +708,7 @@ RULES:
                     prompt_tokens=response.usage.prompt_tokens,
                     completion_tokens=response.usage.completion_tokens,
                     processing_time=elapsed,
-                    model="gpt-4o"
+                    model="gpt-5.6-terra"
                 )
             idx_str = response.choices[0].message.content.strip()
             match = re.search(r'-?\d+', idx_str)
@@ -1630,9 +1630,9 @@ Line 2: Carrier/vendor name or UNKNOWN
 OUTPUT:"""
                 start_time_fn = time.time()
                 fn_response = self.client.chat.completions.create(
-                    model="gpt-4o-mini",
+                    model="gpt-5.4-nano",
                     messages=[{"role": "user", "content": filename_prompt}],
-                    temperature=0
+                    temperature=1
                 )
 
                 try:
@@ -1649,7 +1649,7 @@ OUTPUT:"""
                         if _fp: _fn = getattr(_fp, 'name', str(_fp))
                     _fn = str(_fn or 'gpu_doc')
                     if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
-                    _tm(fn_response.usage, model=fn_response.model if hasattr(fn_response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
+                    _tm(fn_response.usage, model=fn_response.model if hasattr(fn_response, 'model') else 'gpt-5.6-terra', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
                 except Exception as e:
                     pass
                 elapsed_fn = time.time() - start_time_fn
@@ -1659,7 +1659,7 @@ OUTPUT:"""
                         prompt_tokens=fn_response.usage.prompt_tokens,
                         completion_tokens=fn_response.usage.completion_tokens,
                         processing_time=elapsed_fn,
-                        model="gpt-4o-mini"
+                        model="gpt-5.4-nano"
                     )
                     
                 fn_output = fn_response.choices[0].message.content.strip().split("\n")
@@ -1752,10 +1752,10 @@ OUTPUT:"""
             print("\n[AI] Sending to AI for full classification...")
             start_time = time.time()
             response = self.client.chat.completions.create(
-                model="gpt-4o-mini",
+                model="gpt-5.4-nano",
                 messages=[{"role": "user", "content": prompt}],
-                temperature=0,
-                max_tokens=30,
+                temperature=1,
+                max_completion_tokens=30,
                 timeout=30
             )
 
@@ -1773,7 +1773,7 @@ OUTPUT:"""
                     if _fp: _fn = getattr(_fp, 'name', str(_fp))
                 _fn = str(_fn or 'gpu_doc')
                 if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
-                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
+                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-5.6-terra', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
             except Exception as e:
                 pass
             elapsed = time.time() - start_time
@@ -1783,7 +1783,7 @@ OUTPUT:"""
                     prompt_tokens=response.usage.prompt_tokens,
                     completion_tokens=response.usage.completion_tokens,
                     processing_time=elapsed,
-                    model="gpt-4o-mini"
+                    model="gpt-5.4-nano"
                 )
             output = response.choices[0].message.content.strip().split("\n")
             classification = output[0].strip().upper()
@@ -1837,9 +1837,9 @@ TEXT SNIPPET:
 
 Return ONLY the company name or UNKNOWN:"""
             prov_response = self.client.chat.completions.create(
-                model="gpt-4o-mini",
+                model="gpt-5.4-nano",
                 messages=[{"role": "user", "content": prov_prompt}],
-                temperature=0
+                temperature=1
             )
 
             try:
@@ -1856,7 +1856,7 @@ Return ONLY the company name or UNKNOWN:"""
                     if _fp: _fn = getattr(_fp, 'name', str(_fp))
                 _fn = str(_fn or 'gpu_doc')
                 if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
-                _tm(prov_response.usage, model=prov_response.model if hasattr(prov_response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
+                _tm(prov_response.usage, model=prov_response.model if hasattr(prov_response, 'model') else 'gpt-5.6-terra', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
             except Exception as e:
                 pass
             elapsed = time.time() - start_time
@@ -1866,7 +1866,7 @@ Return ONLY the company name or UNKNOWN:"""
                     prompt_tokens=prov_response.usage.prompt_tokens,
                     completion_tokens=prov_response.usage.completion_tokens,
                     processing_time=elapsed,
-                    model="gpt-4o-mini"
+                    model="gpt-5.4-nano"
                 )
             return prov_response.choices[0].message.content.strip().upper()
         except Exception as e:
@@ -1885,6 +1885,11 @@ Return ONLY the company name or UNKNOWN:"""
             env = {"PYTHONIOENCODING": "utf-8", "PYTHONUNBUFFERED": "1", **os.environ}
             if request_id:
                 env["AI_MONITOR_REQUEST_ID"] = str(request_id)
+            # Ensure child subprocess inherits sitecustomize for prompt caching & model sanitization
+            _boot_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "subprocess_boot")
+            _cur_pypath = env.get("PYTHONPATH", "")
+            if _boot_dir not in _cur_pypath:
+                env["PYTHONPATH"] = f"{_boot_dir};{_cur_pypath}" if _cur_pypath else _boot_dir
             
             process = subprocess.Popen(
                 cmd,
@@ -2681,7 +2686,7 @@ Return ONLY the company name or UNKNOWN:"""
         import tempfile
         CHAR_THRESHOLD = 100  # Lower threshold for ID docs
 
-        with tempfile.TemporaryDirectory() as tmp_dir:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp_dir:
             working_pdf = self._detect_rotation_and_fix(pdf_path, tmp_dir)
 
             text = ""
@@ -2843,10 +2848,10 @@ Return ONLY the company name or UNKNOWN:"""
 
             start_time = time.time()
             response = self.client.chat.completions.create(
-                model="gpt-4o-mini",
+                model="gpt-5.4-nano",
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
-                temperature=0
+                temperature=1
             )
 
             try:
@@ -2863,7 +2868,7 @@ Return ONLY the company name or UNKNOWN:"""
                     if _fp: _fn = getattr(_fp, 'name', str(_fp))
                 _fn = str(_fn or 'gpu_doc')
                 if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
-                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
+                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-5.6-terra', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
             except Exception as e:
                 pass
             elapsed = time.time() - start_time
@@ -2873,7 +2878,7 @@ Return ONLY the company name or UNKNOWN:"""
                     prompt_tokens=response.usage.prompt_tokens,
                     completion_tokens=response.usage.completion_tokens,
                     processing_time=elapsed,
-                    model="gpt-4o-mini"
+                    model="gpt-5.4-nano"
                 )
             
             data = json.loads(response.choices[0].message.content)
@@ -2997,6 +3002,12 @@ Return ONLY the company name or UNKNOWN:"""
                 rows = [data]
                 
             df = pd.DataFrame(rows)
+            try:
+                from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
+                _clean = lambda v: ILLEGAL_CHARACTERS_RE.sub('', v) if isinstance(v, str) else v
+                df = df.map(_clean) if hasattr(df, 'map') else df.applymap(_clean)
+            except Exception:
+                pass
             df.to_excel(xlsx_path, index=False)
             return str(xlsx_path)
         except Exception as e:
@@ -3239,7 +3250,7 @@ Return ONLY the company name or UNKNOWN:"""
 
         import tempfile
         # Use a context manager to ensure the temp directory is cleaned up at the end
-        with tempfile.TemporaryDirectory() as tmp_dir:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp_dir:
             working_path = file_path
             
             # ── GLOBAL ROTATION & NORMALIZATION ──────────────────────────────

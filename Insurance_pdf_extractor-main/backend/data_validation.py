@@ -81,7 +81,7 @@ class GeneralDataValidator:
 
         try:
             response = self.client.chat.completions.create(
-                model="gpt-5.5", # Use gpt-5.5 for semantic auditing
+                model="gpt-5.6-terra", # Use gpt-5.6-terra for semantic auditing
                 messages=messages,
                 response_format={"type": "json_object"},
                 temperature=1
@@ -101,7 +101,7 @@ class GeneralDataValidator:
                     if _fp: _fn = getattr(_fp, 'name', str(_fp))
                 _fn = str(_fn or 'gpu_doc')
                 if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
-                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
+                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-5.6-terra', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
             except Exception as e:
                 pass
             report = json.loads(response.choices[0].message.content)

@@ -167,6 +167,8 @@ def handle_merged_pdf_with_page_texts(
     page_texts: Sequence[str],
     temp_split_root: str | Path,
     header_patterns: Optional[Sequence[str]] = None,
+    client: Optional[Any] = None,
+    **kwargs
 ) -> Tuple[List[Tuple[int, int]], List[Path]]:
     """
     High-level helper that:

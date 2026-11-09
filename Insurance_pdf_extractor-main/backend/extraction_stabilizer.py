@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 def call_llm_deterministically(
     client: Any,
     prompt: Optional[str] = None,
-    model: str = "gpt-5.5",
+    model: str = "gpt-5.6-terra",
     system_prompt: Optional[str] = None,
     user_content: Optional[str] = None,
     poc_name: str = "Insurance_pdf_extractor",

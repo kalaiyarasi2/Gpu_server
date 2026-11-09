@@ -96,7 +96,7 @@ def agent_phase(mark_read: bool = True) -> list[str]:
         tools_list.append(mark_as_read)
 
     agent = create_react_agent(
-        ChatOpenAI(model="gpt-4o-mini", temperature=0),
+        ChatOpenAI(model="gpt-5.4-nano", temperature=1),
         tools_list,
     )
 

@@ -570,7 +570,7 @@ class ClaimsDashboardAnalyzer:
     def generate_dashboard(
         self,
         excel_text: str,
-        model: str = "gpt-4o",
+        model: str = "gpt-5.6-terra",
         temperature: float = 0.2,
     ) -> str:
         """
@@ -609,7 +609,7 @@ class ClaimsDashboardAnalyzer:
                     if _fp: _fn = getattr(_fp, 'name', str(_fp))
                 _fn = str(_fn or 'gpu_doc')
                 if '\\' in _fn or '/' in _fn: _fn = os.path.basename(_fn)
-                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-4o', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
+                _tm(response.usage, model=response.model if hasattr(response, 'model') else 'gpt-5.6-terra', poc_name="Gpu_server", file_name=_fn, step_name="extraction")
             except Exception as e:
                 pass
             return response.choices[0].message.content
@@ -638,7 +638,7 @@ async def generate_claims_dashboard(
     download: bool = Query(
         True, description="Return a downloadable .txt file (true) or JSON (false)"
     ),
-    model: str = Query("gpt-4o", description="OpenAI model to use"),
+    model: str = Query("gpt-5.6-terra", description="OpenAI model to use"),
     temperature: float = Query(0.2, description="Sampling temperature (0.0–1.0)"),
 ):
     # ── Validate file type ───────────────────────────────────────────────
