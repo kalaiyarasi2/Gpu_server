@@ -66,14 +66,41 @@ except ImportError:
     except ImportError:
         fitz = None
 
+_FILE_IDENTIFIER_SOURCE = None
 try:
+    # 1) External File_identifier POC (e.g. when running inside the Cognet app)
     from file_identifier import FileIdentifier, FileType, IdentifierResult
     _FILE_IDENTIFIER_AVAILABLE = True
+    _FILE_IDENTIFIER_SOURCE = getattr(sys.modules.get("file_identifier"), "__file__", "external")
 except ImportError:
-    FileIdentifier = None
-    FileType = None
-    IdentifierResult = None
-    _FILE_IDENTIFIER_AVAILABLE = False
+    # 2) Bundled copy so Gpu_server works standalone (File_identifier folder may be empty)
+    try:
+        import importlib.util as _ilu
+        _bundled_path = _CURRENT_DIR / "bundled_file_identifier" / "file_identifier.py"
+        _spec = _ilu.spec_from_file_location("file_identifier", str(_bundled_path))
+        if _spec is None or _spec.loader is None or not _bundled_path.exists():
+            raise ImportError(f"bundled file_identifier not found at {_bundled_path}")
+        _mod = _ilu.module_from_spec(_spec)
+        sys.modules["file_identifier"] = _mod
+        _spec.loader.exec_module(_mod)
+        FileIdentifier = _mod.FileIdentifier
+        FileType = _mod.FileType
+        IdentifierResult = _mod.IdentifierResult
+        _FILE_IDENTIFIER_AVAILABLE = True
+        _FILE_IDENTIFIER_SOURCE = str(_bundled_path)
+    except Exception as _bundled_err:
+        sys.modules.pop("file_identifier", None)
+        FileIdentifier = None
+        FileType = None
+        IdentifierResult = None
+        _FILE_IDENTIFIER_AVAILABLE = False
+        print(
+            f"[SmartConnector][WARN] FileIdentifier NOT available ({_bundled_err}). "
+            "Using basic text-length fallback - scanned PDFs with an OCR layer may be misclassified as digital."
+        )
+
+if _FILE_IDENTIFIER_AVAILABLE:
+    print(f"[SmartConnector] FileIdentifier loaded from: {_FILE_IDENTIFIER_SOURCE}")
 
 try:
     from paddleocr_enhancer import extract_with_paddleocr
